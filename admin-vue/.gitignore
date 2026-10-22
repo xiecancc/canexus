@@ -1,44 +1,71 @@
-# Logs
-logs
-*.log
+# 依赖
+node_modules/
+.pnpm-store/
+.npm/
+.yarn/cache/
+.yarn/unplugged/
+.yarn/build-state.yml
+.yarn/install-state.gz
+.yarn-integrity
+.pnp.*
+bower_components/
+jspm_packages/
+web_modules/
+.lock-wscript
+
+# 包管理器日志
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
+.pnpm-debug.log*
+*.tgz
 
-node_modules
-.DS_Store
-dist
-dist-ssr
-coverage
-*.local
-
-# Editor directories and files
-.vscode/*
-!.vscode/extensions.json
-.idea
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
-*.sw?
-
+# 构建产物
+dist/
+dist-ssr/
+dist-e2e/
+dev-dist/
+.output/
+.nitro/
 *.tsbuildinfo
-
-.eslintcache
-
-# Cypress
-/cypress/videos/
-/cypress/screenshots/
-
-# Vitest
-__screenshots__/
-
-# Vite
 *.timestamp-*-*.mjs
 
+# 部署产物
+.vercel/
+.netlify/
+.cloudflare/
+.wrangler/
+.serverless/
+.firebase/
+
+# 缓存
+.vite/
+.eslintcache
+.stylelintcache
+.parcel-cache/
+.rollup.cache/
+.turbo/
+
+# 测试 覆盖率
+coverage/
+*.lcov
+.nyc_output/
 test-results/
 playwright-report/
+blob-report/
+playwright/.cache/
+cypress/videos/
+cypress/screenshots/
+cypress/downloads/
+__screenshots__/
+.vitest/
+.allure/
+.pw-cache/
 
-!.vscode/settings.json
+# 本地配置
+.npmrc
+.yarnrc.yml
+
+# 注意：pnpm-lock.yaml 必须提交，不可忽略
