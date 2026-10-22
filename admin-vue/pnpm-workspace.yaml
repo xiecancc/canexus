@@ -1,3 +1,6 @@
+minimumReleaseAgeExclude:
+    - rolldown@1.2.15
+
 overrides:
   'vue': 'rc'
   '@vue/compiler-core': 'rc'

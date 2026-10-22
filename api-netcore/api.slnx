@@ -8,5 +8,10 @@
     <Project Path="src/API/API.csproj" />
     <Project Path="src/Application/Application.csproj" />
   </Folder>
-  <Folder Name="/test/" />
+  <Folder Name="/test/">
+    <Project Path="test/Application.Tests/Application.Tests.csproj" Id="d71f9ef9-c58e-4e58-a3e4-a1c22b93c725" />
+    <Project Path="test/Domain.Tests/Domain.Tests.csproj" Id="c051aa6d-0eee-413c-9203-aba579a562a6" />
+    <Project Path="test/API.Tests/API.Tests.csproj" />
+    <Project Path="test/Infrastructure.Tests/Infrastructure.Tests.csproj" Id="6bd34443-cb6a-4f4b-8ff6-e9b0e4339554" />
+  </Folder>
 </Solution>
