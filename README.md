@@ -32,7 +32,7 @@ api-netcore（http://localhost:5000）
 
 ## 工程化规范
 
-- **Git Hooks（husky + lint-staged）**：提交前对暂存的前端文件执行 `oxlint --fix` + `oxfmt`；推送前执行全量类型检查（vue-tsc）与 Vitest 单元测试。`pnpm install` 时自动生效（`prepare` 脚本配置 `core.hooksPath`），详见 [admin-vue/README.md](./admin-vue/README.md)。
+- **Git Hooks（husky + lint-staged）**：提交前对暂存文件分类检查——前端 `oxlint --fix` + `oxfmt`，后端 `dotnet format`；推送前执行前端类型检查（vue-tsc）、Vitest 单元测试与后端编译检查。`pnpm install` 时自动生效（`prepare` 脚本配置 `core.hooksPath`），详见 [admin-vue/README.md](./admin-vue/README.md)。
 - **CI 流水线（GitHub Actions）**：`.github/workflows/ci.yml`，push 与 PR 触发——前端 Job（lint / 类型检查 / 单测 / 构建）与后端 Job（dotnet build / test，MySQL 8 服务容器承载集成测试）并行执行。
 
 ## 约定

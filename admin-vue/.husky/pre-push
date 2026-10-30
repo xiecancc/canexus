@@ -1,2 +1,3 @@
-# 推送门禁：全量类型检查 + 单元测试（较重检查放 pre-push，保持提交流畅）
-cd "$(dirname "$0")/.." && pnpm type-check && pnpm test:unit run
+# 推送门禁：前端全量类型检查 + 单元测试；后端编译检查
+# （较重检查放 pre-push，保持提交流畅；完整构建与集成测试由 CI 执行）
+cd "$(dirname "$0")/.." && pnpm type-check && pnpm test:unit run && dotnet build api-netcore/api.slnx --verbosity quiet

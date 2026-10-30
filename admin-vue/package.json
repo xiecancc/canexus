@@ -19,6 +19,9 @@
     "*.{js,mjs,cjs,ts,vue}": [
       "oxlint --fix",
       "oxfmt"
+    ],
+    "*.cs": [
+      "dotnet format ../api-netcore/api.slnx --include"
     ]
   },
   "dependencies": {
