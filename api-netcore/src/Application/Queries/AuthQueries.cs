@@ -9,10 +9,10 @@ using Application.Permissions;
 using Domain.Entities;
 using Domain.Repositories;
 using Domain.Services.Security;
+using Domain.Services.Users;
 using Domain.Shared.Enums;
 using Domain.Shared.Exceptions;
 using Domain.Shared.Results;
-using Domain.Services.Users;
 
 /// <summary>获取图形验证码查询处理器。</summary>
 public sealed class GetCaptchaQueryHandler : QueryHandler<GetCaptchaQuery, CaptchaResult>

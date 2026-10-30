@@ -27,12 +27,12 @@ public interface IAggregateRepository<TEntity> : IDomainRepository<TEntity>
     /// <returns>表示异步操作的任务。</returns>
     Task DeleteAsync(Guid id, CancellationToken cancellationToken = default);
 
-    /// <summary>删除聚合（重写领域仓储的物理删除语义）：自动转为软删除
+    /// <summary>删除聚合（有意隐藏并重写领域仓储的物理删除语义）：自动转为软删除
     /// （标记 IsDeleted，审计字段由框架自动填充并递增版本号）。</summary>
     /// <param name="entity">聚合。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>表示异步操作的任务。</returns>
-    Task DeleteAsync(TEntity entity, CancellationToken cancellationToken = default);
+    new Task DeleteAsync(TEntity entity, CancellationToken cancellationToken = default);
 
     /// <summary>恢复软删除的聚合（标记 IsDeleted = false）；主键不存在或未删除时静默忽略（幂等）。
     /// 注意：恢复操作绕过默认查询过滤与版本校验，不递增版本号。</summary>

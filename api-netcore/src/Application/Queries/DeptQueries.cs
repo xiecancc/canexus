@@ -7,8 +7,8 @@ using Application.Contracts.Queries;
 using Application.Mappings;
 using AutoMapper;
 using Domain.Entities;
-using Domain.Shared.Enums;
 using Domain.Repositories;
+using Domain.Shared.Enums;
 using Domain.Shared.Exceptions;
 using Domain.Shared.Results;
 

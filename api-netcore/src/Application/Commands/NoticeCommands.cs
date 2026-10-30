@@ -4,9 +4,9 @@ using Application.Abstractions;
 using Application.Contracts.Commands;
 using Application.Contracts.Notices;
 using AutoMapper;
-using Domain.Services.Rules;
 using Domain.Entities;
 using Domain.Repositories;
+using Domain.Services.Rules;
 using Domain.Shared.Exceptions;
 using Domain.Shared.Results;
 

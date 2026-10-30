@@ -5,8 +5,8 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
 using API;
-using Infrastructure.Shared.Caching;
 using Domain.Services.Security;
+using Infrastructure.Shared.Caching;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -228,21 +228,36 @@ public class DictConfigApiTests
         // 同类型下重复标签
         var dupLabel = await SendAsync(HttpMethod.Post, "/api/system/dict-data", new
         {
-            dictType, dictLabel = "选项C", dictValue = "C2", tagType = 1, orderNum = 1, status = 1
+            dictType,
+            dictLabel = "选项C",
+            dictValue = "C2",
+            tagType = 1,
+            orderNum = 1,
+            status = 1
         });
         var dupLabelBody = await ReadBodyAsync(dupLabel);
 
         // 同类型下重复键值
         var dupValue = await SendAsync(HttpMethod.Post, "/api/system/dict-data", new
         {
-            dictType, dictLabel = "选项C3", dictValue = "C", tagType = 1, orderNum = 1, status = 1
+            dictType,
+            dictLabel = "选项C3",
+            dictValue = "C",
+            tagType = 1,
+            orderNum = 1,
+            status = 1
         });
         var dupValueBody = await ReadBodyAsync(dupValue);
 
         // 不存在的字典类型
         var missingType = await SendAsync(HttpMethod.Post, "/api/system/dict-data", new
         {
-            dictType = dictType + "missing", dictLabel = "x", dictValue = "x", tagType = 1, orderNum = 1, status = 1
+            dictType = dictType + "missing",
+            dictLabel = "x",
+            dictValue = "x",
+            tagType = 1,
+            orderNum = 1,
+            status = 1
         });
         var missingTypeBody = await ReadBodyAsync(missingType);
 
@@ -288,7 +303,9 @@ public class DictConfigApiTests
         // 重复键名 → 400702
         var duplicate = await SendAsync(HttpMethod.Post, "/api/system/config", new
         {
-            configName = "重复参数", configKey, configValue = "x"
+            configName = "重复参数",
+            configKey,
+            configValue = "x"
         });
         var duplicateBody = await ReadBodyAsync(duplicate);
         Assert.Multiple(() =>

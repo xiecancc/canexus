@@ -2,8 +2,8 @@ namespace API.Filters;
 
 using API.Authorization;
 using Application.Permissions;
-using Domain.Shared.Results;
 using Domain.Services.Users;
+using Domain.Shared.Results;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;

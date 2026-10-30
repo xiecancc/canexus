@@ -5,8 +5,8 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
 using API;
-using Infrastructure.Shared.Caching;
 using Domain.Services.Security;
+using Infrastructure.Shared.Caching;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -162,28 +162,40 @@ public class NoticeApiTests
         // 类型非法（非 1/2）
         var badType = await SendAsync(HttpMethod.Post, "/api/system/notice", new
         {
-            title, noticeType = 3, content = "x", status = 1
+            title,
+            noticeType = 3,
+            content = "x",
+            status = 1
         });
         var badTypeBody = await ReadBodyAsync(badType);
 
         // 状态非法（非 0/1）
         var badStatus = await SendAsync(HttpMethod.Post, "/api/system/notice", new
         {
-            title, noticeType = 1, content = "x", status = 2
+            title,
+            noticeType = 1,
+            content = "x",
+            status = 2
         });
         var badStatusBody = await ReadBodyAsync(badStatus);
 
         // 标题空白
         var blankTitle = await SendAsync(HttpMethod.Post, "/api/system/notice", new
         {
-            title = "   ", noticeType = 1, content = "x", status = 1
+            title = "   ",
+            noticeType = 1,
+            content = "x",
+            status = 1
         });
         var blankTitleBody = await ReadBodyAsync(blankTitle);
 
         // 内容空白
         var blankContent = await SendAsync(HttpMethod.Post, "/api/system/notice", new
         {
-            title, noticeType = 1, content = "  ", status = 1
+            title,
+            noticeType = 1,
+            content = "  ",
+            status = 1
         });
         var blankContentBody = await ReadBodyAsync(blankContent);
 
@@ -192,7 +204,10 @@ public class NoticeApiTests
         var missingDetailBody = await ReadBodyAsync(missingDetail);
         var missingUpdate = await SendAsync(HttpMethod.Put, "/api/system/notice/00000000-0000-0000-0000-000000009999", new
         {
-            title, noticeType = 1, content = "x", status = 1
+            title,
+            noticeType = 1,
+            content = "x",
+            status = 1
         });
         var missingUpdateBody = await ReadBodyAsync(missingUpdate);
         var missingDelete = await SendAsync(HttpMethod.Delete, "/api/system/notice/00000000-0000-0000-0000-000000009999", null);

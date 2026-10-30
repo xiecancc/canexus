@@ -5,13 +5,13 @@ using Application.Abstractions;
 using Application.Contracts.Abstractions;
 using Application.Contracts.Dicts;
 using Application.Contracts.Queries;
-using Infrastructure.Shared.Caching;
-using Domain.Services.Rules;
 using AutoMapper;
 using Domain.Entities;
-using Domain.Shared.Enums;
 using Domain.Repositories;
+using Domain.Services.Rules;
+using Domain.Shared.Enums;
 using Domain.Shared.Paging;
+using Infrastructure.Shared.Caching;
 
 /// <summary>按字典类型查询字典数据处理器。</summary>
 public sealed class GetDictDataByTypeQueryHandler : QueryHandler<GetDictDataByTypeQuery, List<DictDataSimpleVO>>

@@ -5,12 +5,12 @@ using Application.Contracts.Commands;
 using Application.Contracts.Configs;
 using Application.Mappings;
 using AutoMapper;
-using Infrastructure.Shared.Caching;
-using Domain.Services.Rules;
 using Domain.Entities;
 using Domain.Repositories;
+using Domain.Services.Rules;
 using Domain.Shared.Exceptions;
 using Domain.Shared.Results;
+using Infrastructure.Shared.Caching;
 
 /// <summary>创建参数配置命令处理器。</summary>
 public sealed class CreateConfigCommandHandler : CommandHandler<CreateConfigCommand, Guid>

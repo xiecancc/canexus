@@ -51,7 +51,6 @@ public sealed class DeleteJobCommandHandler : CommandHandler<DeleteJobCommand>
 {
     private readonly IAggregateRepository<SysJob> _jobRepository;
     private readonly IJobScheduleManager _scheduleManager;
-    private readonly IMapper _mapper;
 
     /// <summary>构造函数。</summary>
     /// <param name="jobRepository">定时任务仓储。</param>

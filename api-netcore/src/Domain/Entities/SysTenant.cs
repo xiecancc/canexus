@@ -1,7 +1,7 @@
 namespace Domain.Entities;
 
-using SqlSugar;
 using Domain.Shared.Enums;
+using SqlSugar;
 
 /// <summary>
 /// 租户实体：平台级全局表（租户定义不参与租户隔离过滤）。

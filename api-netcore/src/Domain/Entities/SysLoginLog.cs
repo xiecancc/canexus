@@ -1,7 +1,7 @@
 namespace Domain.Entities;
 
-using SqlSugar;
 using Domain.Shared.Enums;
+using SqlSugar;
 
 /// <summary>系统登录日志实体：记录每次登录成功 / 失败的审计信息。</summary>
 [SugarTable("sys_login_log")]

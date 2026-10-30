@@ -6,11 +6,11 @@ using Application.Contracts.Users;
 using Application.Permissions;
 using Domain.Entities;
 using Domain.Repositories;
+using Domain.Services.Auth;
+using Domain.Services.Users;
 using Domain.Shared.Enums;
 using Domain.Shared.Exceptions;
 using Domain.Shared.Results;
-using Domain.Services.Auth;
-using Domain.Services.Users;
 
 /// <summary>用户-角色关联的共享业务逻辑（角色存在性校验与全量替换，供多个用户命令处理器复用）。</summary>
 internal static class UserRoleSupport

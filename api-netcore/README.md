@@ -107,6 +107,13 @@ api-netcore/
 - .NET SDK 10.0
 - MySQL 8.x（本地默认 `localhost:3306`，账号 `root/***REMOVED***`，或通过配置修改）
 
+## 构建约束与代码风格
+
+- `Directory.Build.props`（解决方案根）对全部项目生效：**`TreatWarningsAsErrors`（编译警告即错误）** 与 **`EnforceCodeStyleInBuild`（构建期强制 `.editorconfig` 代码风格）**
+- 代码风格基线由 `.editorconfig` 定义（风格类规则为 suggestion 级），格式统一经 `dotnet format api.slnx` 执行
+- 提交 `.cs` 文件时，仓库级 pre-commit 钩子（husky + lint-staged，见 `admin-vue/README.md`）会自动对其运行 `dotnet format --include`；推送前执行 `dotnet build` 编译检查
+- 新增警告将被构建拒绝：修复警告（或经评审后以 `#pragma` / `.editorconfig` 降级并注明原因），不要绕过
+
 ## 本地运行
 
 ```bash

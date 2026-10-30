@@ -1,7 +1,7 @@
 namespace Domain.Entities;
 
-using SqlSugar;
 using Domain.Shared.Enums;
+using SqlSugar;
 
 /// <summary>操作日志实体：记录带 [OperLog] 特性的写操作审计信息。</summary>
 [SugarTable("sys_oper_log")]

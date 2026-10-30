@@ -2,8 +2,8 @@
 using API.Authorization;
 using API.Logging;
 using Application.Contracts.Commands;
-using Application.Contracts.Queries;
 using Application.Contracts.Configs;
+using Application.Contracts.Queries;
 using Domain.Shared.Enums;
 using Domain.Shared.Results;
 using MediatR;

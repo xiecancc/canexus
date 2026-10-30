@@ -1,7 +1,7 @@
 namespace Domain.Entities;
 
-using SqlSugar;
 using Domain.Shared.Enums;
+using SqlSugar;
 
 /// <summary>系统部门实体（树形结构）。
 /// <para>实体不保留验证逻辑与数据归一化：字段约束由 Application 层 FluentValidation Validators 承接，

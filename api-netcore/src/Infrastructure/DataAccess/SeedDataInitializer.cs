@@ -1,8 +1,8 @@
 namespace Infrastructure.DataAccess;
 
 using Domain.Entities;
-using Domain.Shared.Enums;
 using Domain.Services.Auth;
+using Domain.Shared.Enums;
 using Microsoft.Extensions.Logging;
 using SqlSugar;
 
@@ -227,8 +227,8 @@ public sealed class SeedDataInitializer
             var buttonId = SeedId(startId + i);
 
             // 原位纠偏：同名按钮的 perms 前缀过时（如 tool:job → monitor:job）时按「父菜单 + 按钮名称」更新
-        var existing = await _client.Queryable<SysMenu>().FirstAsync(m =>
-            m.MenuType == MenuType.Button && m.ParentId == parentId && m.MenuName == menuName);
+            var existing = await _client.Queryable<SysMenu>().FirstAsync(m =>
+                m.MenuType == MenuType.Button && m.ParentId == parentId && m.MenuName == menuName);
             if (existing is not null && existing.Perms != perms)
             {
                 existing.Perms = perms;
@@ -453,20 +453,20 @@ public sealed class SeedDataInitializer
         Guid parentId = default,
         bool keepAlive = false,
         MenuVisible visible = MenuVisible.Show) => new()
-    {
-        Id = id,
-        ParentId = parentId,
-        MenuType = menuType,
-        MenuName = name,
-        Path = path,
-        Component = component,
-        Perms = perms,
-        Icon = icon,
-        OrderNum = order,
-        Visible = visible,
-        KeepAlive = keepAlive,
-        Status = CommonStatus.Enabled
-    };
+        {
+            Id = id,
+            ParentId = parentId,
+            MenuType = menuType,
+            MenuName = name,
+            Path = path,
+            Component = component,
+            Perms = perms,
+            Icon = icon,
+            OrderNum = order,
+            Visible = visible,
+            KeepAlive = keepAlive,
+            Status = CommonStatus.Enabled
+        };
 
     /// <summary>插入实体（审计字段与 Guid 主键生成由数据访问层 Aop 自动填充）。</summary>
     /// <remarks>显式设置 Id 的种子数据直接写入该主键；Guid 主键非自增，无需 OffIdentity。</remarks>

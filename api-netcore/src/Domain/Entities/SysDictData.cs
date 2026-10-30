@@ -1,7 +1,7 @@
 namespace Domain.Entities;
 
-using SqlSugar;
 using Domain.Shared.Enums;
+using SqlSugar;
 
 /// <summary>字典数据实体（同 dictType 下 label / value 由业务层保证唯一）。
 /// <para>实体不保留验证逻辑与数据归一化：字段约束由 Application 层 FluentValidation Validators 承接，

@@ -8,10 +8,10 @@ using API;
 using Application.Commands;
 using Application.Contracts.Commands;
 using Application.Contracts.Queries;
-using Infrastructure.Shared.Caching;
-using Domain.Services.Security;
 using Domain.Entities;
 using Domain.Services.Auth;
+using Domain.Services.Security;
+using Infrastructure.Shared.Caching;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -360,16 +360,25 @@ public class SystemManagementApiTests
         // 构造 D1（研发部下）与 D2（D1 下），尝试把 D1 的父级设为 D2
         var d1 = (await SendForJsonAsync(HttpMethod.Post, "/api/system/dept", new
         {
-            parentId = SeedId(101), deptName = "层级校验A" + Guid.NewGuid().ToString("N")[..4], orderNum = 9, status = 1
+            parentId = SeedId(101),
+            deptName = "层级校验A" + Guid.NewGuid().ToString("N")[..4],
+            orderNum = 9,
+            status = 1
         }, _adminToken)).RootElement.GetProperty("data").GetGuid();
         var d2 = (await SendForJsonAsync(HttpMethod.Post, "/api/system/dept", new
         {
-            parentId = d1, deptName = "层级校验B" + Guid.NewGuid().ToString("N")[..4], orderNum = 9, status = 1
+            parentId = d1,
+            deptName = "层级校验B" + Guid.NewGuid().ToString("N")[..4],
+            orderNum = 9,
+            status = 1
         }, _adminToken)).RootElement.GetProperty("data").GetGuid();
 
         var response = await SendAsync(HttpMethod.Put, $"/api/system/dept/{d1}", new
         {
-            parentId = d2, deptName = "层级校验A", orderNum = 9, status = 1
+            parentId = d2,
+            deptName = "层级校验A",
+            orderNum = 9,
+            status = 1
         }, _adminToken);
         var body = await ReadBodyAsync(response);
 
@@ -400,7 +409,10 @@ public class SystemManagementApiTests
         var deptName = "待删部门" + Guid.NewGuid().ToString("N")[..4];
         var deptId = (await SendForJsonAsync(HttpMethod.Post, "/api/system/dept", new
         {
-            parentId = SeedId(101), deptName, orderNum = 8, status = 1
+            parentId = SeedId(101),
+            deptName,
+            orderNum = 8,
+            status = 1
         }, _adminToken)).RootElement.GetProperty("data").GetGuid();
         var userId = await CreateUserAsync(nickName: "部门占用用户", deptId: deptId);
 
@@ -501,14 +513,20 @@ public class SystemManagementApiTests
         // 保留 key：super_admin
         var reserved = await SendAsync(HttpMethod.Post, "/api/system/role", new
         {
-            roleName = "保留key", roleKey = "super_admin", dataScope = 1, status = 1
+            roleName = "保留key",
+            roleKey = "super_admin",
+            dataScope = 1,
+            status = 1
         }, _adminToken);
         var reservedBody = await ReadBodyAsync(reserved);
 
         // 重复 key
         var duplicate = await SendAsync(HttpMethod.Post, "/api/system/role", new
         {
-            roleName = "重复key", roleKey, dataScope = 1, status = 1
+            roleName = "重复key",
+            roleKey,
+            dataScope = 1,
+            status = 1
         }, _adminToken);
         var duplicateBody = await ReadBodyAsync(duplicate);
 
@@ -528,7 +546,11 @@ public class SystemManagementApiTests
     {
         var update = await SendAsync(HttpMethod.Put, $"/api/system/role/{SeedId(1)}", new
         {
-            roleName = "尝试改名", roleKey = "super_admin", dataScope = 1, status = 1, menuIds = Array.Empty<Guid>()
+            roleName = "尝试改名",
+            roleKey = "super_admin",
+            dataScope = 1,
+            status = 1,
+            menuIds = Array.Empty<Guid>()
         }, _adminToken);
         var updateBody = await ReadBodyAsync(update);
 
@@ -567,7 +589,11 @@ public class SystemManagementApiTests
         // 校验：目录缺 path
         var invalidDirectory = await SendAsync(HttpMethod.Post, "/api/system/menu", new
         {
-            parentId = Guid.Empty, menuType = 1, menuName = "非法目录", path = " ", status = 1
+            parentId = Guid.Empty,
+            menuType = 1,
+            menuName = "非法目录",
+            path = " ",
+            status = 1
         }, _adminToken);
         var invalidDirectoryBody = await ReadBodyAsync(invalidDirectory);
         Assert.Multiple(() =>
@@ -579,7 +605,11 @@ public class SystemManagementApiTests
         // 校验：按钮缺 perms
         var invalidButton = await SendAsync(HttpMethod.Post, "/api/system/menu", new
         {
-            parentId = SeedId(101), menuType = 3, menuName = "非法按钮", path = "#", status = 1
+            parentId = SeedId(101),
+            menuType = 3,
+            menuName = "非法按钮",
+            path = "#",
+            status = 1
         }, _adminToken);
         var invalidButtonBody = await ReadBodyAsync(invalidButton);
         Assert.That(invalidButtonBody.RootElement.GetProperty("code").GetInt32(), Is.EqualTo(400404));
@@ -588,7 +618,14 @@ public class SystemManagementApiTests
         var perms = $"system:user:export{Guid.NewGuid().ToString("N")[..6]}";
         var createBody = await SendForJsonAsync(HttpMethod.Post, "/api/system/menu", new
         {
-            parentId = SeedId(101), menuType = 3, menuName = "用户导出测试", path = "#", perms, orderNum = 9, visible = 1, status = 1
+            parentId = SeedId(101),
+            menuType = 3,
+            menuName = "用户导出测试",
+            path = "#",
+            perms,
+            orderNum = 9,
+            visible = 1,
+            status = 1
         }, _adminToken);
         var menuId = createBody.RootElement.GetProperty("data").GetGuid();
 
@@ -602,7 +639,14 @@ public class SystemManagementApiTests
         // 父级设为自身 → 400405
         var parentSelf = await SendAsync(HttpMethod.Put, $"/api/system/menu/{menuId}", new
         {
-            parentId = menuId, menuType = 3, menuName = "用户导出测试", path = "#", perms, orderNum = 9, visible = 1, status = 1
+            parentId = menuId,
+            menuType = 3,
+            menuName = "用户导出测试",
+            path = "#",
+            perms,
+            orderNum = 9,
+            visible = 1,
+            status = 1
         }, _adminToken);
         var parentSelfBody = await ReadBodyAsync(parentSelf);
         Assert.That(parentSelfBody.RootElement.GetProperty("code").GetInt32(), Is.EqualTo(400405));
@@ -610,8 +654,16 @@ public class SystemManagementApiTests
         // 父级设为自己的后代（101 的子级 1001）→ 400405
         var parentDescendant = await SendAsync(HttpMethod.Put, $"/api/system/menu/{SeedId(101)}", new
         {
-            parentId = SeedId(1001), menuType = 2, menuName = "用户管理", path = "user", component = "system/user/index",
-            perms = "system:user:list", orderNum = 1, visible = 1, keepAlive = false, status = 1
+            parentId = SeedId(1001),
+            menuType = 2,
+            menuName = "用户管理",
+            path = "user",
+            component = "system/user/index",
+            perms = "system:user:list",
+            orderNum = 1,
+            visible = 1,
+            keepAlive = false,
+            status = 1
         }, _adminToken);
         var parentDescendantBody = await ReadBodyAsync(parentDescendant);
         Assert.That(parentDescendantBody.RootElement.GetProperty("code").GetInt32(), Is.EqualTo(400405));

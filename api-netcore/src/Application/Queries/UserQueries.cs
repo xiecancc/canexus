@@ -10,11 +10,11 @@ using Application.Scopes;
 using AutoMapper;
 using Domain.Entities;
 using Domain.Repositories;
+using Domain.Services.Users;
 using Domain.Shared.Enums;
 using Domain.Shared.Exceptions;
 using Domain.Shared.Paging;
 using Domain.Shared.Results;
-using Domain.Services.Users;
 
 /// <summary>获取用户详情查询处理器。</summary>
 public sealed class GetUserDetailQueryHandler : QueryHandler<GetUserDetailQuery, UserDetailVO>

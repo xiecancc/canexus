@@ -1,9 +1,9 @@
 namespace Infrastructure.Scheduling;
 
 using Domain.Entities;
-using Domain.Shared.Enums;
 using Domain.Repositories;
 using Domain.Services;
+using Domain.Shared.Enums;
 using Microsoft.Extensions.Logging;
 using Quartz;
 

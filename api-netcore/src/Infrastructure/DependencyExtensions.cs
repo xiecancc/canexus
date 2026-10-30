@@ -129,11 +129,8 @@ public static class DependencyExtensions
     /// <returns>服务集合。</returns>
     public static IServiceCollection AddScheduling(this IServiceCollection services)
     {
-        // Quartz 调度器：Microsoft DI 作业工厂（作业内可构造注入）+ 宿主服务（应用启动即启动调度器）
-        services.AddQuartz(quartz =>
-        {
-            quartz.UseMicrosoftDependencyInjectionJobFactory();
-        });
+        // Quartz 调度器（Microsoft DI 作业工厂为默认行为，无需显式配置）+ 宿主服务（应用启动即启动调度器）
+        services.AddQuartz();
         services.AddQuartzHostedService(options => options.WaitForJobsToComplete = false);
 
         // 定时任务调度管理（依赖 scoped 仓储，随请求作用域创建）

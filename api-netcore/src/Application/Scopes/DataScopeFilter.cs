@@ -1,8 +1,8 @@
 
 using Domain.Entities;
 using Domain.Repositories;
-using Domain.Shared.Enums;
 using Domain.Services.Users;
+using Domain.Shared.Enums;
 
 namespace Application.Scopes;
 /// <summary>

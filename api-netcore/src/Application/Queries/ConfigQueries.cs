@@ -5,14 +5,14 @@ using Application.Abstractions;
 using Application.Contracts.Abstractions;
 using Application.Contracts.Configs;
 using Application.Contracts.Queries;
-using Infrastructure.Shared.Caching;
-using Domain.Services.Rules;
 using AutoMapper;
 using Domain.Entities;
 using Domain.Repositories;
+using Domain.Services.Rules;
 using Domain.Shared.Exceptions;
 using Domain.Shared.Paging;
 using Domain.Shared.Results;
+using Infrastructure.Shared.Caching;
 
 /// <summary>按参数键名查询参数值处理器。</summary>
 public sealed class GetConfigByKeyQueryHandler : QueryHandler<GetConfigByKeyQuery, string>

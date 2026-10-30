@@ -1,8 +1,8 @@
 namespace API.Controllers;
 
-using Application.Contracts.Queries;
-using Application.Contracts.Jobs;
 using API.Authorization;
+using Application.Contracts.Jobs;
+using Application.Contracts.Queries;
 using Domain.Shared.Results;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;

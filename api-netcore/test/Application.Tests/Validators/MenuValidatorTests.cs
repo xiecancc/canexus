@@ -4,8 +4,8 @@ using Application.Contracts.Commands;
 using Application.Contracts.Menus;
 using Application.Validators;
 using Domain.Shared.Enums;
-using Domain.Shared.Results;
 using Domain.Shared.Exceptions;
+using Domain.Shared.Results;
 using FluentValidation.TestHelper;
 using NUnit.Framework;
 

@@ -2,11 +2,11 @@ namespace Infrastructure.Scheduling;
 
 using System.Diagnostics;
 using Domain.Entities;
-using Domain.Shared.Enums;
 using Domain.Repositories;
+using Domain.Services;
+using Domain.Shared.Enums;
 using Domain.Shared.Exceptions;
 using Domain.Shared.Results;
-using Domain.Services;
 using Microsoft.Extensions.Logging;
 using Quartz;
 

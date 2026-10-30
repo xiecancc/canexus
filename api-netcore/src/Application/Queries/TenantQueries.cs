@@ -7,8 +7,8 @@ using Application.Contracts.Queries;
 using Application.Contracts.Tenants;
 using AutoMapper;
 using Domain.Entities;
-using Domain.Shared.Enums;
 using Domain.Repositories;
+using Domain.Shared.Enums;
 using Domain.Shared.Paging;
 
 /// <summary>查询启用租户简易列表处理器。</summary>

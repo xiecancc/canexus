@@ -1,10 +1,10 @@
 namespace Application.Permissions;
 
 using Domain.Entities;
-using Domain.Shared.Enums;
 using Domain.Repositories;
-using Infrastructure.Shared.Caching;
 using Domain.Services.Users;
+using Domain.Shared.Enums;
+using Infrastructure.Shared.Caching;
 
 /// <summary>
 /// 权限校验器实现：双层缓存按 userId 缓存权限集合（L1 2 分钟 / L2 10 分钟）。

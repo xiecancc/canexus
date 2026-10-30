@@ -4,12 +4,12 @@ using Application.Abstractions;
 using Application.Contracts.Commands;
 using Application.Contracts.Dicts;
 using AutoMapper;
-using Infrastructure.Shared.Caching;
-using Domain.Services.Rules;
 using Domain.Entities;
 using Domain.Repositories;
+using Domain.Services.Rules;
 using Domain.Shared.Exceptions;
 using Domain.Shared.Results;
+using Infrastructure.Shared.Caching;
 
 /// <summary>创建字典数据命令处理器。</summary>
 public sealed class CreateDictDataCommandHandler : CommandHandler<CreateDictDataCommand, Guid>
