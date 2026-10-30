@@ -1,6 +1,6 @@
 # 推送门禁：前端全量类型检查 + 单元测试；后端编译检查
 # （较重检查放 pre-push，保持提交流畅；完整构建与集成测试由 CI 执行）
 HOOK_DIR=$(cd "$(dirname "$0")" && pwd)
-cd "$HOOK_DIR/../.." || exit 1
+cd "$HOOK_DIR/.." || exit 1
 
 pnpm -C admin-vue type-check && pnpm -C admin-vue test:unit run && dotnet build api-netcore/api.slnx --verbosity quiet

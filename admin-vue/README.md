@@ -90,19 +90,20 @@ pnpm preview          # 本地预览构建产物
 
 ## 工程化规范（Git Hooks + CI）
 
-### Git Hooks（husky + lint-staged）
+### Git Hooks（husky + lint-staged，仓库根级）
 
-> Git 仓库根为工作区根目录，package.json 位于 `admin-vue/` 子目录，husky 经 `core.hooksPath = admin-vue/.husky` 生效；`pnpm install` 时由 `prepare` 脚本自动配置（脚本内容 `cd .. && husky admin-vue/.husky`），无需手动初始化。
+> 钩子配置在**仓库根目录**（`.husky/` 与 `.git` 同级），根目录 `package.json` 持有 husky / lint-staged，覆盖前端与后端。克隆后先在仓库根执行 `pnpm install`（`prepare` 脚本自动配置 `core.hooksPath`），再进本目录 `pnpm install` 安装前端依赖。
 
 | 钩子 | 时机 | 执行内容 |
 | --- | --- | --- |
-| `pre-commit` | `git commit` 前 | 前端暂存文件（`*.{js,mjs,cjs,ts,vue}`）经 lint-staged 执行 `oxlint --fix` + `oxfmt`（lint-staged 仅匹配 admin-vue 目录内文件）；后端暂存 `.cs` 文件由钩子脚本直接执行 `dotnet format --include` 并重新暂存。存在无法自动修复的问题则提交失败 |
+| `pre-commit` | `git commit` 前 | lint-staged（配置于根 `.lintstagedrc.mjs`）对暂存文件分类检查：前端文件（`*.{js,mjs,cjs,ts,vue}`）经 `pnpm -C admin-vue` 以本目录为 cwd 执行 `oxlint --fix` + `oxfmt`；后端 `.cs` 文件执行 `dotnet format --include`（路径转换为仓库相对路径后传入）。自动修复后重新暂存，无法修复的问题则提交失败 |
 | `pre-push` | `git push` 前 | 前端全量 `pnpm type-check`（vue-tsc）+ `pnpm test:unit run`（Vitest）+ 后端 `dotnet build` 编译检查；任一失败则推送被拒绝 |
 
 配置位置：
 
-- `admin-vue/package.json` 的 `lint-staged` 字段（匹配规则与执行命令）
-- `admin-vue/.husky/pre-commit`、`admin-vue/.husky/pre-push`（钩子脚本）
+- 仓库根 `package.json`（husky / lint-staged 依赖与 prepare 脚本）
+- 仓库根 `.lintstagedrc.mjs`（匹配规则与执行命令；`.cs` 用函数配置把 lint-staged 传入的绝对路径转为仓库相对路径——`dotnet format --include` 不识别绝对路径，会静默跳过）
+- 仓库根 `.husky/pre-commit`、`.husky/pre-push`（钩子脚本）
 
 如需临时跳过钩子（不推荐）：`git commit --no-verify` / `git push --no-verify`。
 

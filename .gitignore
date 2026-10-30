@@ -183,3 +183,7 @@ secrets.*.json
 .roo/
 .cline/
 .aider*
+
+# Node（根目录工程化工具：husky / lint-staged）
+node_modules/
+.pnpm-store/

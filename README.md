@@ -32,7 +32,7 @@ api-netcore（http://localhost:5000）
 
 ## 工程化规范
 
-- **Git Hooks（husky + lint-staged）**：提交前对暂存文件分类检查——前端 `oxlint --fix` + `oxfmt`，后端 `dotnet format`；推送前执行前端类型检查（vue-tsc）、Vitest 单元测试与后端编译检查。`pnpm install` 时自动生效（`prepare` 脚本配置 `core.hooksPath`），详见 [admin-vue/README.md](./admin-vue/README.md)。
+- **Git Hooks（husky + lint-staged，仓库根级）**：根目录 `package.json` 持有 husky / lint-staged，`.husky/` 与 `.git` 同级，钩子覆盖全部子项目——提交前前端文件 `oxlint --fix` + `oxfmt`、后端 `.cs` 文件 `dotnet format`；推送前执行前端类型检查（vue-tsc）、Vitest 单元测试与后端编译检查。克隆后先在根目录执行一次 `pnpm install` 激活钩子（`prepare` 脚本配置 `core.hooksPath`），再进各子项目安装依赖。配置见根 `package.json` 与 `.lintstagedrc.mjs`。
 - **CI 流水线（GitHub Actions）**：`.github/workflows/ci.yml`，push 与 PR 触发——前端 Job（lint / 类型检查 / 单测 / 构建）与后端 Job（dotnet build / test，MySQL 8 服务容器承载集成测试）并行执行。
 
 ## 约定

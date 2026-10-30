@@ -1,0 +1,17 @@
+{
+  "name": "super",
+  "version": "0.0.0",
+  "private": true,
+  "description": "仓库根工程化包：持有 husky / lint-staged，Git 提交门禁覆盖前端（admin-vue）与后端（api-netcore）",
+  "packageManager": "pnpm@12.14.0",
+  "engines": {
+    "node": ">=26.0.0"
+  },
+  "scripts": {
+    "prepare": "husky"
+  },
+  "devDependencies": {
+    "husky": "^9.1.7",
+    "lint-staged": "^17.6.0"
+  }
+}
