@@ -12,20 +12,13 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 /// <summary>角色管理接口：分页、下拉简项、详情、增删改与菜单授权。</summary>
+/// <remarks>构造函数。</remarks>
+/// <param name="sender">MediatR 请求发送器（CQRS 分发入口）。</param>
 [ApiController]
 [Route("api/system/role")]
 [Authorize]
-public class SysRoleController : ControllerBase
+public class SysRoleController(ISender sender) : ControllerBase
 {
-    private readonly ISender _sender;
-
-    /// <summary>构造函数。</summary>
-    /// <param name="sender">MediatR 请求发送器（CQRS 分发入口）。</param>
-    public SysRoleController(ISender sender)
-    {
-        _sender = sender;
-    }
-
     /// <summary>分页查询角色（keyword 匹配角色名称 / 角色权限字符；status 精确）。</summary>
     /// <param name="request">分页与筛选条件。</param>
     /// <returns>分页结果。</returns>
@@ -33,7 +26,7 @@ public class SysRoleController : ControllerBase
     [RequirePermission("system:role:list")]
     public async Task<IActionResult> Page([FromQuery] RolePageRequest request)
     {
-        return Ok(Result.Ok(await _sender.Send(new GetRolePageQuery(request))));
+        return Ok(Result.Ok(await sender.Send(new GetRolePageQuery(request))));
     }
 
     /// <summary>获取全部启用角色（不分页，含超管角色，用于用户分配角色下拉）。</summary>
@@ -42,7 +35,7 @@ public class SysRoleController : ControllerBase
     [RequirePermission("system:role:list")]
     public async Task<IActionResult> All()
     {
-        return Ok(Result.Ok(await _sender.Send(new GetAllEnabledRolesQuery())));
+        return Ok(Result.Ok(await sender.Send(new GetAllEnabledRolesQuery())));
     }
 
     /// <summary>获取角色详情（含授权菜单 Id 集合，前端用作菜单授权回显）。</summary>
@@ -52,7 +45,7 @@ public class SysRoleController : ControllerBase
     [RequirePermission("system:role:query")]
     public async Task<IActionResult> Get(Guid id)
     {
-        return Ok(Result.Ok(await _sender.Send(new GetRoleDetailQuery(id))));
+        return Ok(Result.Ok(await sender.Send(new GetRoleDetailQuery(id))));
     }
 
     /// <summary>创建角色（roleKey 唯一且不可使用保留值 super_admin；菜单授权全删全插）。</summary>
@@ -63,7 +56,7 @@ public class SysRoleController : ControllerBase
     [OperLog("角色管理", OperBusinessType.Add)]
     public async Task<IActionResult> Create([FromBody] RoleCreateRequest request)
     {
-        var id = await _sender.Send(new CreateRoleCommand(request));
+        var id = await sender.Send(new CreateRoleCommand(request));
         return Ok(Result.Ok(id, "创建成功"));
     }
 
@@ -76,7 +69,7 @@ public class SysRoleController : ControllerBase
     [OperLog("角色管理", OperBusinessType.Update)]
     public async Task<IActionResult> Update(Guid id, [FromBody] RoleUpdateRequest request)
     {
-        await _sender.Send(new UpdateRoleCommand(id, request));
+        await sender.Send(new UpdateRoleCommand(id, request));
         return Ok(Result.Ok(message: "更新成功"));
     }
 
@@ -88,7 +81,7 @@ public class SysRoleController : ControllerBase
     [OperLog("角色管理", OperBusinessType.Delete)]
     public async Task<IActionResult> Delete(Guid id)
     {
-        await _sender.Send(new DeleteRoleCommand(id));
+        await sender.Send(new DeleteRoleCommand(id));
         return Ok(Result.Ok(message: "删除成功"));
     }
 }

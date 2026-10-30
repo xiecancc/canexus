@@ -10,7 +10,13 @@ using Infrastructure.Shared.Caching;
 /// 权限校验器实现：双层缓存按 userId 缓存权限集合（L1 2 分钟 / L2 10 分钟）。
 /// <para>全局版本号存于缓存（<see cref="VersionCacheKey"/>），全量失效时递增，旧 key 自然失配，无需遍历缓存。</para>
 /// </summary>
-public sealed class PermissionChecker : IPermissionChecker
+/// <remarks>构造函数。</remarks>
+public sealed class PermissionChecker(
+    IDomainRepository<SysUserRole> userRoleRepository,
+    IDomainRepository<SysRole> roleRepository,
+    IDomainRepository<SysRoleMenu> roleMenuRepository,
+    IDomainRepository<SysMenu> menuRepository,
+    ICache cache) : IPermissionChecker
 {
     /// <summary>缓存 key 前缀（key 格式：{prefix}{version}:{userId}）。</summary>
     public const string CacheKeyPrefix = "auth:permissions:";
@@ -27,39 +33,18 @@ public sealed class PermissionChecker : IPermissionChecker
     /// <summary>超管角色权限字符串。</summary>
     private const string SuperAdminRoleKey = "super_admin";
 
-    private readonly IDomainRepository<SysUserRole> _userRoleRepository;
-    private readonly IDomainRepository<SysRole> _roleRepository;
-    private readonly IDomainRepository<SysRoleMenu> _roleMenuRepository;
-    private readonly IDomainRepository<SysMenu> _menuRepository;
-    private readonly ICache _cache;
-
-    /// <summary>构造函数。</summary>
-    public PermissionChecker(
-        IDomainRepository<SysUserRole> userRoleRepository,
-        IDomainRepository<SysRole> roleRepository,
-        IDomainRepository<SysRoleMenu> roleMenuRepository,
-        IDomainRepository<SysMenu> menuRepository,
-        ICache cache)
-    {
-        _userRoleRepository = userRoleRepository;
-        _roleRepository = roleRepository;
-        _roleMenuRepository = roleMenuRepository;
-        _menuRepository = menuRepository;
-        _cache = cache;
-    }
-
     /// <inheritdoc />
     public async Task<IReadOnlySet<string>> GetPermissionsAsync(Guid userId, CancellationToken cancellationToken = default)
     {
         var key = await BuildKeyAsync(userId, cancellationToken);
-        var cached = await _cache.GetAsync<HashSet<string>>(key, cancellationToken);
+        var cached = await cache.GetAsync<HashSet<string>>(key, cancellationToken);
         if (cached is not null)
         {
             return cached;
         }
 
         var permissions = await LoadPermissionsAsync(userId, cancellationToken);
-        await _cache.SetAsync(key, permissions, PermissionTtl, cancellationToken);
+        await cache.SetAsync(key, permissions, PermissionTtl, cancellationToken);
         return permissions;
     }
 
@@ -78,20 +63,20 @@ public sealed class PermissionChecker : IPermissionChecker
     /// <inheritdoc />
     public async Task InvalidateAsync(Guid userId)
     {
-        await _cache.RemoveAsync(BuildKeyStatic(userId, await GetVersionAsync()));
+        await cache.RemoveAsync(BuildKeyStatic(userId, await GetVersionAsync()));
     }
 
     /// <inheritdoc />
     public async Task InvalidateAllAsync()
     {
         // 版本号递增后旧 key 全部失配，等效于全量失效
-        await _cache.SetAsync(VersionCacheKey, await GetVersionAsync() + 1, PermissionTtl);
+        await cache.SetAsync(VersionCacheKey, await GetVersionAsync() + 1, PermissionTtl);
     }
 
     /// <summary>加载用户权限集合：启用角色 → 超管通配 / 角色菜单 → 菜单 perms。</summary>
     private async Task<HashSet<string>> LoadPermissionsAsync(Guid userId, CancellationToken cancellationToken)
     {
-        var roleIds = (await _userRoleRepository.GetListAsync([ur => ur.UserId == userId], cancellationToken: cancellationToken))
+        var roleIds = (await userRoleRepository.GetListAsync([ur => ur.UserId == userId], cancellationToken: cancellationToken))
             .Select(ur => ur.RoleId)
             .Distinct()
             .ToList();
@@ -100,7 +85,7 @@ public sealed class PermissionChecker : IPermissionChecker
             return [];
         }
 
-        var roles = await _roleRepository.GetListAsync([r => r.Status == CommonStatus.Enabled && roleIds.Contains(r.Id)], cancellationToken: cancellationToken);
+        var roles = await roleRepository.GetListAsync([r => r.Status == CommonStatus.Enabled && roleIds.Contains(r.Id)], cancellationToken: cancellationToken);
         if (roles.Count == 0)
         {
             return [];
@@ -112,7 +97,7 @@ public sealed class PermissionChecker : IPermissionChecker
             return [WildcardPermission];
         }
 
-        var menuIds = (await _roleMenuRepository.GetListAsync([rm => roleIds.Contains(rm.RoleId)], cancellationToken: cancellationToken))
+        var menuIds = (await roleMenuRepository.GetListAsync([rm => roleIds.Contains(rm.RoleId)], cancellationToken: cancellationToken))
             .Select(rm => rm.MenuId)
             .Distinct()
             .ToList();
@@ -121,7 +106,7 @@ public sealed class PermissionChecker : IPermissionChecker
             return [];
         }
 
-        var perms = (await _menuRepository.GetListAsync([m => m.Status == CommonStatus.Enabled && menuIds.Contains(m.Id)], cancellationToken: cancellationToken))
+        var perms = (await menuRepository.GetListAsync([m => m.Status == CommonStatus.Enabled && menuIds.Contains(m.Id)], cancellationToken: cancellationToken))
             .Where(m => !string.IsNullOrWhiteSpace(m.Perms))
             .Select(m => m.Perms!.Trim());
         return perms.ToHashSet();
@@ -132,7 +117,7 @@ public sealed class PermissionChecker : IPermissionChecker
     /// <returns>全局版本号。</returns>
     private async Task<long> GetVersionAsync(CancellationToken cancellationToken = default)
     {
-        return await _cache.GetAsync<long>(VersionCacheKey, cancellationToken);
+        return await cache.GetAsync<long>(VersionCacheKey, cancellationToken);
     }
 
     /// <summary>构建用户权限缓存 key（带全局版本号，全量失效后旧 key 失配）。</summary>

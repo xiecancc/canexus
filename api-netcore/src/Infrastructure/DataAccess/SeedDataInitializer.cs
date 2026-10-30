@@ -15,7 +15,11 @@ using SqlSugar;
 /// <item>字典（sys_normal_disable / sys_user_sex / sys_yes_no / sys_oper_type / sys_notice_type）、参数（初始密码 / 验证码开关）与示例通知公告按缺失项幂等追加。</item>
 /// </list>
 /// </summary>
-public sealed class SeedDataInitializer
+/// <remarks>构造函数。</remarks>
+/// <param name="client">SqlSugar 客户端。</param>
+/// <param name="passwordHasher">密码哈希器（种子账号密码加密）。</param>
+/// <param name="logger">日志。</param>
+public sealed class SeedDataInitializer(ISqlSugarClient client, IPasswordHasher passwordHasher, ILogger<SeedDataInitializer> logger)
 {
     /// <summary>由种子序号生成确定性占位主键（格式 00000000-0000-0000-0000-{序号:D12}，保证 36 位）。</summary>
     private static Guid SeedId(long n) => Guid.Parse($"00000000-0000-0000-0000-{n:D12}");
@@ -34,27 +38,12 @@ public sealed class SeedDataInitializer
     /// <summary>字典数据隐藏页菜单固定 Id（挂在字典管理 105 下，visible=0 不进入侧边栏）。</summary>
     private static readonly Guid DictDataMenuId = SeedId(109);
 
-    private readonly ISqlSugarClient _client;
-    private readonly IPasswordHasher _passwordHasher;
-    private readonly ILogger<SeedDataInitializer> _logger;
-
-    /// <summary>构造函数。</summary>
-    /// <param name="client">SqlSugar 客户端。</param>
-    /// <param name="passwordHasher">密码哈希器（种子账号密码加密）。</param>
-    /// <param name="logger">日志。</param>
-    public SeedDataInitializer(ISqlSugarClient client, IPasswordHasher passwordHasher, ILogger<SeedDataInitializer> logger)
-    {
-        _client = client;
-        _passwordHasher = passwordHasher;
-        _logger = logger;
-    }
-
     /// <summary>初始化种子数据（幂等：基础数据仅当对应表为空时插入，字典与参数按缺失项追加，整体在一个事务内完成）。</summary>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>表示异步操作的任务。</returns>
     public async Task InitializeAsync(CancellationToken cancellationToken = default)
     {
-        await _client.Ado.BeginTranAsync();
+        await client.Ado.BeginTranAsync();
         try
         {
             await SeedDeptsAsync();
@@ -65,11 +54,11 @@ public sealed class SeedDataInitializer
             await SeedDictsAsync();
             await SeedConfigsAsync();
             await SeedNoticesAsync();
-            await _client.Ado.CommitTranAsync();
+            await client.Ado.CommitTranAsync();
         }
         catch
         {
-            await _client.Ado.RollbackTranAsync();
+            await client.Ado.RollbackTranAsync();
             throw;
         }
     }
@@ -77,7 +66,7 @@ public sealed class SeedDataInitializer
     /// <summary>种子默认部门树：总公司（研发部、市场部）。</summary>
     private async Task SeedDeptsAsync()
     {
-        if (await _client.Queryable<SysDept>().CountAsync() > 0)
+        if (await client.Queryable<SysDept>().CountAsync() > 0)
         {
             return;
         }
@@ -86,13 +75,13 @@ public sealed class SeedDataInitializer
         await InsertAsync(new SysDept { Id = DeptRdId, ParentId = DeptCompanyId, DeptName = "研发部", OrderNum = 1 });
         await InsertAsync(new SysDept { Id = DeptMarketId, ParentId = DeptCompanyId, DeptName = "市场部", OrderNum = 2 });
 
-        _logger.LogInformation("种子数据：默认部门树已初始化");
+        logger.LogInformation("种子数据：默认部门树已初始化");
     }
 
     /// <summary>种子超管角色：super_admin（数据范围为全部）。</summary>
     private async Task SeedRoleAsync()
     {
-        if (await _client.Queryable<SysRole>().CountAsync() > 0)
+        if (await client.Queryable<SysRole>().CountAsync() > 0)
         {
             return;
         }
@@ -106,13 +95,13 @@ public sealed class SeedDataInitializer
             Description = "内置超管角色，放行全部权限"
         });
 
-        _logger.LogInformation("种子数据：超管角色 super_admin 已初始化");
+        logger.LogInformation("种子数据：超管角色 super_admin 已初始化");
     }
 
     /// <summary>种子 admin 用户（用户名 admin，初始密码 admin123）并绑定超管角色。</summary>
     private async Task SeedAdminUserAsync()
     {
-        if (await _client.Queryable<SysUser>().CountAsync() > 0)
+        if (await client.Queryable<SysUser>().CountAsync() > 0)
         {
             return;
         }
@@ -122,14 +111,14 @@ public sealed class SeedDataInitializer
             Id = AdminUserId,
             UserName = "admin",
             NickName = "超级管理员",
-            PasswordHash = _passwordHasher.Hash("admin123"),
+            PasswordHash = passwordHasher.Hash("admin123"),
             DeptId = DeptCompanyId,
             Description = "内置超管账号"
         });
 
         await InsertAsync(new SysUserRole { UserId = AdminUserId, RoleId = SuperAdminRoleId });
 
-        _logger.LogInformation("种子数据：admin 账号已初始化（初始密码 admin123）");
+        logger.LogInformation("种子数据：admin 账号已初始化（初始密码 admin123）");
     }
 
     /// <summary>
@@ -184,14 +173,14 @@ public sealed class SeedDataInitializer
         await EnsureButtonsAsync(SeedId(301), "monitor:job", "定时任务", startId: 3011,
             ("查询", "query"), ("新增", "add"), ("修改", "edit"), ("删除", "remove"), ("执行", "run"), ("状态修改", "changeStatus"));
 
-        _logger.LogInformation("种子数据：菜单树已同步");
+        logger.LogInformation("种子数据：菜单树已同步");
     }
 
     /// <summary>确保目录 / 菜单存在（按主键或「菜单类型 + 名称 + 路由」判重，缺失时插入；同名菜单 component / perms 过时则原位更新）。</summary>
     /// <param name="menu">菜单实体（携带种子固定 Id）。</param>
     private async Task EnsureMenuAsync(SysMenu menu)
     {
-        var existing = await _client.Queryable<SysMenu>().FirstAsync(m =>
+        var existing = await client.Queryable<SysMenu>().FirstAsync(m =>
             m.Id == menu.Id
             || (m.MenuType == menu.MenuType && m.MenuName == menu.MenuName && m.Path == menu.Path));
         if (existing is null)
@@ -206,7 +195,7 @@ public sealed class SeedDataInitializer
         {
             existing.Component = menu.Component;
             existing.Perms = menu.Perms;
-            await _client.Updateable(existing)
+            await client.Updateable(existing)
                 .UpdateColumns(m => new { m.Component, m.Perms })
                 .ExecuteCommandAsync();
         }
@@ -227,17 +216,17 @@ public sealed class SeedDataInitializer
             var buttonId = SeedId(startId + i);
 
             // 原位纠偏：同名按钮的 perms 前缀过时（如 tool:job → monitor:job）时按「父菜单 + 按钮名称」更新
-            var existing = await _client.Queryable<SysMenu>().FirstAsync(m =>
+            var existing = await client.Queryable<SysMenu>().FirstAsync(m =>
                 m.MenuType == MenuType.Button && m.ParentId == parentId && m.MenuName == menuName);
             if (existing is not null && existing.Perms != perms)
             {
                 existing.Perms = perms;
-                await _client.Updateable(existing)
+                await client.Updateable(existing)
                     .UpdateColumns(m => new { m.Perms })
                     .ExecuteCommandAsync();
             }
 
-            var exists = await _client.Queryable<SysMenu>().CountAsync(m =>
+            var exists = await client.Queryable<SysMenu>().CountAsync(m =>
                 m.Id == buttonId
                 || (m.MenuType == MenuType.Button && m.ParentId == parentId && m.Perms == perms)) > 0;
             if (exists)
@@ -261,7 +250,7 @@ public sealed class SeedDataInitializer
     /// <summary>补充字典数据隐藏页菜单（system/dict/data，visible=0；历史库也幂等追加）。</summary>
     private async Task EnsureDictDataMenuAsync()
     {
-        if (await _client.Queryable<SysMenu>().CountAsync(m => m.Component == "system/dict/data") > 0)
+        if (await client.Queryable<SysMenu>().CountAsync(m => m.Component == "system/dict/data") > 0)
         {
             return;
         }
@@ -278,7 +267,7 @@ public sealed class SeedDataInitializer
             parentId: DictMenuId,
             visible: MenuVisible.Hide));
 
-        _logger.LogInformation("种子数据：字典数据隐藏页菜单已补充");
+        logger.LogInformation("种子数据：字典数据隐藏页菜单已补充");
     }
 
     /// <summary>种子字典数据（按 dictType + dictValue 幂等追加，缺失项才插入，不破坏既有数据）。</summary>
@@ -314,7 +303,7 @@ public sealed class SeedDataInitializer
 
         if (inserted)
         {
-            _logger.LogInformation("种子数据：字典数据已同步");
+            logger.LogInformation("种子数据：字典数据已同步");
         }
     }
 
@@ -328,7 +317,7 @@ public sealed class SeedDataInitializer
 
         if (inserted)
         {
-            _logger.LogInformation("种子数据：系统参数已同步");
+            logger.LogInformation("种子数据：系统参数已同步");
         }
     }
 
@@ -336,7 +325,7 @@ public sealed class SeedDataInitializer
     /// <returns>本次是否执行了插入。</returns>
     private async Task<bool> EnsureDictTypeAsync(string dictType, string dictName, string? description)
     {
-        if (await _client.Queryable<SysDictType>().CountAsync(t => t.DictType == dictType) > 0)
+        if (await client.Queryable<SysDictType>().CountAsync(t => t.DictType == dictType) > 0)
         {
             return false;
         }
@@ -349,7 +338,7 @@ public sealed class SeedDataInitializer
     /// <returns>本次是否执行了插入。</returns>
     private async Task<bool> EnsureDictDataAsync(string dictType, string label, string value, TagType tagType, int orderNum)
     {
-        if (await _client.Queryable<SysDictData>().CountAsync(d => d.DictType == dictType && d.DictValue == value) > 0)
+        if (await client.Queryable<SysDictData>().CountAsync(d => d.DictType == dictType && d.DictValue == value) > 0)
         {
             return false;
         }
@@ -370,7 +359,7 @@ public sealed class SeedDataInitializer
     /// <returns>本次是否执行了插入。</returns>
     private async Task<bool> EnsureConfigAsync(string configKey, string configValue, string configName, bool builtIn = true, string? description = null)
     {
-        if (await _client.Queryable<SysConfig>().CountAsync(c => c.ConfigKey == configKey) > 0)
+        if (await client.Queryable<SysConfig>().CountAsync(c => c.ConfigKey == configKey) > 0)
         {
             return false;
         }
@@ -410,7 +399,7 @@ public sealed class SeedDataInitializer
 
         if (inserted)
         {
-            _logger.LogInformation("种子数据：示例通知公告已同步");
+            logger.LogInformation("种子数据：示例通知公告已同步");
         }
     }
 
@@ -419,7 +408,7 @@ public sealed class SeedDataInitializer
     /// <returns>本次是否执行了插入。</returns>
     private async Task<bool> EnsureNoticeAsync(SysNotice notice)
     {
-        if (await _client.Queryable<SysNotice>().CountAsync(n => n.Title == notice.Title) > 0)
+        if (await client.Queryable<SysNotice>().CountAsync(n => n.Title == notice.Title) > 0)
         {
             return false;
         }
@@ -472,6 +461,6 @@ public sealed class SeedDataInitializer
     /// <remarks>显式设置 Id 的种子数据直接写入该主键；Guid 主键非自增，无需 OffIdentity。</remarks>
     private async Task InsertAsync<TEntity>(TEntity entity) where TEntity : DomainBase, new()
     {
-        await _client.Insertable(entity).ExecuteCommandAsync();
+        await client.Insertable(entity).ExecuteCommandAsync();
     }
 }

@@ -11,21 +11,12 @@ using Domain.Shared.Results;
 /// <item>未知异常：返回 500 + 统一 Result（固定消息“服务器内部错误”，不向客户端泄露堆栈），并以 Error 级别记录 Serilog。</item>
 /// </list>
 /// </summary>
-public sealed class GlobalExceptionHandlingMiddleware
+/// <remarks>构造函数（由请求管道注入）。</remarks>
+/// <param name="next">管道中的下一个委托。</param>
+/// <param name="logger">日志记录器。</param>
+public sealed class GlobalExceptionHandlingMiddleware(RequestDelegate next, ILogger<GlobalExceptionHandlingMiddleware> logger)
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
-
-    private readonly RequestDelegate _next;
-    private readonly ILogger<GlobalExceptionHandlingMiddleware> _logger;
-
-    /// <summary>构造函数（由请求管道注入）。</summary>
-    /// <param name="next">管道中的下一个委托。</param>
-    /// <param name="logger">日志记录器。</param>
-    public GlobalExceptionHandlingMiddleware(RequestDelegate next, ILogger<GlobalExceptionHandlingMiddleware> logger)
-    {
-        _next = next;
-        _logger = logger;
-    }
 
     /// <summary>中间件入口：捕获下游管道的未处理异常并转换为统一响应。</summary>
     /// <param name="context">HTTP 上下文。</param>
@@ -33,13 +24,13 @@ public sealed class GlobalExceptionHandlingMiddleware
     {
         try
         {
-            await _next(context);
+            await next(context);
         }
         catch (BusinessException exception)
         {
             // 业务异常：错误码映射 HTTP 状态，消息可直接返回给客户端
             var statusCode = ErrorCodes.GetHttpStatusCode(exception.Code);
-            _logger.LogWarning("业务异常：{Code} - {Message}", exception.Code, exception.Message);
+            logger.LogWarning("业务异常：{Code} - {Message}", exception.Code, exception.Message);
             await WriteResultAsync(context, statusCode, Result.Fail(exception.Code, exception.Message));
         }
         catch (FluentValidation.ValidationException exception)
@@ -51,13 +42,13 @@ public sealed class GlobalExceptionHandlingMiddleware
                 message = "请求参数校验失败";
             }
 
-            _logger.LogWarning("验证异常：{Message}", message);
+            logger.LogWarning("验证异常：{Message}", message);
             await WriteResultAsync(context, StatusCodes.Status400BadRequest, Result.Fail(ErrorCodes.CommonValidationFailed, message));
         }
         catch (Exception exception)
         {
             // 未知异常：不泄露堆栈与内部信息，仅返回固定文案，完整堆栈写入日志
-            _logger.LogError(exception, "未处理异常：{Method} {Path}", context.Request.Method, context.Request.Path);
+            logger.LogError(exception, "未处理异常：{Method} {Path}", context.Request.Method, context.Request.Path);
             await WriteResultAsync(
                 context,
                 StatusCodes.Status500InternalServerError,

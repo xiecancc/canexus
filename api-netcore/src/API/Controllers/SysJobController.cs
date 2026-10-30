@@ -12,20 +12,13 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 /// <summary>定时任务管理接口：分页、增删改、启停与立即执行（创建 / 修改 / 启停即时同步 Quartz 调度器）。</summary>
+/// <remarks>构造函数。</remarks>
+/// <param name="sender">MediatR 请求发送器（CQRS 分发入口）。</param>
 [ApiController]
 [Route("api/monitor/job")]
 [Authorize]
-public class SysJobController : ControllerBase
+public class SysJobController(ISender sender) : ControllerBase
 {
-    private readonly ISender _sender;
-
-    /// <summary>构造函数。</summary>
-    /// <param name="sender">MediatR 请求发送器（CQRS 分发入口）。</param>
-    public SysJobController(ISender sender)
-    {
-        _sender = sender;
-    }
-
     /// <summary>分页查询定时任务（keyword 模糊匹配任务名称 / 任务分组；status 精确）。</summary>
     /// <param name="request">分页与筛选条件。</param>
     /// <returns>分页结果。</returns>
@@ -33,7 +26,7 @@ public class SysJobController : ControllerBase
     [RequirePermission("monitor:job:list")]
     public async Task<IActionResult> Page([FromQuery] JobPageRequest request)
     {
-        return Ok(Result.Ok(await _sender.Send(new GetJobPageQuery(request))));
+        return Ok(Result.Ok(await sender.Send(new GetJobPageQuery(request))));
     }
 
     /// <summary>创建定时任务（Cron 与任务类型校验；status=1 时创建后立即入调度）。</summary>
@@ -44,7 +37,7 @@ public class SysJobController : ControllerBase
     [OperLog("定时任务", OperBusinessType.Add)]
     public async Task<IActionResult> Create([FromBody] JobCreateRequest request)
     {
-        var id = await _sender.Send(new CreateJobCommand(request));
+        var id = await sender.Send(new CreateJobCommand(request));
         return Ok(Result.Ok(id, "创建成功"));
     }
 
@@ -57,7 +50,7 @@ public class SysJobController : ControllerBase
     [OperLog("定时任务", OperBusinessType.Update)]
     public async Task<IActionResult> Update(Guid id, [FromBody] JobUpdateRequest request)
     {
-        await _sender.Send(new UpdateJobCommand(id, request));
+        await sender.Send(new UpdateJobCommand(id, request));
         return Ok(Result.Ok(message: "更新成功"));
     }
 
@@ -69,7 +62,7 @@ public class SysJobController : ControllerBase
     [OperLog("定时任务", OperBusinessType.Delete)]
     public async Task<IActionResult> Delete(Guid id)
     {
-        await _sender.Send(new DeleteJobCommand(id));
+        await sender.Send(new DeleteJobCommand(id));
         return Ok(Result.Ok(message: "删除成功"));
     }
 
@@ -82,7 +75,7 @@ public class SysJobController : ControllerBase
     [OperLog("定时任务", OperBusinessType.Update)]
     public async Task<IActionResult> UpdateStatus(Guid id, [FromBody] JobStatusRequest request)
     {
-        await _sender.Send(new UpdateJobStatusCommand(id, request));
+        await sender.Send(new UpdateJobStatusCommand(id, request));
         return Ok(Result.Ok(message: "状态更新成功"));
     }
 
@@ -94,7 +87,7 @@ public class SysJobController : ControllerBase
     [OperLog("定时任务", OperBusinessType.Update)]
     public async Task<IActionResult> RunOnce(Guid id)
     {
-        await _sender.Send(new RunJobOnceCommand(id));
+        await sender.Send(new RunJobOnceCommand(id));
         return Ok(Result.Ok(message: "执行成功，执行结果请在执行日志中查看"));
     }
 }

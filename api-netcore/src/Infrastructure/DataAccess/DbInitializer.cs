@@ -8,20 +8,11 @@ using SqlSugar;
 /// 数据库初始化器（CodeFirst）：自动建库 + 同步表结构。
 /// <para>扫描配置程序集中继承 <see cref="DomainBase"/> 体系（含聚合基类与树形聚合基类）的具体实体类型（排除抽象类与泛型定义）。</para>
 /// </summary>
-public sealed class DbInitializer
+/// <remarks>构造函数。</remarks>
+/// <param name="client">SqlSugar 客户端。</param>
+/// <param name="options">数据访问配置。</param>
+public sealed class DbInitializer(ISqlSugarClient client, DatabaseOption options)
 {
-    private readonly ISqlSugarClient _client;
-    private readonly DatabaseOption _options;
-
-    /// <summary>构造函数。</summary>
-    /// <param name="client">SqlSugar 客户端。</param>
-    /// <param name="options">数据访问配置。</param>
-    public DbInitializer(ISqlSugarClient client, DatabaseOption options)
-    {
-        _client = client;
-        _options = options;
-    }
-
     /// <summary>初始化数据库：按配置自动建库（AutoCreateTable）、同步表结构（AutoSyncStructure）。</summary>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>表示异步操作的任务。</returns>
@@ -30,12 +21,12 @@ public sealed class DbInitializer
         cancellationToken.ThrowIfCancellationRequested();
 
         // 两个开关均关闭时跳过初始化（由外部自行管理数据库结构）
-        if (!_options.AutoCreateTable && !_options.AutoSyncStructure)
+        if (!options.AutoCreateTable && !options.AutoSyncStructure)
         {
             return;
         }
 
-        var entityTypes = _options.EntityAssemblies
+        var entityTypes = options.EntityAssemblies
             .SelectMany(assembly => assembly.GetTypes())
             .Where(IsConcreteEntityType)
             .Distinct()
@@ -47,31 +38,31 @@ public sealed class DbInitializer
         }
 
         // 建库：连接串中的库不存在时自动创建（MySQL 需要 CREATE DATABASE 权限）
-        if (_options.AutoCreateTable)
+        if (options.AutoCreateTable)
         {
-            _client.DbMaintenance.CreateDatabase();
+            client.DbMaintenance.CreateDatabase();
         }
 
         // CodeFirst 建表 / 同步表结构（SqlSugar 的 InitTables 同时承担缺失表的创建与已有表的结构同步；
         // 仅关闭 AutoSyncStructure 而保留 AutoCreateTable 时，新建表仍会按实体定义生成完整结构）
-        if (_options.AutoCreateTable || _options.AutoSyncStructure)
+        if (options.AutoCreateTable || options.AutoSyncStructure)
         {
-            _client.CodeFirst.InitTables(entityTypes);
+            client.CodeFirst.InitTables(entityTypes);
         }
 
         // 事务支持要求 InnoDB：若服务器默认存储引擎为 MyISAM（不支持事务），将框架管理的表统一修正为 InnoDB
-        if (_options.AutoSyncStructure)
+        if (options.AutoSyncStructure)
         {
             foreach (var entityType in entityTypes)
             {
-                var tableName = _client.EntityMaintenance.GetEntityInfo(entityType).DbTableName;
-                var engine = await _client.Ado.GetScalarAsync(
+                var tableName = client.EntityMaintenance.GetEntityInfo(entityType).DbTableName;
+                var engine = await client.Ado.GetScalarAsync(
                     "SELECT ENGINE FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = @tableName",
                     new SugarParameter("@tableName", tableName));
 
                 if (!string.Equals(engine?.ToString(), "InnoDB", StringComparison.OrdinalIgnoreCase))
                 {
-                    await _client.Ado.ExecuteCommandAsync($"ALTER TABLE `{tableName}` ENGINE = InnoDB");
+                    await client.Ado.ExecuteCommandAsync($"ALTER TABLE `{tableName}` ENGINE = InnoDB");
                 }
             }
         }

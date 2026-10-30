@@ -12,20 +12,13 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 /// <summary>部门管理接口：树查询、详情、增删改。</summary>
+/// <remarks>构造函数。</remarks>
+/// <param name="sender">MediatR 请求发送器（CQRS 分发入口）。</param>
 [ApiController]
 [Route("api/system/dept")]
 [Authorize]
-public class SysDeptController : ControllerBase
+public class SysDeptController(ISender sender) : ControllerBase
 {
-    private readonly ISender _sender;
-
-    /// <summary>构造函数。</summary>
-    /// <param name="sender">MediatR 请求发送器（CQRS 分发入口）。</param>
-    public SysDeptController(ISender sender)
-    {
-        _sender = sender;
-    }
-
     /// <summary>查询部门树（keyword 匹配部门名称 / 负责人；status 精确）。</summary>
     /// <param name="keyword">关键字。</param>
     /// <param name="status">状态。</param>
@@ -34,7 +27,7 @@ public class SysDeptController : ControllerBase
     [RequirePermission("system:dept:list")]
     public async Task<IActionResult> Tree([FromQuery] string? keyword, [FromQuery] Domain.Shared.Enums.CommonStatus? status)
     {
-        return Ok(Result.Ok(await _sender.Send(new GetDeptTreeQuery(keyword, status))));
+        return Ok(Result.Ok(await sender.Send(new GetDeptTreeQuery(keyword, status))));
     }
 
     /// <summary>获取部门详情。</summary>
@@ -44,7 +37,7 @@ public class SysDeptController : ControllerBase
     [RequirePermission("system:dept:query")]
     public async Task<IActionResult> Get(Guid id)
     {
-        return Ok(Result.Ok(await _sender.Send(new GetDeptDetailQuery(id))));
+        return Ok(Result.Ok(await sender.Send(new GetDeptDetailQuery(id))));
     }
 
     /// <summary>创建部门（父部门存在性由处理器校验）。</summary>
@@ -55,7 +48,7 @@ public class SysDeptController : ControllerBase
     [OperLog("部门管理", OperBusinessType.Add)]
     public async Task<IActionResult> Create([FromBody] DeptCreateRequest request)
     {
-        var id = await _sender.Send(new CreateDeptCommand(request));
+        var id = await sender.Send(new CreateDeptCommand(request));
         return Ok(Result.Ok(id, "创建成功"));
     }
 
@@ -68,7 +61,7 @@ public class SysDeptController : ControllerBase
     [OperLog("部门管理", OperBusinessType.Update)]
     public async Task<IActionResult> Update(Guid id, [FromBody] DeptUpdateRequest request)
     {
-        await _sender.Send(new UpdateDeptCommand(id, request));
+        await sender.Send(new UpdateDeptCommand(id, request));
         return Ok(Result.Ok(message: "更新成功"));
     }
 
@@ -80,7 +73,7 @@ public class SysDeptController : ControllerBase
     [OperLog("部门管理", OperBusinessType.Delete)]
     public async Task<IActionResult> Delete(Guid id)
     {
-        await _sender.Send(new DeleteDeptCommand(id));
+        await sender.Send(new DeleteDeptCommand(id));
         return Ok(Result.Ok(message: "删除成功"));
     }
 }

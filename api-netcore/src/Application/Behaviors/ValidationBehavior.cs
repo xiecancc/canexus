@@ -11,28 +11,21 @@ using MediatR;
 /// </summary>
 /// <typeparam name="TRequest">请求类型。</typeparam>
 /// <typeparam name="TResponse">响应类型。</typeparam>
-public sealed class ValidationBehavior<TRequest, TResponse> : IPipelineBehavior<TRequest, TResponse>
+/// <remarks>构造函数。</remarks>
+/// <param name="validators">当前请求匹配的全部验证器（来自 Validators 目录的程序集扫描注册）。</param>
+public sealed class ValidationBehavior<TRequest, TResponse>(IEnumerable<IValidator<TRequest>> validators) : IPipelineBehavior<TRequest, TResponse>
     where TRequest : notnull
 {
-    private readonly IEnumerable<IValidator<TRequest>> _validators;
-
-    /// <summary>构造函数。</summary>
-    /// <param name="validators">当前请求匹配的全部验证器（来自 Validators 目录的程序集扫描注册）。</param>
-    public ValidationBehavior(IEnumerable<IValidator<TRequest>> validators)
-    {
-        _validators = validators;
-    }
-
     /// <inheritdoc />
     public async Task<TResponse> Handle(TRequest request, RequestHandlerDelegate<TResponse> next, CancellationToken cancellationToken)
     {
-        if (!_validators.Any())
+        if (!validators.Any())
         {
             return await next();
         }
 
         var context = new ValidationContext<TRequest>(request);
-        var failures = (await Task.WhenAll(_validators.Select(v => v.ValidateAsync(context, cancellationToken))))
+        var failures = (await Task.WhenAll(validators.Select(v => v.ValidateAsync(context, cancellationToken))))
             .SelectMany(result => result.Errors)
             .Where(failure => failure is not null)
             .ToList();

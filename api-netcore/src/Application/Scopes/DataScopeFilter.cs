@@ -31,28 +31,15 @@ public sealed record UserDataScope(DataScope Scope, IReadOnlyList<Guid>? DeptIds
 }
 
 /// <summary>数据范围过滤实现：基于当前用户角色解析最宽数据范围，用户查询按此追加过滤条件。</summary>
-public sealed class DataScopeFilter : IDataScopeFilter
+/// <remarks>构造函数。</remarks>
+public sealed class DataScopeFilter(
+    IDomainRepository<SysRole> roleRepository,
+    IAggregateTreeRepository<SysDept> deptRepository,
+    IDomainRepository<SysRoleDept> roleDeptRepository,
+    UserContext currentUser) : IDataScopeFilter
 {
-    private readonly IDomainRepository<SysRole> _roleRepository;
-    private readonly IAggregateTreeRepository<SysDept> _deptRepository;
-    private readonly IDomainRepository<SysRoleDept> _roleDeptRepository;
-    private readonly UserContext _currentUser;
-
     /// <summary>请求内缓存：已解析的数据范围。</summary>
     private UserDataScope? _scope;
-
-    /// <summary>构造函数。</summary>
-    public DataScopeFilter(
-        IDomainRepository<SysRole> roleRepository,
-        IAggregateTreeRepository<SysDept> deptRepository,
-        IDomainRepository<SysRoleDept> roleDeptRepository,
-        UserContext currentUser)
-    {
-        _roleRepository = roleRepository;
-        _deptRepository = deptRepository;
-        _roleDeptRepository = roleDeptRepository;
-        _currentUser = currentUser;
-    }
 
     /// <inheritdoc />
     public DataScope? CurrentScope => _scope?.Scope;
@@ -73,18 +60,18 @@ public sealed class DataScopeFilter : IDataScopeFilter
     private async Task<UserDataScope> ResolveScopeAsync(CancellationToken cancellationToken)
     {
         // 超管放行全部数据
-        if (_currentUser.IsSuperAdmin)
+        if (currentUser.IsSuperAdmin)
         {
             return new UserDataScope(DataScope.All, null);
         }
 
-        var roleIds = _currentUser.RoleIds.ToList();
+        var roleIds = currentUser.RoleIds.ToList();
         if (roleIds.Count == 0)
         {
             return new UserDataScope(DataScope.Self, null);
         }
 
-        var roles = await _roleRepository.GetListAsync(
+        var roles = await roleRepository.GetListAsync(
             [r => r.Status == CommonStatus.Enabled && roleIds.Contains(r.Id)],
             cancellationToken: cancellationToken);
         if (roles.Count == 0)
@@ -100,8 +87,8 @@ public sealed class DataScopeFilter : IDataScopeFilter
                 return new UserDataScope(DataScope.All, null);
 
             // 未分配部门时部门维度无法圈定，按仅本人兜底
-            case DataScope.Dept when _currentUser.DeptId is null:
-            case DataScope.DeptAndBelow when _currentUser.DeptId is null:
+            case DataScope.Dept when currentUser.DeptId is null:
+            case DataScope.DeptAndBelow when currentUser.DeptId is null:
                 return new UserDataScope(DataScope.Self, null);
 
             case DataScope.Dept:
@@ -109,9 +96,9 @@ public sealed class DataScopeFilter : IDataScopeFilter
 
             case DataScope.DeptAndBelow:
                 // 树形仓储下探：本部门及其全部后代（含自身）
-                var belowIds = new List<Guid> { _currentUser.DeptId!.Value };
+                var belowIds = new List<Guid> { currentUser.DeptId!.Value };
                 belowIds.AddRange(
-                    (await _deptRepository.GetDescendantsAsync(_currentUser.DeptId.Value, cancellationToken))
+                    (await deptRepository.GetDescendantsAsync(currentUser.DeptId.Value, cancellationToken))
                         .Select(d => d.Id));
                 return new UserDataScope(DataScope.DeptAndBelow, belowIds);
 
@@ -131,7 +118,7 @@ public sealed class DataScopeFilter : IDataScopeFilter
             .Select(r => r.Id)
             .ToList();
 
-        var deptIds = (await _roleDeptRepository.GetListAsync(
+        var deptIds = (await roleDeptRepository.GetListAsync(
                 [rd => customRoleIds.Contains(rd.RoleId)],
                 cancellationToken: cancellationToken))
             .Select(rd => rd.DeptId)

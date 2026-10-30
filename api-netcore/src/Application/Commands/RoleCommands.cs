@@ -47,42 +47,27 @@ internal static class RoleMenuSupport
 }
 
 /// <summary>创建角色命令处理器。</summary>
-public sealed class CreateRoleCommandHandler : CommandHandler<CreateRoleCommand, Guid>
+/// <remarks>构造函数。</remarks>
+public sealed class CreateRoleCommandHandler(
+    IAggregateRepository<SysRole> roleRepository,
+    IDomainRepository<SysRoleMenu> roleMenuRepository,
+    IAggregateRepository<SysMenu> menuRepository,
+    IUnitOfWork unitOfWork,
+    IMapper mapper) : CommandHandler<CreateRoleCommand, Guid>
 {
-    private readonly IAggregateRepository<SysRole> _roleRepository;
-    private readonly IDomainRepository<SysRoleMenu> _roleMenuRepository;
-    private readonly IAggregateRepository<SysMenu> _menuRepository;
-    private readonly IUnitOfWork _unitOfWork;
-    private readonly IMapper _mapper;
-
-    /// <summary>构造函数。</summary>
-    public CreateRoleCommandHandler(
-        IAggregateRepository<SysRole> roleRepository,
-        IDomainRepository<SysRoleMenu> roleMenuRepository,
-        IAggregateRepository<SysMenu> menuRepository,
-        IUnitOfWork unitOfWork,
-        IMapper mapper)
-    {
-        _roleRepository = roleRepository;
-        _roleMenuRepository = roleMenuRepository;
-        _menuRepository = menuRepository;
-        _unitOfWork = unitOfWork;
-        _mapper = mapper;
-    }
-
     /// <inheritdoc />
     protected override async Task<Guid> HandleAsync(CreateRoleCommand command, CancellationToken cancellationToken)
     {
         var request = command.Request;
         var roleKey = request.RoleKey.Trim();
         await EnsureRoleKeyAvailableAsync(roleKey, excludeId: null, cancellationToken);
-        await RoleMenuSupport.ValidateMenusAsync(_menuRepository, request.MenuIds, cancellationToken);
+        await RoleMenuSupport.ValidateMenusAsync(menuRepository, request.MenuIds, cancellationToken);
 
-        return await _unitOfWork.RunInTransactionAsync(async () =>
+        return await unitOfWork.RunInTransactionAsync(async () =>
         {
-            var role = _mapper.Map<SysRole>(request);
-            var inserted = await _roleRepository.InsertAsync(role, cancellationToken);
-            await RoleMenuSupport.ReplaceRoleMenusAsync(_roleMenuRepository, inserted.Id, request.MenuIds, cancellationToken);
+            var role = mapper.Map<SysRole>(request);
+            var inserted = await roleRepository.InsertAsync(role, cancellationToken);
+            await RoleMenuSupport.ReplaceRoleMenusAsync(roleMenuRepository, inserted.Id, request.MenuIds, cancellationToken);
             return inserted.Id;
         }, cancellationToken);
     }
@@ -95,7 +80,7 @@ public sealed class CreateRoleCommandHandler : CommandHandler<CreateRoleCommand,
             throw new BusinessException(ErrorCodes.RoleKeyReserved, "角色权限字符 super_admin 为内置保留值，不可使用");
         }
 
-        var duplicated = (await _roleRepository.GetListAsync([r => r.RoleKey == roleKey], cancellationToken: cancellationToken))
+        var duplicated = (await roleRepository.GetListAsync([r => r.RoleKey == roleKey], cancellationToken: cancellationToken))
             .Any(r => r.Id != excludeId);
         if (duplicated)
         {
@@ -106,96 +91,64 @@ public sealed class CreateRoleCommandHandler : CommandHandler<CreateRoleCommand,
 }
 
 /// <summary>删除角色命令处理器。</summary>
-public sealed class DeleteRoleCommandHandler : CommandHandler<DeleteRoleCommand>
+/// <remarks>构造函数。</remarks>
+public sealed class DeleteRoleCommandHandler(
+    IAggregateRepository<SysRole> roleRepository,
+    IDomainRepository<SysUserRole> userRoleRepository,
+    IDomainRepository<SysRoleMenu> roleMenuRepository,
+    IPermissionChecker permissionChecker,
+    IUnitOfWork unitOfWork) : CommandHandler<DeleteRoleCommand>
 {
     /// <summary>内置超管角色权限字符（保留值）。</summary>
     private const string SuperAdminRoleKey = "super_admin";
 
-    private readonly IAggregateRepository<SysRole> _roleRepository;
-    private readonly IDomainRepository<SysUserRole> _userRoleRepository;
-    private readonly IDomainRepository<SysRoleMenu> _roleMenuRepository;
-    private readonly IPermissionChecker _permissionChecker;
-    private readonly IUnitOfWork _unitOfWork;
-
-    /// <summary>构造函数。</summary>
-    public DeleteRoleCommandHandler(
-        IAggregateRepository<SysRole> roleRepository,
-        IDomainRepository<SysUserRole> userRoleRepository,
-        IDomainRepository<SysRoleMenu> roleMenuRepository,
-        IPermissionChecker permissionChecker,
-        IUnitOfWork unitOfWork)
-    {
-        _roleRepository = roleRepository;
-        _userRoleRepository = userRoleRepository;
-        _roleMenuRepository = roleMenuRepository;
-        _permissionChecker = permissionChecker;
-        _unitOfWork = unitOfWork;
-    }
-
     /// <inheritdoc />
     protected override async Task HandleAsync(DeleteRoleCommand command, CancellationToken cancellationToken)
     {
-        var role = await _roleRepository.GetAsync(command.Id, cancellationToken)
+        var role = await roleRepository.GetAsync(command.Id, cancellationToken)
             ?? throw new BusinessException(ErrorCodes.RoleNotFound, $"角色 {command.Id} 不存在");
         if (role.RoleKey == SuperAdminRoleKey)
         {
             throw new BusinessException(ErrorCodes.RoleProtected, "内置超管角色 super_admin 不允许删除");
         }
 
-        if (await _userRoleRepository.CountAsync(ur => ur.RoleId == command.Id, cancellationToken) > 0)
+        if (await userRoleRepository.CountAsync(ur => ur.RoleId == command.Id, cancellationToken) > 0)
         {
             throw new BusinessException(ErrorCodes.RoleInUse, $"角色「{role.RoleName}」已被用户引用，不允许删除");
         }
 
-        await _unitOfWork.RunInTransactionAsync(async () =>
+        await unitOfWork.RunInTransactionAsync(async () =>
         {
-            await _roleRepository.DeleteAsync(role, cancellationToken);
-            var relations = await _roleMenuRepository.GetListAsync([rm => rm.RoleId == command.Id], cancellationToken: cancellationToken);
+            await roleRepository.DeleteAsync(role, cancellationToken);
+            var relations = await roleMenuRepository.GetListAsync([rm => rm.RoleId == command.Id], cancellationToken: cancellationToken);
             foreach (var relation in relations)
             {
-                await _roleMenuRepository.DeleteAsync(relation, cancellationToken);
+                await roleMenuRepository.DeleteAsync(relation, cancellationToken);
             }
         }, cancellationToken);
 
-        await _permissionChecker.InvalidateAllAsync();
+        await permissionChecker.InvalidateAllAsync();
     }
 }
 
 /// <summary>更新角色命令处理器。</summary>
-public sealed class UpdateRoleCommandHandler : CommandHandler<UpdateRoleCommand>
+/// <remarks>构造函数。</remarks>
+public sealed class UpdateRoleCommandHandler(
+    IAggregateRepository<SysRole> roleRepository,
+    IDomainRepository<SysRoleMenu> roleMenuRepository,
+    IAggregateRepository<SysMenu> menuRepository,
+    IPermissionChecker permissionChecker,
+    IUnitOfWork unitOfWork,
+    IMapper mapper) : CommandHandler<UpdateRoleCommand>
 {
     /// <summary>内置超管角色权限字符（保留值）。</summary>
     private const string SuperAdminRoleKey = "super_admin";
-
-    private readonly IAggregateRepository<SysRole> _roleRepository;
-    private readonly IDomainRepository<SysRoleMenu> _roleMenuRepository;
-    private readonly IAggregateRepository<SysMenu> _menuRepository;
-    private readonly IPermissionChecker _permissionChecker;
-    private readonly IUnitOfWork _unitOfWork;
-    private readonly IMapper _mapper;
-
-    /// <summary>构造函数。</summary>
-    public UpdateRoleCommandHandler(
-        IAggregateRepository<SysRole> roleRepository,
-        IDomainRepository<SysRoleMenu> roleMenuRepository,
-        IAggregateRepository<SysMenu> menuRepository,
-        IPermissionChecker permissionChecker,
-        IUnitOfWork unitOfWork,
-        IMapper mapper)
-    {
-        _roleRepository = roleRepository;
-        _roleMenuRepository = roleMenuRepository;
-        _menuRepository = menuRepository;
-        _permissionChecker = permissionChecker;
-        _unitOfWork = unitOfWork;
-        _mapper = mapper;
-    }
 
     /// <inheritdoc />
     protected override async Task HandleAsync(UpdateRoleCommand command, CancellationToken cancellationToken)
     {
         var request = command.Request;
-        var role = await _roleRepository.GetAsync(command.Id, cancellationToken)
+        var role = await roleRepository.GetAsync(command.Id, cancellationToken)
             ?? throw new BusinessException(ErrorCodes.RoleNotFound, $"角色 {command.Id} 不存在");
         if (role.RoleKey == SuperAdminRoleKey)
         {
@@ -204,17 +157,17 @@ public sealed class UpdateRoleCommandHandler : CommandHandler<UpdateRoleCommand>
 
         var roleKey = request.RoleKey.Trim();
         await EnsureRoleKeyAvailableAsync(roleKey, excludeId: command.Id, cancellationToken);
-        await RoleMenuSupport.ValidateMenusAsync(_menuRepository, request.MenuIds, cancellationToken);
+        await RoleMenuSupport.ValidateMenusAsync(menuRepository, request.MenuIds, cancellationToken);
 
-        await _unitOfWork.RunInTransactionAsync(async () =>
+        await unitOfWork.RunInTransactionAsync(async () =>
         {
-            _mapper.Map(request, role);
-            await _roleRepository.UpdateAsync(role, cancellationToken);
-            await RoleMenuSupport.ReplaceRoleMenusAsync(_roleMenuRepository, command.Id, request.MenuIds, cancellationToken);
+            mapper.Map(request, role);
+            await roleRepository.UpdateAsync(role, cancellationToken);
+            await RoleMenuSupport.ReplaceRoleMenusAsync(roleMenuRepository, command.Id, request.MenuIds, cancellationToken);
         }, cancellationToken);
 
         // 角色 key / 状态 / 数据范围 / 授权菜单均可能影响已持有该角色用户的权限：全量失效
-        await _permissionChecker.InvalidateAllAsync();
+        await permissionChecker.InvalidateAllAsync();
     }
 
     /// <summary>校验 roleKey 可用：不可使用保留值 super_admin，且不与其他角色重复。</summary>
@@ -225,7 +178,7 @@ public sealed class UpdateRoleCommandHandler : CommandHandler<UpdateRoleCommand>
             throw new BusinessException(ErrorCodes.RoleKeyReserved, "角色权限字符 super_admin 为内置保留值，不可使用");
         }
 
-        var duplicated = (await _roleRepository.GetListAsync([r => r.RoleKey == roleKey], cancellationToken: cancellationToken))
+        var duplicated = (await roleRepository.GetListAsync([r => r.RoleKey == roleKey], cancellationToken: cancellationToken))
             .Any(r => r.Id != excludeId);
         if (duplicated)
         {

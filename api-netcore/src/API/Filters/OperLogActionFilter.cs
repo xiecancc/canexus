@@ -19,24 +19,13 @@ using Microsoft.AspNetCore.Mvc.Filters;
 /// <item>日志写入自身失败仅告警，不影响主流程响应。</item>
 /// </list>
 /// </summary>
-public sealed class OperLogActionFilter : IAsyncActionFilter
+/// <remarks>构造函数。</remarks>
+/// <param name="operLogRepository">操作日志仓储。</param>
+/// <param name="currentUser">当前用户上下文。</param>
+/// <param name="logger">日志。</param>
+public sealed class OperLogActionFilter(IOperLogRepository operLogRepository, UserContext currentUser, ILogger<OperLogActionFilter> logger) : IAsyncActionFilter
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
-
-    private readonly IOperLogRepository _operLogRepository;
-    private readonly UserContext _currentUser;
-    private readonly ILogger<OperLogActionFilter> _logger;
-
-    /// <summary>构造函数。</summary>
-    /// <param name="operLogRepository">操作日志仓储。</param>
-    /// <param name="currentUser">当前用户上下文。</param>
-    /// <param name="logger">日志。</param>
-    public OperLogActionFilter(IOperLogRepository operLogRepository, UserContext currentUser, ILogger<OperLogActionFilter> logger)
-    {
-        _operLogRepository = operLogRepository;
-        _currentUser = currentUser;
-        _logger = logger;
-    }
 
     /// <inheritdoc />
     public async Task OnActionExecutionAsync(ActionExecutingContext context, ActionExecutionDelegate next)
@@ -60,7 +49,7 @@ public sealed class OperLogActionFilter : IAsyncActionFilter
             var actionName = (context.ActionDescriptor as ControllerActionDescriptor)?.ActionName
                              ?? context.ActionDescriptor.DisplayName
                              ?? string.Empty;
-            await _operLogRepository.InsertAsync(new SysOperLog
+            await operLogRepository.InsertAsync(new SysOperLog
             {
                 Title = attribute.Module,
                 BusinessType = attribute.BusinessType,
@@ -69,7 +58,7 @@ public sealed class OperLogActionFilter : IAsyncActionFilter
                 RequestUrl = TruncateUrl($"{request.Path}{request.QueryString}"),
                 OperParam = OperLogSanitizer.Truncate(parameters),
                 OperIp = context.HttpContext.Connection.RemoteIpAddress?.ToString(),
-                OperUserName = _currentUser.UserName ?? string.Empty,
+                OperUserName = currentUser.UserName ?? string.Empty,
                 Status = exception is null
                     ? Domain.Shared.Enums.ExecutionStatus.Success
                     : Domain.Shared.Enums.ExecutionStatus.Failure,
@@ -81,7 +70,7 @@ public sealed class OperLogActionFilter : IAsyncActionFilter
         catch (Exception ex)
         {
             // 日志写入失败不影响主流程：仅记录告警
-            _logger.LogWarning(ex, "写入操作日志失败：{Module}", attribute.Module);
+            logger.LogWarning(ex, "写入操作日志失败：{Module}", attribute.Module);
         }
     }
 

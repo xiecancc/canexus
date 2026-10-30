@@ -12,20 +12,13 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 /// <summary>字典类型管理接口：分页、增删改（dictType 唯一且不可变更）。</summary>
+/// <remarks>构造函数。</remarks>
+/// <param name="sender">MediatR 请求发送器（CQRS 分发入口）。</param>
 [ApiController]
 [Route("api/system/dict-type")]
 [Authorize]
-public class SysDictTypeController : ControllerBase
+public class SysDictTypeController(ISender sender) : ControllerBase
 {
-    private readonly ISender _sender;
-
-    /// <summary>构造函数。</summary>
-    /// <param name="sender">MediatR 请求发送器（CQRS 分发入口）。</param>
-    public SysDictTypeController(ISender sender)
-    {
-        _sender = sender;
-    }
-
     /// <summary>分页查询字典类型（keyword 模糊匹配字典名称 / 字典类型）。</summary>
     /// <param name="request">分页与筛选条件。</param>
     /// <returns>分页结果。</returns>
@@ -33,7 +26,7 @@ public class SysDictTypeController : ControllerBase
     [RequirePermission("system:dict:list")]
     public async Task<IActionResult> Page([FromQuery] DictTypePageRequest request)
     {
-        return Ok(Result.Ok(await _sender.Send(new GetDictTypePageQuery(request))));
+        return Ok(Result.Ok(await sender.Send(new GetDictTypePageQuery(request))));
     }
 
     /// <summary>创建字典类型（dictType 唯一）。</summary>
@@ -44,7 +37,7 @@ public class SysDictTypeController : ControllerBase
     [OperLog("字典类型", OperBusinessType.Add)]
     public async Task<IActionResult> Create([FromBody] DictTypeCreateRequest request)
     {
-        var id = await _sender.Send(new CreateDictTypeCommand(request));
+        var id = await sender.Send(new CreateDictTypeCommand(request));
         return Ok(Result.Ok(id, "创建成功"));
     }
 
@@ -57,7 +50,7 @@ public class SysDictTypeController : ControllerBase
     [OperLog("字典类型", OperBusinessType.Update)]
     public async Task<IActionResult> Update(Guid id, [FromBody] DictTypeUpdateRequest request)
     {
-        await _sender.Send(new UpdateDictTypeCommand(id, request));
+        await sender.Send(new UpdateDictTypeCommand(id, request));
         return Ok(Result.Ok(message: "更新成功"));
     }
 
@@ -69,7 +62,7 @@ public class SysDictTypeController : ControllerBase
     [OperLog("字典类型", OperBusinessType.Delete)]
     public async Task<IActionResult> Delete(Guid id)
     {
-        await _sender.Send(new DeleteDictTypeCommand(id));
+        await sender.Send(new DeleteDictTypeCommand(id));
         return Ok(Result.Ok(message: "删除成功"));
     }
 }

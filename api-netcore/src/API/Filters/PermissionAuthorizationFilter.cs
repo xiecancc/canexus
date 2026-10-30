@@ -17,20 +17,11 @@ using Microsoft.AspNetCore.Mvc.Filters;
 /// <item>无权限 → 403 统一响应（code 40300）。</item>
 /// </list>
 /// </summary>
-public sealed class PermissionAuthorizationFilter : IAsyncAuthorizationFilter
+/// <remarks>构造函数。</remarks>
+/// <param name="permissionChecker">权限校验器。</param>
+/// <param name="currentUser">当前用户上下文。</param>
+public sealed class PermissionAuthorizationFilter(IPermissionChecker permissionChecker, UserContext currentUser) : IAsyncAuthorizationFilter
 {
-    private readonly IPermissionChecker _permissionChecker;
-    private readonly UserContext _currentUser;
-
-    /// <summary>构造函数。</summary>
-    /// <param name="permissionChecker">权限校验器。</param>
-    /// <param name="currentUser">当前用户上下文。</param>
-    public PermissionAuthorizationFilter(IPermissionChecker permissionChecker, UserContext currentUser)
-    {
-        _permissionChecker = permissionChecker;
-        _currentUser = currentUser;
-    }
-
     /// <inheritdoc />
     public async Task OnAuthorizationAsync(AuthorizationFilterContext context)
     {
@@ -46,7 +37,7 @@ public sealed class PermissionAuthorizationFilter : IAsyncAuthorizationFilter
             return;
         }
 
-        if (!_currentUser.IsAuthenticated)
+        if (!currentUser.IsAuthenticated)
         {
             context.Result = new JsonResult(Result.Fail(Domain.Shared.Results.ErrorCodes.AuthUnauthorized, "未登录或令牌无效"))
             {
@@ -55,13 +46,13 @@ public sealed class PermissionAuthorizationFilter : IAsyncAuthorizationFilter
             return;
         }
 
-        if (_currentUser.IsSuperAdmin)
+        if (currentUser.IsSuperAdmin)
         {
             return;
         }
 
-        var userId = _currentUser.UserId!.Value;
-        if (await _permissionChecker.HasPermissionAsync(userId, permission.Permission))
+        var userId = currentUser.UserId!.Value;
+        if (await permissionChecker.HasPermissionAsync(userId, permission.Permission))
         {
             return;
         }

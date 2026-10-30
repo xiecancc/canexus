@@ -15,21 +15,14 @@ using Domain.Shared.Exceptions;
 using Domain.Shared.Results;
 
 /// <summary>获取图形验证码查询处理器。</summary>
-public sealed class GetCaptchaQueryHandler : QueryHandler<GetCaptchaQuery, CaptchaResult>
+/// <remarks>构造函数。</remarks>
+/// <param name="captchaService">图形验证码服务。</param>
+public sealed class GetCaptchaQueryHandler(ICaptchaService captchaService) : QueryHandler<GetCaptchaQuery, CaptchaResult>
 {
-    private readonly ICaptchaService _captchaService;
-
-    /// <summary>构造函数。</summary>
-    /// <param name="captchaService">图形验证码服务。</param>
-    public GetCaptchaQueryHandler(ICaptchaService captchaService)
-    {
-        _captchaService = captchaService;
-    }
-
     /// <inheritdoc />
     protected override async Task<CaptchaResult> HandleAsync(GetCaptchaQuery query, CancellationToken cancellationToken)
     {
-        var image = await _captchaService.GenerateAsync(cancellationToken);
+        var image = await captchaService.GenerateAsync(cancellationToken);
         return new CaptchaResult { CaptchaId = image.CaptchaId, ImageBase64 = image.ImageBase64 };
     }
 }
@@ -42,37 +35,24 @@ public sealed class GetCaptchaQueryHandler : QueryHandler<GetCaptchaQuery, Captc
 /// <item>路由 name 由完整路径段拼接驼峰（如 /system/user → SystemUser），保证全局唯一。</item>
 /// </list>
 /// </summary>
-public sealed class GetRoutesQueryHandler : QueryHandler<GetRoutesQuery, List<RouteVO>>
+/// <remarks>构造函数。</remarks>
+public sealed class GetRoutesQueryHandler(
+    IAggregateTreeRepository<SysMenu> menuRepository,
+    IDomainRepository<SysUserRole> userRoleRepository,
+    IDomainRepository<SysRoleMenu> roleMenuRepository,
+    UserContext currentUser) : QueryHandler<GetRoutesQuery, List<RouteVO>>
 {
     /// <summary>根节点父 Id（Guid.Empty 表示无父级）。</summary>
     private static readonly Guid RootParentId = Guid.Empty;
 
-    private readonly IAggregateTreeRepository<SysMenu> _menuRepository;
-    private readonly IDomainRepository<SysUserRole> _userRoleRepository;
-    private readonly IDomainRepository<SysRoleMenu> _roleMenuRepository;
-    private readonly UserContext _currentUser;
-
-    /// <summary>构造函数。</summary>
-    public GetRoutesQueryHandler(
-        IAggregateTreeRepository<SysMenu> menuRepository,
-        IDomainRepository<SysUserRole> userRoleRepository,
-        IDomainRepository<SysRoleMenu> roleMenuRepository,
-        UserContext currentUser)
-    {
-        _menuRepository = menuRepository;
-        _userRoleRepository = userRoleRepository;
-        _roleMenuRepository = roleMenuRepository;
-        _currentUser = currentUser;
-    }
-
     /// <inheritdoc />
     protected override async Task<List<RouteVO>> HandleAsync(GetRoutesQuery query, CancellationToken cancellationToken)
     {
-        var userId = _currentUser.UserId
+        var userId = currentUser.UserId
             ?? throw new BusinessException(ErrorCodes.AuthUnauthorized, "未登录或令牌无效");
 
-        var menus = _currentUser.IsSuperAdmin
-            ? await _menuRepository.GetListAsync(cancellationToken: cancellationToken)
+        var menus = currentUser.IsSuperAdmin
+            ? await menuRepository.GetListAsync(cancellationToken: cancellationToken)
             : await GetUserMenusAsync(userId, cancellationToken);
 
         var visible = menus
@@ -89,7 +69,7 @@ public sealed class GetRoutesQueryHandler : QueryHandler<GetRoutesQuery, List<Ro
     /// <summary>查询普通用户可见菜单：角色 → 角色菜单 → 菜单。</summary>
     private async Task<List<SysMenu>> GetUserMenusAsync(Guid userId, CancellationToken cancellationToken)
     {
-        var roleIds = (await _userRoleRepository.GetListAsync([ur => ur.UserId == userId], cancellationToken: cancellationToken))
+        var roleIds = (await userRoleRepository.GetListAsync([ur => ur.UserId == userId], cancellationToken: cancellationToken))
             .Select(ur => ur.RoleId)
             .Distinct()
             .ToList();
@@ -98,7 +78,7 @@ public sealed class GetRoutesQueryHandler : QueryHandler<GetRoutesQuery, List<Ro
             return [];
         }
 
-        var menuIds = (await _roleMenuRepository.GetListAsync([rm => roleIds.Contains(rm.RoleId)], cancellationToken: cancellationToken))
+        var menuIds = (await roleMenuRepository.GetListAsync([rm => roleIds.Contains(rm.RoleId)], cancellationToken: cancellationToken))
             .Select(rm => rm.MenuId)
             .Distinct()
             .ToList();
@@ -107,7 +87,7 @@ public sealed class GetRoutesQueryHandler : QueryHandler<GetRoutesQuery, List<Ro
             return [];
         }
 
-        return await _menuRepository.GetListAsync([m => menuIds.Contains(m.Id)], cancellationToken: cancellationToken);
+        return await menuRepository.GetListAsync([m => menuIds.Contains(m.Id)], cancellationToken: cancellationToken);
     }
 
     /// <summary>按父 Id 递归构建路由树。</summary>
@@ -168,40 +148,25 @@ public sealed class GetRoutesQueryHandler : QueryHandler<GetRoutesQuery, List<Ro
 }
 
 /// <summary>获取当前登录用户信息查询处理器。</summary>
-public sealed class GetUserInfoQueryHandler : QueryHandler<GetUserInfoQuery, UserInfoResult>
+/// <remarks>构造函数。</remarks>
+public sealed class GetUserInfoQueryHandler(
+    IAggregateRepository<SysUser> userRepository,
+    IAggregateRepository<SysRole> roleRepository,
+    IDomainRepository<SysUserRole> userRoleRepository,
+    IPermissionChecker permissionChecker,
+    UserContext currentUser) : QueryHandler<GetUserInfoQuery, UserInfoResult>
 {
-    private readonly IAggregateRepository<SysUser> _userRepository;
-    private readonly IAggregateRepository<SysRole> _roleRepository;
-    private readonly IDomainRepository<SysUserRole> _userRoleRepository;
-    private readonly IPermissionChecker _permissionChecker;
-    private readonly UserContext _currentUser;
-
-    /// <summary>构造函数。</summary>
-    public GetUserInfoQueryHandler(
-        IAggregateRepository<SysUser> userRepository,
-        IAggregateRepository<SysRole> roleRepository,
-        IDomainRepository<SysUserRole> userRoleRepository,
-        IPermissionChecker permissionChecker,
-        UserContext currentUser)
-    {
-        _userRepository = userRepository;
-        _roleRepository = roleRepository;
-        _userRoleRepository = userRoleRepository;
-        _permissionChecker = permissionChecker;
-        _currentUser = currentUser;
-    }
-
     /// <inheritdoc />
     protected override async Task<UserInfoResult> HandleAsync(GetUserInfoQuery query, CancellationToken cancellationToken)
     {
-        var userId = _currentUser.UserId
+        var userId = currentUser.UserId
             ?? throw new BusinessException(ErrorCodes.AuthUnauthorized, "未登录或令牌无效");
 
-        var user = await _userRepository.GetAsync(userId, cancellationToken)
+        var user = await userRepository.GetAsync(userId, cancellationToken)
             ?? throw new BusinessException(ErrorCodes.AuthUnauthorized, "登录状态已失效，请重新登录");
 
         var roles = (await GetUserRolesAsync(userId, cancellationToken)).Select(r => r.RoleKey).ToList();
-        var permissions = await _permissionChecker.GetPermissionsAsync(userId, cancellationToken);
+        var permissions = await permissionChecker.GetPermissionsAsync(userId, cancellationToken);
 
         return new UserInfoResult
         {
@@ -217,7 +182,7 @@ public sealed class GetUserInfoQueryHandler : QueryHandler<GetUserInfoQuery, Use
     /// <summary>查询用户启用状态的角色列表。</summary>
     private async Task<List<SysRole>> GetUserRolesAsync(Guid userId, CancellationToken cancellationToken)
     {
-        var roleIds = (await _userRoleRepository.GetListAsync([ur => ur.UserId == userId], cancellationToken: cancellationToken))
+        var roleIds = (await userRoleRepository.GetListAsync([ur => ur.UserId == userId], cancellationToken: cancellationToken))
             .Select(ur => ur.RoleId)
             .Distinct()
             .ToList();
@@ -226,6 +191,6 @@ public sealed class GetUserInfoQueryHandler : QueryHandler<GetUserInfoQuery, Use
             return [];
         }
 
-        return await _roleRepository.GetListAsync([r => r.Status == CommonStatus.Enabled && roleIds.Contains(r.Id)], cancellationToken: cancellationToken);
+        return await roleRepository.GetListAsync([r => r.Status == CommonStatus.Enabled && roleIds.Contains(r.Id)], cancellationToken: cancellationToken);
     }
 }

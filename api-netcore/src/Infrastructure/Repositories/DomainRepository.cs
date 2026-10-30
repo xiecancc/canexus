@@ -15,26 +15,21 @@ using SqlSugar;
 /// 分页支持同样的动态条件与排序，未指定排序时按主键升序兜底，保证分页结果稳定。</para>
 /// </summary>
 /// <typeparam name="TEntity">实体类型。</typeparam>
-public class DomainRepository<TEntity> : IDomainRepository<TEntity>
+/// <remarks>构造函数。</remarks>
+/// <param name="client">SqlSugar 客户端（单例 SqlSugarScope，内部按异步上下文隔离）。</param>
+public class DomainRepository<TEntity>(ISqlSugarClient client) : IDomainRepository<TEntity>
     where TEntity : DomainBase, new()
 {
     /// <summary>SqlSugar 客户端（单例 SqlSugarScope，内部按异步上下文隔离）。</summary>
-    protected readonly ISqlSugarClient Client;
+    protected ISqlSugarClient Client => client;
 
     /// <summary>默认排序列名缓存（键为实体类型；分页排序表达式构建时复用）。</summary>
     private static readonly ConcurrentDictionary<Type, string> DefaultOrderColumnCache = new();
 
-    /// <summary>构造函数。</summary>
-    /// <param name="client">SqlSugar 客户端。</param>
-    public DomainRepository(ISqlSugarClient client)
-    {
-        Client = client;
-    }
-
     /// <inheritdoc />
     public virtual async Task<TEntity?> GetAsync(Guid id, CancellationToken cancellationToken = default)
     {
-        return await Client.Queryable<TEntity>().InSingleAsync(id);
+        return await client.Queryable<TEntity>().InSingleAsync(id);
     }
 
     /// <inheritdoc />
@@ -50,13 +45,13 @@ public class DomainRepository<TEntity> : IDomainRepository<TEntity>
     /// <inheritdoc />
     public virtual async Task<TEntity?> GetFirstAsync(Expression<Func<TEntity, bool>> predicate, CancellationToken cancellationToken = default)
     {
-        return await Client.Queryable<TEntity>().Where(predicate).FirstAsync();
+        return await client.Queryable<TEntity>().Where(predicate).FirstAsync();
     }
 
     /// <inheritdoc />
     public virtual async Task<bool> AnyAsync(Expression<Func<TEntity, bool>> predicate, CancellationToken cancellationToken = default)
     {
-        return await Client.Queryable<TEntity>().AnyAsync(predicate);
+        return await client.Queryable<TEntity>().AnyAsync(predicate);
     }
 
     /// <inheritdoc />
@@ -91,7 +86,7 @@ public class DomainRepository<TEntity> : IDomainRepository<TEntity>
     public virtual async Task<long> CountAsync(Expression<Func<TEntity, bool>>? predicate = null, CancellationToken cancellationToken = default)
     {
         // WhereIF：条件为 null 时跳过拼接
-        return await Client.Queryable<TEntity>()
+        return await client.Queryable<TEntity>()
             .WhereIF(predicate is not null, predicate!)
             .CountAsync();
     }
@@ -101,21 +96,21 @@ public class DomainRepository<TEntity> : IDomainRepository<TEntity>
     {
         // 创建审计（创建时间 / 创建人）由 Aop.DataExecuting 自动填充；
         // 聚合根的空主键与软删除标记亦由其初始化，业务代码无需显式赋值
-        return await Client.Insertable(entity).ExecuteReturnEntityAsync();
+        return await client.Insertable(entity).ExecuteReturnEntityAsync();
     }
 
     /// <inheritdoc />
     public virtual async Task DeleteAsync(TEntity entity, CancellationToken cancellationToken = default)
     {
         // 物理删除：按主键（含联合主键）直接移除，不产生软删除墓碑；不存在时静默忽略（幂等）
-        await Client.Deleteable(entity).ExecuteCommandAsync(cancellationToken);
+        await client.Deleteable(entity).ExecuteCommandAsync(cancellationToken);
     }
 
     /// <inheritdoc />
     public virtual async Task<int> DeleteRangeAsync(Expression<Func<TEntity, bool>> predicate, CancellationToken cancellationToken = default)
     {
         // 批量物理删除：单条 DELETE ... WHERE；聚合根软删除场景请勿使用本方法
-        return await Client.Deleteable<TEntity>()
+        return await client.Deleteable<TEntity>()
             .Where(predicate)
             .ExecuteCommandAsync(cancellationToken);
     }
@@ -124,7 +119,7 @@ public class DomainRepository<TEntity> : IDomainRepository<TEntity>
     public virtual async Task InsertRangeAsync(IEnumerable<TEntity> entities, CancellationToken cancellationToken = default)
     {
         // 批量插入：单条多值 INSERT；Aop.DataExecuting 对每个实体生效（审计 / 主键填充）
-        await Client.Insertable(entities.ToList()).ExecuteCommandAsync(cancellationToken);
+        await client.Insertable(entities.ToList()).ExecuteCommandAsync(cancellationToken);
     }
 
     /// <summary>
@@ -142,7 +137,7 @@ public class DomainRepository<TEntity> : IDomainRepository<TEntity>
             }
 
             // 无 Id 属性的联合主键实体：从实体元数据取首个主键列，兜底首个映射列
-            var columns = Client.EntityMaintenance.GetEntityInfo(type).Columns;
+            var columns = client.EntityMaintenance.GetEntityInfo(type).Columns;
             var column = columns.FirstOrDefault(c => c.IsPrimarykey) ?? columns.FirstOrDefault()
                 ?? throw new InvalidOperationException($"实体 {type.Name} 缺少可用于排序的列");
             return column.PropertyName;
@@ -168,7 +163,7 @@ public class DomainRepository<TEntity> : IDomainRepository<TEntity>
         IDictionary<Expression<Func<TEntity, object>>, bool?>? orders,
         bool applyDefaultCreatedAtOrder = true)
     {
-        var query = Client.Queryable<TEntity>();
+        var query = client.Queryable<TEntity>();
 
         if (predicates is not null)
         {

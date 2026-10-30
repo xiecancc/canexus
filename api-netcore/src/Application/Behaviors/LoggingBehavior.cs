@@ -9,32 +9,25 @@ using Microsoft.Extensions.Logging;
 /// </summary>
 /// <typeparam name="TRequest">请求类型。</typeparam>
 /// <typeparam name="TResponse">响应类型。</typeparam>
-public sealed class LoggingBehavior<TRequest, TResponse> : IPipelineBehavior<TRequest, TResponse>
+/// <remarks>构造函数。</remarks>
+/// <param name="logger">日志器。</param>
+public sealed class LoggingBehavior<TRequest, TResponse>(ILogger<LoggingBehavior<TRequest, TResponse>> logger) : IPipelineBehavior<TRequest, TResponse>
     where TRequest : notnull
 {
-    private readonly ILogger<LoggingBehavior<TRequest, TResponse>> _logger;
-
-    /// <summary>构造函数。</summary>
-    /// <param name="logger">日志器。</param>
-    public LoggingBehavior(ILogger<LoggingBehavior<TRequest, TResponse>> logger)
-    {
-        _logger = logger;
-    }
-
     /// <inheritdoc />
     public async Task<TResponse> Handle(TRequest request, RequestHandlerDelegate<TResponse> next, CancellationToken cancellationToken)
     {
         var requestName = typeof(TRequest).Name;
-        _logger.LogInformation("处理请求 {RequestName} 开始", requestName);
+        logger.LogInformation("处理请求 {RequestName} 开始", requestName);
         try
         {
             var response = await next();
-            _logger.LogInformation("处理请求 {RequestName} 完成", requestName);
+            logger.LogInformation("处理请求 {RequestName} 完成", requestName);
             return response;
         }
         catch (Exception exception)
         {
-            _logger.LogError(exception, "处理请求 {RequestName} 异常", requestName);
+            logger.LogError(exception, "处理请求 {RequestName} 异常", requestName);
             throw;
         }
     }

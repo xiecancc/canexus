@@ -7,15 +7,10 @@ using Domain.Shared.Paging;
 using SqlSugar;
 
 /// <summary>基于 SqlSugar 的定时任务执行日志仓储实现（按触发时间倒序分页，最新记录在前）。</summary>
-public class JobLogRepository : AggregateRepository<SysJobLog>, IJobLogRepository
+/// <remarks>构造函数。</remarks>
+/// <param name="client">SqlSugar 客户端。</param>
+public class JobLogRepository(ISqlSugarClient client) : AggregateRepository<SysJobLog>(client), IJobLogRepository
 {
-    /// <summary>构造函数。</summary>
-    /// <param name="client">SqlSugar 客户端。</param>
-    public JobLogRepository(ISqlSugarClient client)
-        : base(client)
-    {
-    }
-
     /// <inheritdoc />
     public async Task<PagedResult<SysJobLog>> GetPagedDescAsync(
         PagedRequest request,

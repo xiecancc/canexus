@@ -12,20 +12,13 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 /// <summary>菜单管理接口：树查询、详情、增删改（目录 / 菜单 / 按钮统一维护）。</summary>
+/// <remarks>构造函数。</remarks>
+/// <param name="sender">MediatR 请求发送器（CQRS 分发入口）。</param>
 [ApiController]
 [Route("api/system/menu")]
 [Authorize]
-public class SysMenuController : ControllerBase
+public class SysMenuController(ISender sender) : ControllerBase
 {
-    private readonly ISender _sender;
-
-    /// <summary>构造函数。</summary>
-    /// <param name="sender">MediatR 请求发送器（CQRS 分发入口）。</param>
-    public SysMenuController(ISender sender)
-    {
-        _sender = sender;
-    }
-
     /// <summary>查询菜单树（keyword 匹配菜单名称 / 权限标识；status 精确；含按钮类型）。</summary>
     /// <param name="keyword">关键字。</param>
     /// <param name="status">状态。</param>
@@ -34,7 +27,7 @@ public class SysMenuController : ControllerBase
     [RequirePermission("system:menu:list")]
     public async Task<IActionResult> Tree([FromQuery] string? keyword, [FromQuery] Domain.Shared.Enums.CommonStatus? status)
     {
-        return Ok(Result.Ok(await _sender.Send(new GetMenuTreeQuery(keyword, status))));
+        return Ok(Result.Ok(await sender.Send(new GetMenuTreeQuery(keyword, status))));
     }
 
     /// <summary>获取菜单详情。</summary>
@@ -44,7 +37,7 @@ public class SysMenuController : ControllerBase
     [RequirePermission("system:menu:query")]
     public async Task<IActionResult> Get(Guid id)
     {
-        return Ok(Result.Ok(await _sender.Send(new GetMenuDetailQuery(id))));
+        return Ok(Result.Ok(await sender.Send(new GetMenuDetailQuery(id))));
     }
 
     /// <summary>创建菜单（目录必有 path；菜单必有 path 与 component；按钮必有 perms）。</summary>
@@ -55,7 +48,7 @@ public class SysMenuController : ControllerBase
     [OperLog("菜单管理", OperBusinessType.Add)]
     public async Task<IActionResult> Create([FromBody] MenuCreateRequest request)
     {
-        var id = await _sender.Send(new CreateMenuCommand(request));
+        var id = await sender.Send(new CreateMenuCommand(request));
         return Ok(Result.Ok(id, "创建成功"));
     }
 
@@ -68,7 +61,7 @@ public class SysMenuController : ControllerBase
     [OperLog("菜单管理", OperBusinessType.Update)]
     public async Task<IActionResult> Update(Guid id, [FromBody] MenuUpdateRequest request)
     {
-        await _sender.Send(new UpdateMenuCommand(id, request));
+        await sender.Send(new UpdateMenuCommand(id, request));
         return Ok(Result.Ok(message: "更新成功"));
     }
 
@@ -80,7 +73,7 @@ public class SysMenuController : ControllerBase
     [OperLog("菜单管理", OperBusinessType.Delete)]
     public async Task<IActionResult> Delete(Guid id)
     {
-        await _sender.Send(new DeleteMenuCommand(id));
+        await sender.Send(new DeleteMenuCommand(id));
         return Ok(Result.Ok(message: "删除成功"));
     }
 }

@@ -11,20 +11,11 @@ using Domain.Repositories;
 using Domain.Shared.Paging;
 
 /// <summary>分页查询任务执行日志处理器。</summary>
-public sealed class GetJobLogPageQueryHandler : QueryHandler<GetJobLogPageQuery, PagedResult<JobLogListVO>>
+/// <remarks>构造函数。</remarks>
+/// <param name="jobLogRepository">任务执行日志仓储（倒序分页）。</param>
+/// <param name="mapper">AutoMapper 映射器。</param>
+public sealed class GetJobLogPageQueryHandler(IJobLogRepository jobLogRepository, IMapper mapper) : QueryHandler<GetJobLogPageQuery, PagedResult<JobLogListVO>>
 {
-    private readonly IJobLogRepository _jobLogRepository;
-    private readonly IMapper _mapper;
-
-    /// <summary>构造函数。</summary>
-    /// <param name="jobLogRepository">任务执行日志仓储（倒序分页）。</param>
-    /// <param name="mapper">AutoMapper 映射器。</param>
-    public GetJobLogPageQueryHandler(IJobLogRepository jobLogRepository, IMapper mapper)
-    {
-        _jobLogRepository = jobLogRepository;
-        _mapper = mapper;
-    }
-
     /// <inheritdoc />
     protected override async Task<PagedResult<JobLogListVO>> HandleAsync(GetJobLogPageQuery query, CancellationToken cancellationToken)
     {
@@ -33,27 +24,18 @@ public sealed class GetJobLogPageQueryHandler : QueryHandler<GetJobLogPageQuery,
             (request.JobId == null || l.JobId == request.JobId.Value)
             && (request.Status == null || l.Status == request.Status.Value);
 
-        var page = await _jobLogRepository.GetPagedDescAsync(request, predicate, cancellationToken);
-        var items = page.Items.Select(l => _mapper.Map<JobLogListVO>(l)).ToList();
+        var page = await jobLogRepository.GetPagedDescAsync(request, predicate, cancellationToken);
+        var items = page.Items.Select(l => mapper.Map<JobLogListVO>(l)).ToList();
         return PagedResult<JobLogListVO>.Create(items, page.Total, request);
     }
 }
 
 /// <summary>分页查询定时任务处理器。</summary>
-public sealed class GetJobPageQueryHandler : QueryHandler<GetJobPageQuery, PagedResult<JobListVO>>
+/// <remarks>构造函数。</remarks>
+/// <param name="jobRepository">定时任务仓储（只读）。</param>
+/// <param name="mapper">AutoMapper 映射器。</param>
+public sealed class GetJobPageQueryHandler(IDomainRepository<SysJob> jobRepository, IMapper mapper) : QueryHandler<GetJobPageQuery, PagedResult<JobListVO>>
 {
-    private readonly IDomainRepository<SysJob> _jobRepository;
-    private readonly IMapper _mapper;
-
-    /// <summary>构造函数。</summary>
-    /// <param name="jobRepository">定时任务仓储（只读）。</param>
-    /// <param name="mapper">AutoMapper 映射器。</param>
-    public GetJobPageQueryHandler(IDomainRepository<SysJob> jobRepository, IMapper mapper)
-    {
-        _jobRepository = jobRepository;
-        _mapper = mapper;
-    }
-
     /// <inheritdoc />
     protected override async Task<PagedResult<JobListVO>> HandleAsync(GetJobPageQuery query, CancellationToken cancellationToken)
     {
@@ -63,8 +45,8 @@ public sealed class GetJobPageQueryHandler : QueryHandler<GetJobPageQuery, Paged
             (keyword == null || j.JobName.Contains(keyword) || j.JobGroup.Contains(keyword))
             && (request.Status == null || j.Status == request.Status.Value);
 
-        var page = await _jobRepository.GetPagedAsync(request.PageIndex, request.PageSize, [predicate], cancellationToken: cancellationToken);
-        var items = page.Items.Select(j => _mapper.Map<JobListVO>(j)).ToList();
+        var page = await jobRepository.GetPagedAsync(request.PageIndex, request.PageSize, [predicate], cancellationToken: cancellationToken);
+        var items = page.Items.Select(j => mapper.Map<JobListVO>(j)).ToList();
         return PagedResult<JobListVO>.Create(items, page.Total, request);
     }
 }

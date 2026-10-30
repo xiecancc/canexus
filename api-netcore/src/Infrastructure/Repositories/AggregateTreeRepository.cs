@@ -13,16 +13,11 @@ using SqlSugar;
 /// 自动继承软删除与租户过滤。</para>
 /// </summary>
 /// <typeparam name="TAggregate">树形聚合类型。</typeparam>
-public class AggregateTreeRepository<TAggregate> : AggregateRepository<TAggregate>, IAggregateTreeRepository<TAggregate>
+/// <remarks>构造函数。</remarks>
+/// <param name="client">SqlSugar 客户端。</param>
+public class AggregateTreeRepository<TAggregate>(ISqlSugarClient client) : AggregateRepository<TAggregate>(client), IAggregateTreeRepository<TAggregate>
     where TAggregate : AggregateTreeBase<TAggregate>, new()
 {
-    /// <summary>构造函数。</summary>
-    /// <param name="client">SqlSugar 客户端。</param>
-    public AggregateTreeRepository(ISqlSugarClient client)
-        : base(client)
-    {
-    }
-
     /// <inheritdoc />
     public virtual async Task<List<TAggregate>> GetChildrenAsync(Guid parentId, CancellationToken cancellationToken = default)
     {

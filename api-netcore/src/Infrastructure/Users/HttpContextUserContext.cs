@@ -8,18 +8,11 @@ using Microsoft.AspNetCore.Http;
 /// 基于 HttpContext 的当前用户上下文实现：从 JWT claims 解析用户 / 部门 / 角色 / 租户信息。
 /// <para>注册为单例（依赖 IHttpContextAccessor），请求间天然隔离；无请求上下文（后台任务等）时各成员返回 null。</para>
 /// </summary>
-public sealed class HttpContextUserContext : UserContext
+/// <remarks>构造函数。</remarks>
+/// <param name="httpContextAccessor">HTTP 上下文访问器。</param>
+public sealed class HttpContextUserContext(IHttpContextAccessor httpContextAccessor) : UserContext
 {
-    private readonly IHttpContextAccessor _httpContextAccessor;
-
-    /// <summary>构造函数。</summary>
-    /// <param name="httpContextAccessor">HTTP 上下文访问器。</param>
-    public HttpContextUserContext(IHttpContextAccessor httpContextAccessor)
-    {
-        _httpContextAccessor = httpContextAccessor;
-    }
-
-    private ClaimsPrincipal? Principal => _httpContextAccessor.HttpContext?.User;
+    private ClaimsPrincipal? Principal => httpContextAccessor.HttpContext?.User;
 
     /// <inheritdoc />
     public Guid? UserId =>

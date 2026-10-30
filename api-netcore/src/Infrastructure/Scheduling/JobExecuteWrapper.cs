@@ -14,31 +14,18 @@ using Quartz;
 /// 调度包装任务：按 JobDataMap 中的 jobId 从库中加载任务定义，反射解析目标 IJob 类型并执行；
 /// 执行前后统一写执行日志（SysJobLog），异常信息截断 2000 字符。
 /// </summary>
-public class JobExecuteWrapper : IJob
+/// <remarks>构造函数（由 Quartz 的 Microsoft DI 作业工厂按执行作用域创建）。</remarks>
+public class JobExecuteWrapper(
+    IAggregateRepository<SysJob> jobRepository,
+    IAggregateRepository<SysJobLog> jobLogRepository,
+    IServiceProvider serviceProvider,
+    ILogger<JobExecuteWrapper> logger) : IJob
 {
     /// <summary>异常信息列宽上限。</summary>
     private const int ExceptionMaxLength = 2000;
 
     /// <summary>任务主键在 JobDataMap 中的键名。</summary>
     public const string JobIdKey = "jobId";
-
-    private readonly IAggregateRepository<SysJob> _jobRepository;
-    private readonly IAggregateRepository<SysJobLog> _jobLogRepository;
-    private readonly IServiceProvider _serviceProvider;
-    private readonly ILogger<JobExecuteWrapper> _logger;
-
-    /// <summary>构造函数（由 Quartz 的 Microsoft DI 作业工厂按执行作用域创建）。</summary>
-    public JobExecuteWrapper(
-        IAggregateRepository<SysJob> jobRepository,
-        IAggregateRepository<SysJobLog> jobLogRepository,
-        IServiceProvider serviceProvider,
-        ILogger<JobExecuteWrapper> logger)
-    {
-        _jobRepository = jobRepository;
-        _jobLogRepository = jobLogRepository;
-        _serviceProvider = serviceProvider;
-        _logger = logger;
-    }
 
     /// <summary>执行包装任务：解析目标 IJob、计时执行并记录执行日志。</summary>
     /// <param name="context">执行上下文。</param>
@@ -47,10 +34,10 @@ public class JobExecuteWrapper : IJob
         var jobId = context.MergedJobDataMap.ContainsKey(JobIdKey)
             ? Guid.TryParse(context.MergedJobDataMap.GetString(JobIdKey), out var parsedJobId) ? parsedJobId : Guid.Empty
             : Guid.Empty;
-        var job = jobId != Guid.Empty ? await _jobRepository.GetAsync(jobId) : null;
+        var job = jobId != Guid.Empty ? await jobRepository.GetAsync(jobId) : null;
         if (job is null)
         {
-            _logger.LogWarning("定时任务 {JobId} 不存在或已删除，跳过执行", jobId);
+            logger.LogWarning("定时任务 {JobId} 不存在或已删除，跳过执行", jobId);
             return;
         }
 
@@ -71,7 +58,7 @@ public class JobExecuteWrapper : IJob
                 throw new BusinessException(ErrorCodes.JobTypeInvalid, $"任务类型「{job.JobType}」不可解析或未实现 Quartz IJob");
             }
 
-            var instance = (IJob)(_serviceProvider.GetService(targetType) ?? Activator.CreateInstance(targetType)!);
+            var instance = (IJob)(serviceProvider.GetService(targetType) ?? Activator.CreateInstance(targetType)!);
             await instance.Execute(context);
         }
         catch (Exception exception)
@@ -79,7 +66,7 @@ public class JobExecuteWrapper : IJob
             log.Status = ExecutionStatus.Failure;
             log.Result = "执行失败";
             log.Exception = TruncateException(exception.ToString());
-            _logger.LogError(exception, "定时任务执行失败：{JobName}", job.JobName);
+            logger.LogError(exception, "定时任务执行失败：{JobName}", job.JobName);
         }
         finally
         {
@@ -87,12 +74,12 @@ public class JobExecuteWrapper : IJob
             log.CostMs = stopwatch.ElapsedMilliseconds;
             try
             {
-                await _jobLogRepository.InsertAsync(log);
+                await jobLogRepository.InsertAsync(log);
             }
             catch (Exception logException)
             {
                 // 日志写入失败不影响调度主流程：仅记录告警
-                _logger.LogWarning(logException, "写入定时任务执行日志失败：{JobName}", job.JobName);
+                logger.LogWarning(logException, "写入定时任务执行日志失败：{JobName}", job.JobName);
             }
         }
     }

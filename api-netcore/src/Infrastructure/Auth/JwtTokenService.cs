@@ -15,25 +15,16 @@ using Microsoft.IdentityModel.Tokens;
 /// 基于 JWT 的令牌服务：发放 accessToken（HS256 签名）与 refreshToken（随机 64 位十六进制串，持久化到 sys_refresh_token 表）。
 /// <para>claims 约定：sub=用户 Id、unique_name=用户名、deptId=部门、roleId/role=角色、tenantId=租户。</para>
 /// </summary>
-public sealed class JwtTokenService : ITokenService
+/// <remarks>构造函数。</remarks>
+/// <param name="options">JWT 配置监视器。</param>
+/// <param name="refreshTokenRepository">刷新令牌仓储。</param>
+public sealed class JwtTokenService(IOptionsMonitor<JwtOption> options, ISysRefreshTokenRepository refreshTokenRepository) : ITokenService
 {
     /// <summary>令牌处理器：关闭入站 claim 映射，保持 sub / unique_name / role 等原始名称（与 JwtBearer 配置一致）。</summary>
     private static readonly JwtSecurityTokenHandler TokenHandler = new() { MapInboundClaims = false };
 
-    private readonly IOptionsMonitor<JwtOption> _optionsMonitor;
-    private readonly ISysRefreshTokenRepository _refreshTokenRepository;
-
     /// <summary>当前 JWT 配置（经 IOptionsMonitor 读取，Secret 等变更支持热加载）。</summary>
-    private JwtOption Options => _optionsMonitor.CurrentValue;
-
-    /// <summary>构造函数。</summary>
-    /// <param name="options">JWT 配置监视器。</param>
-    /// <param name="refreshTokenRepository">刷新令牌仓储。</param>
-    public JwtTokenService(IOptionsMonitor<JwtOption> options, ISysRefreshTokenRepository refreshTokenRepository)
-    {
-        _optionsMonitor = options;
-        _refreshTokenRepository = refreshTokenRepository;
-    }
+    private JwtOption Options => options.CurrentValue;
 
     /// <summary>
     /// 构造令牌校验参数（JWT Bearer 与 accessToken 校验共用，保证两边行为一致）。
@@ -85,7 +76,7 @@ public sealed class JwtTokenService : ITokenService
 
         // refreshToken：密码学随机 32 字节转 64 位十六进制串，并持久化（过期时间按配置天数）
         var refreshToken = Convert.ToHexString(RandomNumberGenerator.GetBytes(32)).ToLowerInvariant();
-        await _refreshTokenRepository.InsertAsync(new SysRefreshToken
+        await refreshTokenRepository.InsertAsync(new SysRefreshToken
         {
             Token = refreshToken,
             UserId = subject.UserId,
@@ -112,7 +103,7 @@ public sealed class JwtTokenService : ITokenService
     /// <inheritdoc />
     public async Task<RefreshTokenInfo?> GetActiveRefreshTokenAsync(string refreshToken, CancellationToken cancellationToken = default)
     {
-        var entity = await _refreshTokenRepository.GetActiveByTokenAsync(refreshToken, DateTime.Now, cancellationToken);
+        var entity = await refreshTokenRepository.GetActiveByTokenAsync(refreshToken, DateTime.Now, cancellationToken);
         if (entity is null)
         {
             return null;
@@ -124,14 +115,14 @@ public sealed class JwtTokenService : ITokenService
     /// <inheritdoc />
     public async Task RevokeAsync(string refreshToken, CancellationToken cancellationToken = default)
     {
-        var entity = await _refreshTokenRepository.GetActiveByTokenAsync(refreshToken, DateTime.Now, cancellationToken);
+        var entity = await refreshTokenRepository.GetActiveByTokenAsync(refreshToken, DateTime.Now, cancellationToken);
         if (entity is null)
         {
             return;
         }
 
         entity.RevokedAt = DateTime.Now;
-        await _refreshTokenRepository.UpdateAsync(entity, cancellationToken);
+        await refreshTokenRepository.UpdateAsync(entity, cancellationToken);
     }
 
     /// <summary>构造 accessToken claims（未认证 claims 如 jti 不参与业务，略去）。</summary>

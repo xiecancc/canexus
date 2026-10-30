@@ -14,16 +14,11 @@ using SqlSugar;
 /// 版本冲突时抛出业务异常（错误码 CommonConcurrencyConflict）。</para>
 /// </summary>
 /// <typeparam name="TEntity">聚合根实体类型。</typeparam>
-public class AggregateRepository<TEntity> : DomainRepository<TEntity>, IAggregateRepository<TEntity>
+/// <remarks>构造函数。</remarks>
+/// <param name="client">SqlSugar 客户端。</param>
+public class AggregateRepository<TEntity>(ISqlSugarClient client) : DomainRepository<TEntity>(client), IAggregateRepository<TEntity>
     where TEntity : AggregateBase, new()
 {
-    /// <summary>构造函数。</summary>
-    /// <param name="client">SqlSugar 客户端。</param>
-    public AggregateRepository(ISqlSugarClient client)
-        : base(client)
-    {
-    }
-
     /// <inheritdoc />
     public virtual async Task UpdateAsync(TEntity entity, CancellationToken cancellationToken = default)
     {

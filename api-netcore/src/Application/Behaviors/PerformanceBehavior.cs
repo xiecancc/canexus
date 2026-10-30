@@ -9,21 +9,15 @@ using Microsoft.Extensions.Logging;
 /// </summary>
 /// <typeparam name="TRequest">请求类型。</typeparam>
 /// <typeparam name="TResponse">响应类型。</typeparam>
-public sealed class PerformanceBehavior<TRequest, TResponse> : IPipelineBehavior<TRequest, TResponse>
+/// <remarks>构造函数。</remarks>
+/// <param name="logger">日志器。</param>
+public sealed class PerformanceBehavior<TRequest, TResponse>(ILogger<PerformanceBehavior<TRequest, TResponse>> logger) : IPipelineBehavior<TRequest, TResponse>
     where TRequest : notnull
 {
     /// <summary>慢请求阈值（毫秒）。</summary>
     private const long SlowRequestThresholdMs = 500;
 
     private readonly Stopwatch _timer = Stopwatch.StartNew();
-    private readonly ILogger<PerformanceBehavior<TRequest, TResponse>> _logger;
-
-    /// <summary>构造函数。</summary>
-    /// <param name="logger">日志器。</param>
-    public PerformanceBehavior(ILogger<PerformanceBehavior<TRequest, TResponse>> logger)
-    {
-        _logger = logger;
-    }
 
     /// <inheritdoc />
     public async Task<TResponse> Handle(TRequest request, RequestHandlerDelegate<TResponse> next, CancellationToken cancellationToken)
@@ -35,7 +29,7 @@ public sealed class PerformanceBehavior<TRequest, TResponse> : IPipelineBehavior
         if (elapsedMs > SlowRequestThresholdMs)
         {
             var requestName = typeof(TRequest).Name;
-            _logger.LogWarning("慢请求：{RequestName} 处理耗时 {ElapsedMs}ms（阈值 {ThresholdMs}ms）",
+            logger.LogWarning("慢请求：{RequestName} 处理耗时 {ElapsedMs}ms（阈值 {ThresholdMs}ms）",
                 requestName, elapsedMs, SlowRequestThresholdMs);
         }
 

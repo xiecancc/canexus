@@ -5,15 +5,10 @@ using Domain.Repositories;
 using SqlSugar;
 
 /// <summary>基于 SqlSugar 的刷新令牌专属仓储实现（继承聚合仓储，补充令牌语义方法）。</summary>
-public class SysRefreshTokenRepository : AggregateRepository<SysRefreshToken>, ISysRefreshTokenRepository
+/// <remarks>构造函数。</remarks>
+/// <param name="client">SqlSugar 客户端。</param>
+public class SysRefreshTokenRepository(ISqlSugarClient client) : AggregateRepository<SysRefreshToken>(client), ISysRefreshTokenRepository
 {
-    /// <summary>构造函数。</summary>
-    /// <param name="client">SqlSugar 客户端。</param>
-    public SysRefreshTokenRepository(ISqlSugarClient client)
-        : base(client)
-    {
-    }
-
     /// <inheritdoc />
     public virtual async Task<SysRefreshToken?> GetActiveByTokenAsync(string token, DateTime now, CancellationToken cancellationToken = default)
     {

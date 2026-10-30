@@ -12,20 +12,11 @@ using Domain.Services.Rules;
 using Domain.Shared.Paging;
 
 /// <summary>分页查询登录日志处理器。</summary>
-public sealed class GetLoginLogPageQueryHandler : QueryHandler<GetLoginLogPageQuery, PagedResult<LoginLogListVO>>
+/// <remarks>构造函数。</remarks>
+/// <param name="loginLogRepository">登录日志仓储（只读）。</param>
+/// <param name="mapper">AutoMapper 映射器。</param>
+public sealed class GetLoginLogPageQueryHandler(ILoginLogRepository loginLogRepository, IMapper mapper) : QueryHandler<GetLoginLogPageQuery, PagedResult<LoginLogListVO>>
 {
-    private readonly ILoginLogRepository _loginLogRepository;
-    private readonly IMapper _mapper;
-
-    /// <summary>构造函数。</summary>
-    /// <param name="loginLogRepository">登录日志仓储（只读）。</param>
-    /// <param name="mapper">AutoMapper 映射器。</param>
-    public GetLoginLogPageQueryHandler(ILoginLogRepository loginLogRepository, IMapper mapper)
-    {
-        _loginLogRepository = loginLogRepository;
-        _mapper = mapper;
-    }
-
     /// <inheritdoc />
     protected override async Task<PagedResult<LoginLogListVO>> HandleAsync(GetLoginLogPageQuery query, CancellationToken cancellationToken)
     {
@@ -44,27 +35,18 @@ public sealed class GetLoginLogPageQueryHandler : QueryHandler<GetLoginLogPageQu
             && (endTime == null || (l.LoginTime != null && l.LoginTime < endTime.Value));
 
         // 按登录时间倒序：日志列表最新记录在前（Guid 主键无时序语义，不能按 Id 排序）
-        var page = await _loginLogRepository.GetPagedByTimeDescAsync(request, predicate, cancellationToken);
-        var items = page.Items.Select(l => _mapper.Map<LoginLogListVO>(l)).ToList();
+        var page = await loginLogRepository.GetPagedByTimeDescAsync(request, predicate, cancellationToken);
+        var items = page.Items.Select(l => mapper.Map<LoginLogListVO>(l)).ToList();
         return PagedResult<LoginLogListVO>.Create(items, page.Total, request);
     }
 }
 
 /// <summary>分页查询操作日志处理器。</summary>
-public sealed class GetOperLogPageQueryHandler : QueryHandler<GetOperLogPageQuery, PagedResult<OperLogListVO>>
+/// <remarks>构造函数。</remarks>
+/// <param name="operLogRepository">操作日志仓储（只读）。</param>
+/// <param name="mapper">AutoMapper 映射器。</param>
+public sealed class GetOperLogPageQueryHandler(IOperLogRepository operLogRepository, IMapper mapper) : QueryHandler<GetOperLogPageQuery, PagedResult<OperLogListVO>>
 {
-    private readonly IOperLogRepository _operLogRepository;
-    private readonly IMapper _mapper;
-
-    /// <summary>构造函数。</summary>
-    /// <param name="operLogRepository">操作日志仓储（只读）。</param>
-    /// <param name="mapper">AutoMapper 映射器。</param>
-    public GetOperLogPageQueryHandler(IOperLogRepository operLogRepository, IMapper mapper)
-    {
-        _operLogRepository = operLogRepository;
-        _mapper = mapper;
-    }
-
     /// <inheritdoc />
     protected override async Task<PagedResult<OperLogListVO>> HandleAsync(GetOperLogPageQuery query, CancellationToken cancellationToken)
     {
@@ -84,8 +66,8 @@ public sealed class GetOperLogPageQueryHandler : QueryHandler<GetOperLogPageQuer
             && (beginTime == null || (l.OperTime != null && l.OperTime >= beginTime.Value))
             && (endTime == null || (l.OperTime != null && l.OperTime < endTime.Value));
 
-        var page = await _operLogRepository.GetPagedAsync(request.PageIndex, request.PageSize, [predicate], cancellationToken: cancellationToken);
-        var items = page.Items.Select(l => _mapper.Map<OperLogListVO>(l)).ToList();
+        var page = await operLogRepository.GetPagedAsync(request.PageIndex, request.PageSize, [predicate], cancellationToken: cancellationToken);
+        var items = page.Items.Select(l => mapper.Map<OperLogListVO>(l)).ToList();
         return PagedResult<OperLogListVO>.Create(items, page.Total, request);
     }
 }

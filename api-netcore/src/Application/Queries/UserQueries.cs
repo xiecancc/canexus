@@ -17,30 +17,19 @@ using Domain.Shared.Paging;
 using Domain.Shared.Results;
 
 /// <summary>获取用户详情查询处理器。</summary>
-public sealed class GetUserDetailQueryHandler : QueryHandler<GetUserDetailQuery, UserDetailVO>
+/// <remarks>构造函数。</remarks>
+public sealed class GetUserDetailQueryHandler(
+    IAggregateRepository<SysUser> userRepository,
+    IDomainRepository<SysUserRole> userRoleRepository,
+    IMapper mapper) : QueryHandler<GetUserDetailQuery, UserDetailVO>
 {
-    private readonly IAggregateRepository<SysUser> _userRepository;
-    private readonly IDomainRepository<SysUserRole> _userRoleRepository;
-    private readonly IMapper _mapper;
-
-    /// <summary>构造函数。</summary>
-    public GetUserDetailQueryHandler(
-        IAggregateRepository<SysUser> userRepository,
-        IDomainRepository<SysUserRole> userRoleRepository,
-        IMapper mapper)
-    {
-        _userRepository = userRepository;
-        _userRoleRepository = userRoleRepository;
-        _mapper = mapper;
-    }
-
     /// <inheritdoc />
     protected override async Task<UserDetailVO> HandleAsync(GetUserDetailQuery query, CancellationToken cancellationToken)
     {
-        var user = await _userRepository.GetAsync(query.Id, cancellationToken)
+        var user = await userRepository.GetAsync(query.Id, cancellationToken)
             ?? throw new BusinessException(ErrorCodes.UserNotFound, $"用户 {query.Id} 不存在");
-        var detail = _mapper.Map<UserDetailVO>(user);
-        detail.RoleIds = (await _userRoleRepository.GetListAsync([ur => ur.UserId == query.Id], cancellationToken: cancellationToken))
+        var detail = mapper.Map<UserDetailVO>(user);
+        detail.RoleIds = (await userRoleRepository.GetListAsync([ur => ur.UserId == query.Id], cancellationToken: cancellationToken))
             .Select(ur => ur.RoleId)
             .Distinct()
             .ToList();
@@ -49,53 +38,34 @@ public sealed class GetUserDetailQueryHandler : QueryHandler<GetUserDetailQuery,
 }
 
 /// <summary>分页查询用户处理器。</summary>
-public sealed class GetUserPageQueryHandler : QueryHandler<GetUserPageQuery, PagedResult<UserListVO>>
+/// <remarks>构造函数。</remarks>
+public sealed class GetUserPageQueryHandler(
+    IAggregateRepository<SysUser> userRepository,
+    IAggregateRepository<SysRole> roleRepository,
+    IAggregateTreeRepository<SysDept> deptRepository,
+    IDomainRepository<SysUserRole> userRoleRepository,
+    IDataScopeFilter dataScopeFilter,
+    UserContext currentUser,
+    IMapper mapper) : QueryHandler<GetUserPageQuery, PagedResult<UserListVO>>
 {
-    private readonly IAggregateRepository<SysUser> _userRepository;
-    private readonly IAggregateRepository<SysRole> _roleRepository;
-    private readonly IAggregateTreeRepository<SysDept> _deptRepository;
-    private readonly IDomainRepository<SysUserRole> _userRoleRepository;
-    private readonly IDataScopeFilter _dataScopeFilter;
-    private readonly UserContext _currentUser;
-    private readonly IMapper _mapper;
-
-    /// <summary>构造函数。</summary>
-    public GetUserPageQueryHandler(
-        IAggregateRepository<SysUser> userRepository,
-        IAggregateRepository<SysRole> roleRepository,
-        IAggregateTreeRepository<SysDept> deptRepository,
-        IDomainRepository<SysUserRole> userRoleRepository,
-        IDataScopeFilter dataScopeFilter,
-        UserContext currentUser,
-        IMapper mapper)
-    {
-        _userRepository = userRepository;
-        _roleRepository = roleRepository;
-        _deptRepository = deptRepository;
-        _userRoleRepository = userRoleRepository;
-        _dataScopeFilter = dataScopeFilter;
-        _currentUser = currentUser;
-        _mapper = mapper;
-    }
-
     /// <inheritdoc />
     protected override async Task<PagedResult<UserListVO>> HandleAsync(GetUserPageQuery query, CancellationToken cancellationToken)
     {
         var request = query.Request;
 
         // 数据范围解析（请求内缓存）；筛选部门子树仅在实际传入 deptId 时查询（含自身 + 全部后代）
-        var scope = await _dataScopeFilter.GetUserScopeAsync(cancellationToken);
+        var scope = await dataScopeFilter.GetUserScopeAsync(cancellationToken);
         List<Guid>? deptFilterIds = null;
         if (request.DeptId is not null)
         {
             deptFilterIds = [request.DeptId.Value];
             deptFilterIds.AddRange(
-                (await _deptRepository.GetDescendantsAsync(request.DeptId.Value, cancellationToken))
+                (await deptRepository.GetDescendantsAsync(request.DeptId.Value, cancellationToken))
                     .Select(d => d.Id));
         }
 
         var predicate = BuildPredicate(request, scope, deptFilterIds);
-        var page = await _userRepository.GetPagedAsync(request.PageIndex, request.PageSize, [predicate], cancellationToken: cancellationToken);
+        var page = await userRepository.GetPagedAsync(request.PageIndex, request.PageSize, [predicate], cancellationToken: cancellationToken);
         if (page.Items.Count == 0)
         {
             return PagedResult<UserListVO>.Create([], page.Total, request);
@@ -104,22 +74,22 @@ public sealed class GetUserPageQueryHandler : QueryHandler<GetUserPageQuery, Pag
         // 关联数据一次性批量查询组装（避免 N+1）：部门名 + 角色
         var users = page.Items;
         var userIds = users.Select(u => u.Id).ToList();
-        var userRoles = await _userRoleRepository.GetListAsync([ur => userIds.Contains(ur.UserId)], cancellationToken: cancellationToken);
+        var userRoles = await userRoleRepository.GetListAsync([ur => userIds.Contains(ur.UserId)], cancellationToken: cancellationToken);
         var roleIds = userRoles.Select(ur => ur.RoleId).Distinct().ToList();
         var roleMap = (roleIds.Count == 0
                 ? []
-                : await _roleRepository.GetListAsync([r => roleIds.Contains(r.Id)], cancellationToken: cancellationToken))
+                : await roleRepository.GetListAsync([r => roleIds.Contains(r.Id)], cancellationToken: cancellationToken))
             .ToDictionary(r => r.Id, r => r);
 
         var relatedDeptIds = users.Where(u => u.DeptId != null).Select(u => u.DeptId!.Value).Distinct().ToList();
         var deptMap = (relatedDeptIds.Count == 0
                 ? []
-                : await _deptRepository.GetListAsync([d => relatedDeptIds.Contains(d.Id)], cancellationToken: cancellationToken))
+                : await deptRepository.GetListAsync([d => relatedDeptIds.Contains(d.Id)], cancellationToken: cancellationToken))
             .ToDictionary(d => d.Id, d => d);
 
         var items = users.Select(user =>
         {
-            var vo = _mapper.Map<UserListVO>(user);
+            var vo = mapper.Map<UserListVO>(user);
             vo.DeptName = user.DeptId != null && deptMap.TryGetValue(user.DeptId.Value, out var dept)
                 ? dept.DeptName
                 : null;
@@ -144,9 +114,9 @@ public sealed class GetUserPageQueryHandler : QueryHandler<GetUserPageQuery, Pag
         var status = request.Status;
         var scopeType = scope.Scope;
         var scopeDeptIds = scope.DeptIds?.ToList();
-        var currentUserId = _currentUser.UserId ?? Guid.Empty;
-        var currentUserName = _currentUser.UserName ?? string.Empty;
-        var currentUserDeptId = _currentUser.DeptId;
+        var currentUserId = currentUser.UserId ?? Guid.Empty;
+        var currentUserName = currentUser.UserName ?? string.Empty;
+        var currentUserDeptId = currentUser.DeptId;
 
         return u =>
             (keyword == null

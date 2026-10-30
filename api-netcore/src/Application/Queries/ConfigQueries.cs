@@ -15,20 +15,11 @@ using Domain.Shared.Results;
 using Infrastructure.Shared.Caching;
 
 /// <summary>按参数键名查询参数值处理器。</summary>
-public sealed class GetConfigByKeyQueryHandler : QueryHandler<GetConfigByKeyQuery, string>
+/// <remarks>构造函数。</remarks>
+/// <param name="configRepository">参数配置仓储（只读）。</param>
+/// <param name="cache">内存缓存。</param>
+public sealed class GetConfigByKeyQueryHandler(IDomainRepository<SysConfig> configRepository, ICache cache) : QueryHandler<GetConfigByKeyQuery, string>
 {
-    private readonly IDomainRepository<SysConfig> _configRepository;
-    private readonly ICache _cache;
-
-    /// <summary>构造函数。</summary>
-    /// <param name="configRepository">参数配置仓储（只读）。</param>
-    /// <param name="cache">内存缓存。</param>
-    public GetConfigByKeyQueryHandler(IDomainRepository<SysConfig> configRepository, ICache cache)
-    {
-        _configRepository = configRepository;
-        _cache = cache;
-    }
-
     /// <inheritdoc />
     protected override async Task<string> HandleAsync(GetConfigByKeyQuery query, CancellationToken cancellationToken)
     {
@@ -36,9 +27,9 @@ public sealed class GetConfigByKeyQueryHandler : QueryHandler<GetConfigByKeyQuer
         var cacheKey = ConfigRules.ValueCacheKey(key);
 
         // 常规档：L1 1 分钟 / L2 10 分钟；写操作后按键失效（见 ConfigCommands）
-        return await _cache.GetOrCreateAsync(cacheKey, async token =>
+        return await cache.GetOrCreateAsync(cacheKey, async token =>
         {
-            var config = (await _configRepository.GetListAsync([c => c.ConfigKey == key], cancellationToken: token)).FirstOrDefault()
+            var config = (await configRepository.GetListAsync([c => c.ConfigKey == key], cancellationToken: token)).FirstOrDefault()
                 ?? throw new BusinessException(ErrorCodes.ConfigNotFound, $"参数「{key}」不存在");
             return config.ConfigValue;
         }, CacheTtl.Medium, cancellationToken);
@@ -46,20 +37,11 @@ public sealed class GetConfigByKeyQueryHandler : QueryHandler<GetConfigByKeyQuer
 }
 
 /// <summary>分页查询参数配置处理器。</summary>
-public sealed class GetConfigPageQueryHandler : QueryHandler<GetConfigPageQuery, PagedResult<ConfigListVO>>
+/// <remarks>构造函数。</remarks>
+/// <param name="configRepository">参数配置仓储（只读）。</param>
+/// <param name="mapper">AutoMapper 映射器。</param>
+public sealed class GetConfigPageQueryHandler(IDomainRepository<SysConfig> configRepository, IMapper mapper) : QueryHandler<GetConfigPageQuery, PagedResult<ConfigListVO>>
 {
-    private readonly IDomainRepository<SysConfig> _configRepository;
-    private readonly IMapper _mapper;
-
-    /// <summary>构造函数。</summary>
-    /// <param name="configRepository">参数配置仓储（只读）。</param>
-    /// <param name="mapper">AutoMapper 映射器。</param>
-    public GetConfigPageQueryHandler(IDomainRepository<SysConfig> configRepository, IMapper mapper)
-    {
-        _configRepository = configRepository;
-        _mapper = mapper;
-    }
-
     /// <inheritdoc />
     protected override async Task<PagedResult<ConfigListVO>> HandleAsync(GetConfigPageQuery query, CancellationToken cancellationToken)
     {
@@ -68,8 +50,8 @@ public sealed class GetConfigPageQueryHandler : QueryHandler<GetConfigPageQuery,
         Expression<Func<SysConfig, bool>> predicate = c =>
             keyword == null || c.ConfigName.Contains(keyword) || c.ConfigKey.Contains(keyword) || c.ConfigValue.Contains(keyword);
 
-        var page = await _configRepository.GetPagedAsync(request.PageIndex, request.PageSize, [predicate], cancellationToken: cancellationToken);
-        var items = page.Items.Select(c => _mapper.Map<ConfigListVO>(c)).ToList();
+        var page = await configRepository.GetPagedAsync(request.PageIndex, request.PageSize, [predicate], cancellationToken: cancellationToken);
+        var items = page.Items.Select(c => mapper.Map<ConfigListVO>(c)).ToList();
         return PagedResult<ConfigListVO>.Create(items, page.Total, request);
     }
 }

@@ -9,17 +9,10 @@ using Domain.Shared.Exceptions;
 using Domain.Shared.Results;
 
 /// <summary>创建租户命令处理器。</summary>
-public sealed class CreateTenantCommandHandler : CommandHandler<CreateTenantCommand, Guid>
+/// <remarks>构造函数。</remarks>
+/// <param name="tenantRepository">租户仓储。</param>
+public sealed class CreateTenantCommandHandler(IAggregateRepository<SysTenant> tenantRepository) : CommandHandler<CreateTenantCommand, Guid>
 {
-    private readonly IAggregateRepository<SysTenant> _tenantRepository;
-
-    /// <summary>构造函数。</summary>
-    /// <param name="tenantRepository">租户仓储。</param>
-    public CreateTenantCommandHandler(IAggregateRepository<SysTenant> tenantRepository)
-    {
-        _tenantRepository = tenantRepository;
-    }
-
     /// <inheritdoc />
     protected override async Task<Guid> HandleAsync(CreateTenantCommand command, CancellationToken cancellationToken)
     {
@@ -27,7 +20,7 @@ public sealed class CreateTenantCommandHandler : CommandHandler<CreateTenantComm
         var tenantKey = request.TenantKey.Trim();
         var tenantName = request.TenantName.Trim();
 
-        if (await _tenantRepository.CountAsync(t => t.TenantKey == tenantKey, cancellationToken) > 0)
+        if (await tenantRepository.CountAsync(t => t.TenantKey == tenantKey, cancellationToken) > 0)
         {
             throw new BusinessException(ErrorCodes.TenantKeyDuplicate, $"租户标识「{tenantKey}」已存在");
         }
@@ -41,59 +34,43 @@ public sealed class CreateTenantCommandHandler : CommandHandler<CreateTenantComm
             Description = request.Description,
             ExpireTime = request.ExpireTime
         };
-        var inserted = await _tenantRepository.InsertAsync(entity, cancellationToken);
+        var inserted = await tenantRepository.InsertAsync(entity, cancellationToken);
         return inserted.Id;
     }
 }
 
 /// <summary>删除租户命令处理器。</summary>
-public sealed class DeleteTenantCommandHandler : CommandHandler<DeleteTenantCommand>
+/// <remarks>构造函数。</remarks>
+/// <param name="tenantRepository">租户仓储。</param>
+/// <param name="userRepository">用户仓储（归属校验）。</param>
+public sealed class DeleteTenantCommandHandler(IAggregateRepository<SysTenant> tenantRepository, IAggregateRepository<SysUser> userRepository) : CommandHandler<DeleteTenantCommand>
 {
-    private readonly IAggregateRepository<SysTenant> _tenantRepository;
-    private readonly IAggregateRepository<SysUser> _userRepository;
-
-    /// <summary>构造函数。</summary>
-    /// <param name="tenantRepository">租户仓储。</param>
-    /// <param name="userRepository">用户仓储（归属校验）。</param>
-    public DeleteTenantCommandHandler(IAggregateRepository<SysTenant> tenantRepository, IAggregateRepository<SysUser> userRepository)
-    {
-        _tenantRepository = tenantRepository;
-        _userRepository = userRepository;
-    }
-
     /// <inheritdoc />
     protected override async Task HandleAsync(DeleteTenantCommand command, CancellationToken cancellationToken)
     {
-        var entity = await _tenantRepository.GetAsync(command.Id, cancellationToken)
+        var entity = await tenantRepository.GetAsync(command.Id, cancellationToken)
             ?? throw new BusinessException(ErrorCodes.TenantNotFound, $"租户 {command.Id} 不存在");
 
         // 存在归属用户（未删除数据按租户 Id 归属）时拒绝删除
-        if (await _userRepository.CountAsync(u => u.TenantId == entity.Id, cancellationToken) > 0)
+        if (await userRepository.CountAsync(u => u.TenantId == entity.Id, cancellationToken) > 0)
         {
             throw new BusinessException(ErrorCodes.TenantInUse, $"租户「{entity.TenantName}」下存在归属用户，不允许删除");
         }
 
-        await _tenantRepository.DeleteAsync(entity, cancellationToken);
+        await tenantRepository.DeleteAsync(entity, cancellationToken);
     }
 }
 
 /// <summary>更新租户命令处理器。</summary>
-public sealed class UpdateTenantCommandHandler : CommandHandler<UpdateTenantCommand>
+/// <remarks>构造函数。</remarks>
+/// <param name="tenantRepository">租户仓储。</param>
+public sealed class UpdateTenantCommandHandler(IAggregateRepository<SysTenant> tenantRepository) : CommandHandler<UpdateTenantCommand>
 {
-    private readonly IAggregateRepository<SysTenant> _tenantRepository;
-
-    /// <summary>构造函数。</summary>
-    /// <param name="tenantRepository">租户仓储。</param>
-    public UpdateTenantCommandHandler(IAggregateRepository<SysTenant> tenantRepository)
-    {
-        _tenantRepository = tenantRepository;
-    }
-
     /// <inheritdoc />
     protected override async Task HandleAsync(UpdateTenantCommand command, CancellationToken cancellationToken)
     {
         var request = command.Request;
-        var entity = await _tenantRepository.GetAsync(command.Id, cancellationToken)
+        var entity = await tenantRepository.GetAsync(command.Id, cancellationToken)
             ?? throw new BusinessException(ErrorCodes.TenantNotFound, $"租户 {command.Id} 不存在");
 
         var tenantKey = request.TenantKey.Trim();
@@ -110,6 +87,6 @@ public sealed class UpdateTenantCommandHandler : CommandHandler<UpdateTenantComm
         entity.Status = request.Status;
         entity.Description = request.Description;
         entity.ExpireTime = request.ExpireTime;
-        await _tenantRepository.UpdateAsync(entity, cancellationToken);
+        await tenantRepository.UpdateAsync(entity, cancellationToken);
     }
 }

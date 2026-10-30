@@ -17,8 +17,6 @@ public sealed class CaptchaService(ICache cache) : ICaptchaService
     /// <summary>可用字符集（剔除易混淆的 0O1Iil）。</summary>
     private const string AvailableChars = "23456789ABCDEFGHJKMNPQRSTUVWXYZ";
 
-    private readonly ICache _cache = cache;
-
     /// <inheritdoc />
     public async ValueTask<CaptchaImage> GenerateAsync(CancellationToken cancellationToken = default)
     {
@@ -31,7 +29,7 @@ public sealed class CaptchaService(ICache cache) : ICaptchaService
         var imageBase64 = "data:image/svg+xml;base64," + Convert.ToBase64String(Encoding.UTF8.GetBytes(svg));
 
         // Hot 档：L1 30s（本实例秒级校验）/ L2 5min（分布式部署跨实例校验）
-        await _cache.SetAsync(ICaptchaService.CacheKeyPrefix + captchaId, normalized, CacheTtl.Hot, cancellationToken);
+        await cache.SetAsync(ICaptchaService.CacheKeyPrefix + captchaId, normalized, CacheTtl.Hot, cancellationToken);
         return new CaptchaImage(captchaId, imageBase64);
     }
 
@@ -44,10 +42,10 @@ public sealed class CaptchaService(ICache cache) : ICaptchaService
         }
 
         var key = ICaptchaService.CacheKeyPrefix + captchaId;
-        var expected = await _cache.GetAsync<string>(key, cancellationToken);
+        var expected = await cache.GetAsync<string>(key, cancellationToken);
 
         // 一次性：无论命中与否均移除，防止重放
-        await _cache.RemoveAsync(key, cancellationToken);
+        await cache.RemoveAsync(key, cancellationToken);
         return !string.IsNullOrWhiteSpace(expected)
             && !string.IsNullOrWhiteSpace(code)
             && string.Equals(expected, code.Trim().ToUpperInvariant(), StringComparison.Ordinal);
