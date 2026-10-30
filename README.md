@@ -30,6 +30,11 @@ api-netcore（http://localhost:5000）
 3. 启动前端：`cd admin-vue && pnpm install && pnpm dev`（已配置代理转发 `/api` 到后端 5000 端口）
 4. 访问前端开发地址，使用种子超级管理员账号 **admin / admin123** 登录
 
+## 工程化规范
+
+- **Git Hooks（husky + lint-staged）**：提交前对暂存的前端文件执行 `oxlint --fix` + `oxfmt`；推送前执行全量类型检查（vue-tsc）与 Vitest 单元测试。`pnpm install` 时自动生效（`prepare` 脚本配置 `core.hooksPath`），详见 [admin-vue/README.md](./admin-vue/README.md)。
+- **CI 流水线（GitHub Actions）**：`.github/workflows/ci.yml`，push 与 PR 触发——前端 Job（lint / 类型检查 / 单测 / 构建）与后端 Job（dotnet build / test，MySQL 8 服务容器承载集成测试）并行执行。
+
 ## 约定
 
 - 全局唯一标识符统一使用 **GUID**（36 位字符串，序列化为 `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`）

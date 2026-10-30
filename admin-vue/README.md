@@ -88,6 +88,35 @@ pnpm preview          # 本地预览构建产物
 
 > IDE 提示：项目使用 `typescript-native-bridge`（tsgo）作为工作区 TypeScript，安装依赖后在 VS Code 中选择「使用工作区版本」即可。
 
+## 工程化规范（Git Hooks + CI）
+
+### Git Hooks（husky + lint-staged）
+
+> Git 仓库根为工作区根目录，package.json 位于 `admin-vue/` 子目录，husky 经 `core.hooksPath = admin-vue/.husky` 生效；`pnpm install` 时由 `prepare` 脚本自动配置（脚本内容 `cd .. && husky admin-vue/.husky`），无需手动初始化。
+
+| 钩子 | 时机 | 执行内容 |
+| --- | --- | --- |
+| `pre-commit` | `git commit` 前 | lint-staged 对**暂存的前端文件**（`*.{js,mjs,cjs,ts,vue}`）执行 `oxlint --fix` + `oxfmt`，修复后自动重新暂存；存在无法自动修复的问题则提交失败 |
+| `pre-push` | `git push` 前 | 全量 `pnpm type-check`（vue-tsc）+ `pnpm test:unit run`（Vitest）；任一失败则推送被拒绝 |
+
+配置位置：
+
+- `admin-vue/package.json` 的 `lint-staged` 字段（匹配规则与执行命令）
+- `admin-vue/.husky/pre-commit`、`admin-vue/.husky/pre-push`（钩子脚本）
+
+如需临时跳过钩子（不推荐）：`git commit --no-verify` / `git push --no-verify`。
+
+### CI 流水线（GitHub Actions）
+
+工作流位于 `.github/workflows/ci.yml`，在 push（main / master）与 Pull Request 时触发，两个并行 Job：
+
+| Job | 环境 | 步骤 |
+| --- | --- | --- |
+| 前端检查与构建 | ubuntu + Node 26 + pnpm 12 | `pnpm install --frozen-lockfile` → `pnpm lint` → `pnpm type-check` → `pnpm test:unit run` → `pnpm build` |
+| 后端构建与测试 | ubuntu + .NET 10 SDK + MySQL 8 服务容器 | `dotnet restore` → `dotnet build` → `dotnet test`（集成测试经 `SUPER_ADMIN_TEST_CONN` 环境变量指向容器，库名 `super_admin_test`） |
+
+说明：Playwright E2E 依赖浏览器与后端服务，暂未纳入 CI，需要时可在工作流中追加 `npx playwright install --with-deps` 与后端启动步骤。
+
 ## 部署说明
 
 1. **构建**：`pnpm build`，产物输出至 `dist/`（纯静态文件）

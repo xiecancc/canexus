@@ -1,0 +1,93 @@
+# CI 流水线：前端（lint / 类型检查 / 单测 / 构建）+ 后端（构建 / 集成测试）
+# 前端：Node 26 + pnpm（与 admin-vue/package.json engines 约定一致）
+# 后端：.NET 10 + MySQL 8 服务容器（集成测试经 SUPER_ADMIN_TEST_CONN 指向容器）
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  frontend:
+    name: 前端检查与构建
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: admin-vue
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 安装 pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 12
+
+      - name: 安装 Node.js 26
+        uses: actions/setup-node@v4
+        with:
+          node-version: 26
+          cache: pnpm
+          cache-dependency-path: admin-vue/pnpm-lock.yaml
+
+      - name: 安装依赖
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint（oxlint）
+        run: pnpm lint
+
+      - name: 类型检查（vue-tsc）
+        run: pnpm type-check
+
+      - name: 单元测试（vitest）
+        run: pnpm test:unit run
+
+      - name: 构建（含类型检查）
+        run: pnpm build
+
+  backend:
+    name: 后端构建与测试
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: api-netcore
+
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: '123456'
+          MYSQL_DATABASE: super_admin_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost -p123456"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+
+    env:
+      # 集成测试连接串覆盖（指向上方 MySQL 服务容器，与测试默认值同构）
+      SUPER_ADMIN_TEST_CONN: 'server=127.0.0.1;port=3306;database=super_admin_test;user id=root;password=***REMOVED***;CharSet=utf8mb4;AllowPublicKeyRetrieval=true;SslMode=none'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 安装 .NET SDK 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: 还原依赖
+        run: dotnet restore api.slnx
+
+      - name: 构建
+        run: dotnet build api.slnx --no-restore
+
+      - name: 测试（含真实 MySQL 集成测试）
+        run: dotnet test api.slnx --no-build --logger "console;verbosity=normal"
