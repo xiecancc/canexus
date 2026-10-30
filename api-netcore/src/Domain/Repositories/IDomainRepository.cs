@@ -73,7 +73,8 @@ public interface IDomainRepository<TEntity>
     Task<TEntity> InsertAsync(TEntity entity, CancellationToken cancellationToken = default);
 
     /// <summary>物理删除实体（直接从数据库移除，不产生软删除墓碑），不存在时静默忽略（幂等）。
-    /// 注意：聚合根请改用 <see cref="IAggregateRepository{TEntity}"/>，其删除为软删除。</summary>
+    /// 语义说明：本方法对关联表等普通实体为物理删除；聚合根仓储（<see cref="IAggregateRepository{TEntity}"/>）
+    /// 的实现类在类层面将其重写为软删除（虚分派对两种引用类型一致生效），聚合的物理删除请使用 HardDeleteAsync。</summary>
     /// <param name="entity">实体。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>表示异步操作的任务。</returns>
