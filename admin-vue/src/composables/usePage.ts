@@ -3,6 +3,7 @@
  *
  * - query 为响应式查询条件（不含分页参数），由各页面自行声明字段
  * - fetcher 负责发起请求，入参为查询条件与分页参数的合并对象
+ * - 内置请求序号竞态防护：连续触发查询时仅接受最新一次的结果
  * - 错误提示由请求层统一处理，此处仅保证 loading 复位
  */
 import { reactive, ref } from 'vue'
@@ -41,8 +42,12 @@ export function usePage<Query extends object, Item>(options: UsePageOptions<Quer
   /** 查询条件（响应式） */
   const query = reactive(options.getDefaultQuery()) as Query
 
+  /** 请求序号：仅接受最新一次请求的结果，防止快速翻页 / 频繁搜索时慢响应覆盖新数据 */
+  let requestSeq = 0
+
   /** 按当前查询条件与分页参数加载数据 */
   async function fetchData(): Promise<void> {
+    const seq = ++requestSeq
     loading.value = true
     try {
       const result = await options.fetcher({
@@ -50,10 +55,17 @@ export function usePage<Query extends object, Item>(options: UsePageOptions<Quer
         pageIndex: pageIndex.value,
         pageSize: pageSize.value,
       })
+      // 竞态防护：已有更新的请求发起，丢弃本次过期结果
+      if (seq !== requestSeq) {
+        return
+      }
       items.value = result.items
       total.value = result.total
     } finally {
-      loading.value = false
+      // 仅由最新一次请求控制 loading（过期请求不干扰最新请求的加载状态）
+      if (seq === requestSeq) {
+        loading.value = false
+      }
     }
   }
 

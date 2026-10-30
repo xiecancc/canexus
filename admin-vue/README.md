@@ -129,6 +129,12 @@ server {
     root /var/www/admin-vue/dist;
     index index.html;
 
+    # 安全响应头（CSP 按需放宽，如头像允许外链域名时在 img-src 追加）
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-Frame-Options "DENY" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+    add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; object-src 'none'" always;
+
     location / {
         try_files $uri $uri/ /index.html;   # history 路由回退
     }

@@ -84,6 +84,26 @@ const router = createRouter({
   routes: constantRoutes,
 })
 
+/** chunk 加载失败整页刷新标记（sessionStorage，按目标路径记录防止刷新循环） */
+const CHUNK_RELOAD_FLAG = 'super_admin_chunk_reload'
+
+// 懒加载 chunk 失败兜底：发版后旧 chunk 失效（Failed to fetch dynamically imported module），
+// 对同一目标路径最多自动整页刷新一次，刷新成功后的首次导航会清除标记
+router.onError((error, to) => {
+  const isChunkError =
+    /Failed to fetch dynamically imported module/i.test(error.message) ||
+    /Importing a module script failed/i.test(error.message)
+  if (isChunkError && sessionStorage.getItem(CHUNK_RELOAD_FLAG) !== to.fullPath) {
+    sessionStorage.setItem(CHUNK_RELOAD_FLAG, to.fullPath)
+    window.location.replace(to.fullPath)
+  }
+})
+
+// 导航成功后清除刷新标记，保留后续发版的自动恢复能力
+router.afterEach(() => {
+  sessionStorage.removeItem(CHUNK_RELOAD_FLAG)
+})
+
 // 注册全局守卫（登录拦截 + 动态路由加载 + 路由级权限校验）
 setupRouterGuard(router)
 
