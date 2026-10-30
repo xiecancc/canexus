@@ -1,3 +1,22 @@
-# 提交门禁：对暂存的前端文件执行 oxlint 自动修复 + oxfmt 格式化
-# （lint-staged 检测到修改会自动重新暂存；存在无法自动修复的问题则提交失败）
-cd "$(dirname "$0")/.." && pnpm exec lint-staged
+# 提交门禁：
+# 1) 前端暂存文件：lint-staged（oxlint --fix + oxfmt，lint-staged 仅匹配 admin-vue 目录内文件）
+# 2) 后端暂存 .cs 文件：dotnet format 格式化，产生修改时重新暂存
+# 存在无法自动修复的问题则提交失败
+HOOK_DIR=$(cd "$(dirname "$0")" && pwd)
+cd "$HOOK_DIR/../.." || exit 1
+
+pnpm -C admin-vue exec lint-staged || exit 1
+
+CS_STAGED=$(git diff --cached --name-only --diff-filter=ACMR -- '*.cs')
+if [ -n "$CS_STAGED" ]; then
+  FORMAT_ARGS=""
+  for f in $CS_STAGED; do
+    FORMAT_ARGS="$FORMAT_ARGS --include $f"
+  done
+  dotnet format api-netcore/api.slnx $FORMAT_ARGS || exit 1
+  CS_CHANGED=$(git diff --name-only -- '*.cs')
+  if [ -n "$CS_CHANGED" ]; then
+    # shellcheck disable=SC2086
+    git add -- $CS_CHANGED
+  fi
+fi

@@ -96,7 +96,7 @@ pnpm preview          # 本地预览构建产物
 
 | 钩子 | 时机 | 执行内容 |
 | --- | --- | --- |
-| `pre-commit` | `git commit` 前 | lint-staged 对**暂存文件**分类检查：前端文件（`*.{js,mjs,cjs,ts,vue}`）执行 `oxlint --fix` + `oxfmt`；后端文件（`*.cs`）执行 `dotnet format`（自动修复后重新暂存）。存在无法自动修复的问题则提交失败 |
+| `pre-commit` | `git commit` 前 | 前端暂存文件（`*.{js,mjs,cjs,ts,vue}`）经 lint-staged 执行 `oxlint --fix` + `oxfmt`（lint-staged 仅匹配 admin-vue 目录内文件）；后端暂存 `.cs` 文件由钩子脚本直接执行 `dotnet format --include` 并重新暂存。存在无法自动修复的问题则提交失败 |
 | `pre-push` | `git push` 前 | 前端全量 `pnpm type-check`（vue-tsc）+ `pnpm test:unit run`（Vitest）+ 后端 `dotnet build` 编译检查；任一失败则推送被拒绝 |
 
 配置位置：
