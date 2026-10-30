@@ -1,0 +1,14 @@
+namespace Application.Contracts.Queries;
+
+using Application.Contracts.Abstractions;
+using Application.Contracts.Depts;
+using Domain.Shared.Enums;
+
+/// <summary>获取部门详情。</summary>
+/// <param name="Id">部门 Id。</param>
+public sealed record GetDeptDetailQuery(Guid Id) : IQuery<DeptDetailVO>;
+
+/// <summary>查询部门树（keyword 匹配部门名称 / 负责人；status 精确）。</summary>
+/// <param name="Keyword">关键字。</param>
+/// <param name="Status">状态。</param>
+public sealed record GetDeptTreeQuery(string? Keyword, CommonStatus? Status) : IQuery<List<DeptTreeVO>>;

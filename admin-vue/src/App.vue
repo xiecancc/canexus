@@ -1,11 +1,13 @@
-<script setup lang="ts"></script>
+<script setup lang="ts">
+/**
+ * 应用根组件：仅负责路由出口与主题初始化。
+ */
+import { useTheme } from '@/composables/useTheme'
+
+// 初始化主题（暗黑模式 + 主题色），根组件常驻，副作用随应用生命周期存在
+useTheme()
+</script>
 
 <template>
-  <h1>You did it!</h1>
-  <p>
-    Visit <a href="https://vuejs.org/" target="_blank" rel="noopener">vuejs.org</a> to read the
-    documentation
-  </p>
+  <router-view />
 </template>
-
-<style scoped></style>

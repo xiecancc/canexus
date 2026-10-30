@@ -20,3 +20,7 @@ overrides:
 peerDependencyRules:
   allowAny:
     - 'vue'
+
+# 允许执行安装脚本的依赖（文件监听原生绑定，使用官方预编译产物）
+allowBuilds:
+  '@parcel/watcher': true

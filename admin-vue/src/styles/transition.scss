@@ -1,0 +1,32 @@
+/**
+ * 全局过渡动画定义。
+ */
+
+/* 路由切换过渡 */
+.fade-transform-enter-active,
+.fade-transform-leave-active {
+  transition:
+    opacity 0.3s ease,
+    transform 0.3s ease;
+}
+
+.fade-transform-enter-from {
+  opacity: 0;
+  transform: translateX(-16px);
+}
+
+.fade-transform-leave-to {
+  opacity: 0;
+  transform: translateX(16px);
+}
+
+/* 通用淡入淡出（遮罩等场景） */
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.3s ease;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}

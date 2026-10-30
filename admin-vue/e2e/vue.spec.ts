@@ -1,8 +1,8 @@
 import { test, expect } from '@playwright/test'
 
-// See here how to get started:
-// https://playwright.dev/docs/intro
+// 冒烟：未登录访问首页应被路由守卫重定向到登录页
 test('visits the app root url', async ({ page }) => {
   await page.goto('/')
-  await expect(page.locator('h1')).toHaveText('You did it!')
+  await expect(page).toHaveURL(/\/login/)
+  await expect(page.getByRole('button', { name: '登 录' })).toBeVisible()
 })

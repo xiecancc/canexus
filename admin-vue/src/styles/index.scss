@@ -1,0 +1,26 @@
+/**
+ * 全局样式入口：变量 → Element Plus 覆盖 → 过渡动画 → 基础样式。
+ */
+
+@use './variables';
+@use './element';
+@use './transition';
+
+html,
+body,
+#app {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family:
+    'Helvetica Neue', Helvetica, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', Arial,
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-size: 14px;
+  color: var(--el-text-color-primary);
+  background-color: var(--el-bg-color);
+}

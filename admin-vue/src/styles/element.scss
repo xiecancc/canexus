@@ -1,0 +1,47 @@
+/**
+ * Element Plus 主题色衍生变量与组件样式覆盖。
+ *
+ * 主题色衍生变量（light-3/5/7/8/9、dark-2）的混色比例与 Element Plus 官方规则一致：
+ * - 亮色模式向白色混合，暗色模式向深色背景（#141414）混合
+ * - dark-2 在亮色模式向黑色混合、暗色模式向白色混合
+ * 运行时由 useTheme 以内联样式写入 html 根元素，此处为 JS 未执行前的兜底默认值。
+ */
+
+:root {
+  --el-color-primary-light-3: color-mix(in srgb, #fff 30%, var(--el-color-primary));
+  --el-color-primary-light-5: color-mix(in srgb, #fff 50%, var(--el-color-primary));
+  --el-color-primary-light-7: color-mix(in srgb, #fff 70%, var(--el-color-primary));
+  --el-color-primary-light-8: color-mix(in srgb, #fff 80%, var(--el-color-primary));
+  --el-color-primary-light-9: color-mix(in srgb, #fff 90%, var(--el-color-primary));
+  --el-color-primary-dark-2: color-mix(in srgb, #000 20%, var(--el-color-primary));
+}
+
+/* 暗黑模式下衍生色向深色背景混合（与 Element Plus 官方暗黑规则一致） */
+html.dark {
+  --el-color-primary-light-3: color-mix(in srgb, #141414 30%, var(--el-color-primary));
+  --el-color-primary-light-5: color-mix(in srgb, #141414 50%, var(--el-color-primary));
+  --el-color-primary-light-7: color-mix(in srgb, #141414 70%, var(--el-color-primary));
+  --el-color-primary-light-8: color-mix(in srgb, #141414 80%, var(--el-color-primary));
+  --el-color-primary-light-9: color-mix(in srgb, #141414 90%, var(--el-color-primary));
+  --el-color-primary-dark-2: color-mix(in srgb, #fff 20%, var(--el-color-primary));
+}
+
+/* 侧边栏菜单配色覆盖（深色侧边栏在亮暗模式下保持一致） */
+.sidebar-menu.el-menu {
+  border-right: none;
+  background-color: transparent;
+
+  .el-menu-item,
+  .el-sub-menu__title {
+    color: var(--sidebar-text-color);
+
+    &:hover {
+      background-color: var(--sidebar-hover-bg-color);
+    }
+  }
+
+  .el-menu-item.is-active {
+    color: var(--sidebar-active-text-color);
+    background-color: var(--el-color-primary);
+  }
+}

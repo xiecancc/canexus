@@ -1,0 +1,24 @@
+/**
+ * 全局 CSS 变量与布局尺寸定义。
+ *
+ * - 布局尺寸以 CSS 变量暴露，供组件样式通过 var() 引用（运行时可响应式调整）
+ * - 侧边栏为经典深色主题，亮暗模式保持一致
+ */
+
+:root {
+  /* 布局尺寸 */
+  --sidebar-width: 210px;
+  --sidebar-collapsed-width: 64px;
+  --navbar-height: 50px;
+  --tags-height: 34px;
+
+  /* 侧边栏配色（经典深色） */
+  --sidebar-bg-color: #304156;
+  --sidebar-text-color: #bfcbd9;
+  --sidebar-hover-bg-color: #263445;
+  --sidebar-active-text-color: #ffffff;
+  --sidebar-logo-text-color: #ffffff;
+
+  /* 页面区域留白 */
+  --app-main-padding: 16px;
+}

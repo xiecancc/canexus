@@ -1,0 +1,40 @@
+namespace Application.Validators;
+
+using Application.Contracts.Commands;
+using Application.Contracts.Depts;
+using Application.Validators.Common;
+using FluentValidation;
+
+/// <summary>部门写入请求验证器：名称非空、状态取值合法（承接自实体 setter 迁移的规则；创建 / 更新共用，消除重复定义）。</summary>
+/// <typeparam name="TRequest">部门写入请求类型。</typeparam>
+public class DeptWriteRequestValidator<TRequest> : AbstractValidator<TRequest>
+    where TRequest : DeptWriteRequest
+{
+    /// <summary>构造函数。</summary>
+    public DeptWriteRequestValidator()
+    {
+        RuleFor(request => request.DeptName).NotBlankRule("部门名称不能为空");
+
+        RuleFor(request => request.Status).StatusRule();
+    }
+}
+
+/// <summary>创建部门命令验证器（委托请求验证器）；父部门存在性与祖级路径由处理器 / 树形仓储校验。</summary>
+public sealed class CreateDeptCommandValidator : AbstractValidator<CreateDeptCommand>
+{
+    /// <summary>构造函数。</summary>
+    public CreateDeptCommandValidator()
+    {
+        RuleFor(command => command.Request).SetValidator(new DeptWriteRequestValidator<DeptCreateRequest>());
+    }
+}
+
+/// <summary>更新部门命令验证器（委托请求验证器）；父级不可选自身或后代由处理器 / 树形仓储校验。</summary>
+public sealed class UpdateDeptCommandValidator : AbstractValidator<UpdateDeptCommand>
+{
+    /// <summary>构造函数。</summary>
+    public UpdateDeptCommandValidator()
+    {
+        RuleFor(command => command.Request).SetValidator(new DeptWriteRequestValidator<DeptUpdateRequest>());
+    }
+}
