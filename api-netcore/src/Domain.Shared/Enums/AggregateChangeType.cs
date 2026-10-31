@@ -10,5 +10,8 @@ public enum AggregateChangeType
     Updated = 2,
 
     /// <summary>删除（含软删除）。</summary>
-    Deleted = 3
+    Deleted = 3,
+
+    /// <summary>重置密码（用户域专用：常关联强制下线等后续动作）。</summary>
+    PasswordReset = 4
 }

@@ -4,14 +4,16 @@ using Application.Abstractions;
 using Application.Contracts.Commands;
 using Application.Contracts.Tenants;
 using Domain.Entities;
+using Domain.Events;
 using Domain.Repositories;
+using Domain.Services.Events;
+using Domain.Shared.Enums;
 using Domain.Shared.Exceptions;
 using Domain.Shared.Results;
 
 /// <summary>创建租户命令处理器。</summary>
 /// <remarks>构造函数。</remarks>
-/// <param name="tenantRepository">租户仓储。</param>
-public sealed class CreateTenantCommandHandler(IAggregateRepository<SysTenant> tenantRepository) : CommandHandler<CreateTenantCommand, Guid>
+public sealed class CreateTenantCommandHandler(IAggregateRepository<SysTenant> tenantRepository, IDomainEventPublisher domainEventPublisher) : CommandHandler<CreateTenantCommand, Guid>
 {
     /// <inheritdoc />
     protected override async Task<Guid> HandleAsync(CreateTenantCommand command, CancellationToken cancellationToken)
@@ -35,15 +37,19 @@ public sealed class CreateTenantCommandHandler(IAggregateRepository<SysTenant> t
             ExpireTime = request.ExpireTime
         };
         var inserted = await tenantRepository.InsertAsync(entity, cancellationToken);
+
+        // 关键节点发布租户创建领域事件（租户初始化等响应动作可由监听器扩展处理）
+        await domainEventPublisher.PublishAsync(new TenantChangedEvent(inserted.Id, AggregateChangeType.Created), cancellationToken);
         return inserted.Id;
     }
 }
 
 /// <summary>删除租户命令处理器。</summary>
 /// <remarks>构造函数。</remarks>
-/// <param name="tenantRepository">租户仓储。</param>
-/// <param name="userRepository">用户仓储（归属校验）。</param>
-public sealed class DeleteTenantCommandHandler(IAggregateRepository<SysTenant> tenantRepository, IAggregateRepository<SysUser> userRepository) : CommandHandler<DeleteTenantCommand>
+public sealed class DeleteTenantCommandHandler(
+    IAggregateRepository<SysTenant> tenantRepository,
+    IAggregateRepository<SysUser> userRepository,
+    IDomainEventPublisher domainEventPublisher) : CommandHandler<DeleteTenantCommand>
 {
     /// <inheritdoc />
     protected override async Task HandleAsync(DeleteTenantCommand command, CancellationToken cancellationToken)
@@ -58,13 +64,15 @@ public sealed class DeleteTenantCommandHandler(IAggregateRepository<SysTenant> t
         }
 
         await tenantRepository.DeleteAsync(entity, cancellationToken);
+
+        // 关键节点发布租户删除领域事件（响应动作由监听器处理）
+        await domainEventPublisher.PublishAsync(new TenantChangedEvent(command.Id, AggregateChangeType.Deleted), cancellationToken);
     }
 }
 
 /// <summary>更新租户命令处理器。</summary>
 /// <remarks>构造函数。</remarks>
-/// <param name="tenantRepository">租户仓储。</param>
-public sealed class UpdateTenantCommandHandler(IAggregateRepository<SysTenant> tenantRepository) : CommandHandler<UpdateTenantCommand>
+public sealed class UpdateTenantCommandHandler(IAggregateRepository<SysTenant> tenantRepository, IDomainEventPublisher domainEventPublisher) : CommandHandler<UpdateTenantCommand>
 {
     /// <inheritdoc />
     protected override async Task HandleAsync(UpdateTenantCommand command, CancellationToken cancellationToken)
@@ -88,5 +96,8 @@ public sealed class UpdateTenantCommandHandler(IAggregateRepository<SysTenant> t
         entity.Description = request.Description;
         entity.ExpireTime = request.ExpireTime;
         await tenantRepository.UpdateAsync(entity, cancellationToken);
+
+        // 关键节点发布租户更新领域事件（响应动作由监听器处理）
+        await domainEventPublisher.PublishAsync(new TenantChangedEvent(command.Id, AggregateChangeType.Updated), cancellationToken);
     }
 }

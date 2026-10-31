@@ -13,6 +13,6 @@ public sealed class MediatRDomainEventPublisher(IPublisher publisher) : IDomainE
     public async Task PublishAsync<TEvent>(TEvent domainEvent, CancellationToken cancellationToken = default)
         where TEvent : DomainEvent
     {
-        await publisher.Publish(new DomainEventNotification<TEvent>(domainEvent), cancellationToken);
+        await publisher.Publish(new DomainEventNotification(domainEvent), cancellationToken);
     }
 }

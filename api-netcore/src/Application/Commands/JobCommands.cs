@@ -5,8 +5,10 @@ using Application.Contracts.Commands;
 using Application.Contracts.Jobs;
 using AutoMapper;
 using Domain.Entities;
+using Domain.Events;
 using Domain.Repositories;
 using Domain.Services;
+using Domain.Services.Events;
 using Domain.Services.Rules;
 using Domain.Shared.Enums;
 using Domain.Shared.Exceptions;
@@ -16,7 +18,8 @@ using Domain.Shared.Results;
 /// <remarks>构造函数。</remarks>
 /// <param name="jobRepository">定时任务仓储。</param>
 /// <param name="scheduleManager">任务调度管理端口（Cron / 任务类型校验与调度同步）。</param>
-public sealed class CreateJobCommandHandler(IAggregateRepository<SysJob> jobRepository, IJobScheduleManager scheduleManager, IMapper mapper) : CommandHandler<CreateJobCommand, Guid>
+/// <param name="domainEventPublisher">领域事件发布端口。</param>
+public sealed class CreateJobCommandHandler(IAggregateRepository<SysJob> jobRepository, IJobScheduleManager scheduleManager, IDomainEventPublisher domainEventPublisher, IMapper mapper) : CommandHandler<CreateJobCommand, Guid>
 {
     /// <inheritdoc />
     protected override async Task<Guid> HandleAsync(CreateJobCommand command, CancellationToken cancellationToken)
@@ -31,6 +34,8 @@ public sealed class CreateJobCommandHandler(IAggregateRepository<SysJob> jobRepo
             await scheduleManager.ScheduleAsync(inserted, cancellationToken);
         }
 
+        // 关键节点发布定时任务创建领域事件（响应动作由监听器处理）
+        await domainEventPublisher.PublishAsync(new JobChangedEvent(inserted.Id, AggregateChangeType.Created), cancellationToken);
         return inserted.Id;
     }
 }
@@ -39,7 +44,8 @@ public sealed class CreateJobCommandHandler(IAggregateRepository<SysJob> jobRepo
 /// <remarks>构造函数。</remarks>
 /// <param name="jobRepository">定时任务仓储。</param>
 /// <param name="scheduleManager">任务调度管理端口（删除后移出调度）。</param>
-public sealed class DeleteJobCommandHandler(IAggregateRepository<SysJob> jobRepository, IJobScheduleManager scheduleManager) : CommandHandler<DeleteJobCommand>
+/// <param name="domainEventPublisher">领域事件发布端口。</param>
+public sealed class DeleteJobCommandHandler(IAggregateRepository<SysJob> jobRepository, IJobScheduleManager scheduleManager, IDomainEventPublisher domainEventPublisher) : CommandHandler<DeleteJobCommand>
 {
     /// <inheritdoc />
     protected override async Task HandleAsync(DeleteJobCommand command, CancellationToken cancellationToken)
@@ -49,6 +55,9 @@ public sealed class DeleteJobCommandHandler(IAggregateRepository<SysJob> jobRepo
 
         await scheduleManager.RemoveAsync(entity.Id, entity.JobGroup, cancellationToken);
         await jobRepository.DeleteAsync(entity, cancellationToken);
+
+        // 关键节点发布定时任务删除领域事件（响应动作由监听器处理）
+        await domainEventPublisher.PublishAsync(new JobChangedEvent(command.Id, AggregateChangeType.Deleted), cancellationToken);
     }
 }
 
@@ -64,6 +73,7 @@ public sealed class RunJobOnceCommandHandler(IAggregateRepository<SysJob> jobRep
         var entity = await jobRepository.GetAsync(command.Id, cancellationToken)
             ?? throw new BusinessException(ErrorCodes.JobNotFound, $"定时任务 {command.Id} 不存在");
 
+        // 触发执行不改变任务聚合数据，不发布领域事件
         await scheduleManager.RunOnceAsync(entity, cancellationToken);
     }
 }
@@ -72,7 +82,8 @@ public sealed class RunJobOnceCommandHandler(IAggregateRepository<SysJob> jobRep
 /// <remarks>构造函数。</remarks>
 /// <param name="jobRepository">定时任务仓储。</param>
 /// <param name="scheduleManager">任务调度管理端口（Cron / 任务类型校验与调度同步）。</param>
-public sealed class UpdateJobCommandHandler(IAggregateRepository<SysJob> jobRepository, IJobScheduleManager scheduleManager, IMapper mapper) : CommandHandler<UpdateJobCommand>
+/// <param name="domainEventPublisher">领域事件发布端口。</param>
+public sealed class UpdateJobCommandHandler(IAggregateRepository<SysJob> jobRepository, IJobScheduleManager scheduleManager, IDomainEventPublisher domainEventPublisher, IMapper mapper) : CommandHandler<UpdateJobCommand>
 {
     /// <inheritdoc />
     protected override async Task HandleAsync(UpdateJobCommand command, CancellationToken cancellationToken)
@@ -102,6 +113,9 @@ public sealed class UpdateJobCommandHandler(IAggregateRepository<SysJob> jobRepo
         {
             await scheduleManager.RemoveAsync(command.Id, jobGroup, cancellationToken);
         }
+
+        // 关键节点发布定时任务更新领域事件（响应动作由监听器处理）
+        await domainEventPublisher.PublishAsync(new JobChangedEvent(command.Id, AggregateChangeType.Updated), cancellationToken);
     }
 }
 
@@ -109,7 +123,8 @@ public sealed class UpdateJobCommandHandler(IAggregateRepository<SysJob> jobRepo
 /// <remarks>构造函数。</remarks>
 /// <param name="jobRepository">定时任务仓储。</param>
 /// <param name="scheduleManager">任务调度管理端口（启停同步调度）。</param>
-public sealed class UpdateJobStatusCommandHandler(IAggregateRepository<SysJob> jobRepository, IJobScheduleManager scheduleManager) : CommandHandler<UpdateJobStatusCommand>
+/// <param name="domainEventPublisher">领域事件发布端口。</param>
+public sealed class UpdateJobStatusCommandHandler(IAggregateRepository<SysJob> jobRepository, IJobScheduleManager scheduleManager, IDomainEventPublisher domainEventPublisher) : CommandHandler<UpdateJobStatusCommand>
 {
     /// <inheritdoc />
     protected override async Task HandleAsync(UpdateJobStatusCommand command, CancellationToken cancellationToken)
@@ -128,5 +143,8 @@ public sealed class UpdateJobStatusCommandHandler(IAggregateRepository<SysJob> j
         {
             await scheduleManager.RemoveAsync(entity.Id, entity.JobGroup, cancellationToken);
         }
+
+        // 关键节点发布定时任务更新领域事件（响应动作由监听器处理）
+        await domainEventPublisher.PublishAsync(new JobChangedEvent(command.Id, AggregateChangeType.Updated), cancellationToken);
     }
 }

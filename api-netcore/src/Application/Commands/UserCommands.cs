@@ -148,7 +148,8 @@ public sealed class DeleteUserCommandHandler(
 /// <remarks>构造函数。</remarks>
 public sealed class ResetUserPasswordCommandHandler(
     IAggregateRepository<SysUser> userRepository,
-    IPasswordHasher passwordHasher) : CommandHandler<ResetUserPasswordCommand>
+    IPasswordHasher passwordHasher,
+    IDomainEventPublisher domainEventPublisher) : CommandHandler<ResetUserPasswordCommand>
 {
     /// <inheritdoc />
     protected override async Task HandleAsync(ResetUserPasswordCommand command, CancellationToken cancellationToken)
@@ -157,6 +158,9 @@ public sealed class ResetUserPasswordCommandHandler(
             ?? throw new BusinessException(ErrorCodes.UserNotFound, $"用户 {command.Id} 不存在");
         user.PasswordHash = passwordHasher.Hash(command.Request.Password);
         await userRepository.UpdateAsync(user, cancellationToken);
+
+        // 关键节点发布用户重置密码领域事件（强制下线等响应动作可由监听器扩展处理）
+        await domainEventPublisher.PublishAsync(new UserChangedEvent(command.Id, AggregateChangeType.PasswordReset), cancellationToken);
     }
 }
 

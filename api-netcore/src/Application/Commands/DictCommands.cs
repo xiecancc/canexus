@@ -5,22 +5,19 @@ using Application.Contracts.Commands;
 using Application.Contracts.Dicts;
 using AutoMapper;
 using Domain.Entities;
+using Domain.Events;
 using Domain.Repositories;
-using Domain.Services.Rules;
+using Domain.Services.Events;
+using Domain.Shared.Enums;
 using Domain.Shared.Exceptions;
 using Domain.Shared.Results;
-using Infrastructure.Shared.Caching;
 
 /// <summary>创建字典数据命令处理器。</summary>
 /// <remarks>构造函数。</remarks>
-/// <param name="dictDataRepository">字典数据仓储。</param>
-/// <param name="dictTypeRepository">字典类型仓储（存在性校验）。</param>
-/// <param name="cache">内存缓存（写后失效对应类型缓存）。</param>
-/// <param name="mapper">DTO → 实体映射。</param>
 public sealed class CreateDictDataCommandHandler(
     IAggregateRepository<SysDictData> dictDataRepository,
     IAggregateRepository<SysDictType> dictTypeRepository,
-    ICache cache,
+    IDomainEventPublisher domainEventPublisher,
     IMapper mapper) : CommandHandler<CreateDictDataCommand, Guid>
 {
     /// <inheritdoc />
@@ -33,7 +30,9 @@ public sealed class CreateDictDataCommandHandler(
 
         var entity = mapper.Map<SysDictData>(request);
         var inserted = await dictDataRepository.InsertAsync(entity, cancellationToken);
-        await cache.RemoveAsync(DictRules.DataTypeCacheKey(dictType));
+
+        // 关键节点发布字典数据创建领域事件（缓存清理等响应动作由监听器处理）
+        await domainEventPublisher.PublishAsync(new DictDataChangedEvent(inserted.Id, dictType, AggregateChangeType.Created), cancellationToken);
         return inserted.Id;
     }
 
@@ -69,9 +68,10 @@ public sealed class CreateDictDataCommandHandler(
 
 /// <summary>创建字典类型命令处理器。</summary>
 /// <remarks>构造函数。</remarks>
-/// <param name="dictTypeRepository">字典类型仓储。</param>
-/// <param name="mapper">DTO → 实体映射。</param>
-public sealed class CreateDictTypeCommandHandler(IAggregateRepository<SysDictType> dictTypeRepository, IMapper mapper) : CommandHandler<CreateDictTypeCommand, Guid>
+public sealed class CreateDictTypeCommandHandler(
+    IAggregateRepository<SysDictType> dictTypeRepository,
+    IDomainEventPublisher domainEventPublisher,
+    IMapper mapper) : CommandHandler<CreateDictTypeCommand, Guid>
 {
     /// <inheritdoc />
     protected override async Task<Guid> HandleAsync(CreateDictTypeCommand command, CancellationToken cancellationToken)
@@ -85,15 +85,18 @@ public sealed class CreateDictTypeCommandHandler(IAggregateRepository<SysDictTyp
 
         var entity = mapper.Map<SysDictType>(request);
         var inserted = await dictTypeRepository.InsertAsync(entity, cancellationToken);
+
+        // 关键节点发布字典类型创建领域事件（清理等响应动作由监听器处理）
+        await domainEventPublisher.PublishAsync(new DictTypeChangedEvent(inserted.Id, AggregateChangeType.Created), cancellationToken);
         return inserted.Id;
     }
 }
 
 /// <summary>删除字典数据命令处理器。</summary>
 /// <remarks>构造函数。</remarks>
-/// <param name="dictDataRepository">字典数据仓储。</param>
-/// <param name="cache">内存缓存（删除后失效对应类型缓存）。</param>
-public sealed class DeleteDictDataCommandHandler(IAggregateRepository<SysDictData> dictDataRepository, ICache cache) : CommandHandler<DeleteDictDataCommand>
+public sealed class DeleteDictDataCommandHandler(
+    IAggregateRepository<SysDictData> dictDataRepository,
+    IDomainEventPublisher domainEventPublisher) : CommandHandler<DeleteDictDataCommand>
 {
     /// <inheritdoc />
     protected override async Task HandleAsync(DeleteDictDataCommand command, CancellationToken cancellationToken)
@@ -102,17 +105,18 @@ public sealed class DeleteDictDataCommandHandler(IAggregateRepository<SysDictDat
             ?? throw new BusinessException(ErrorCodes.DictDataNotFound, $"字典数据 {command.Id} 不存在");
 
         await dictDataRepository.DeleteAsync(entity, cancellationToken);
-        await cache.RemoveAsync(DictRules.DataTypeCacheKey(entity.DictType));
+
+        // 关键节点发布字典数据删除领域事件（缓存清理等响应动作由监听器处理）
+        await domainEventPublisher.PublishAsync(new DictDataChangedEvent(command.Id, entity.DictType, AggregateChangeType.Deleted), cancellationToken);
     }
 }
 
 /// <summary>删除字典类型命令处理器。</summary>
 /// <remarks>构造函数。</remarks>
-/// <param name="dictTypeRepository">字典类型仓储。</param>
-/// <param name="dictDataRepository">字典数据仓储（删除前置校验）。</param>
 public sealed class DeleteDictTypeCommandHandler(
     IAggregateRepository<SysDictType> dictTypeRepository,
-    IAggregateRepository<SysDictData> dictDataRepository) : CommandHandler<DeleteDictTypeCommand>
+    IAggregateRepository<SysDictData> dictDataRepository,
+    IDomainEventPublisher domainEventPublisher) : CommandHandler<DeleteDictTypeCommand>
 {
     /// <inheritdoc />
     protected override async Task HandleAsync(DeleteDictTypeCommand command, CancellationToken cancellationToken)
@@ -126,19 +130,18 @@ public sealed class DeleteDictTypeCommandHandler(
         }
 
         await dictTypeRepository.DeleteAsync(entity, cancellationToken);
+
+        // 关键节点发布字典类型删除领域事件（清理等响应动作由监听器处理）
+        await domainEventPublisher.PublishAsync(new DictTypeChangedEvent(command.Id, AggregateChangeType.Deleted), cancellationToken);
     }
 }
 
 /// <summary>更新字典数据命令处理器。</summary>
 /// <remarks>构造函数。</remarks>
-/// <param name="dictDataRepository">字典数据仓储。</param>
-/// <param name="dictTypeRepository">字典类型仓储（类型迁移时存在性校验）。</param>
-/// <param name="cache">内存缓存（写后失效新旧类型缓存）。</param>
-/// <param name="mapper">DTO → 实体映射。</param>
 public sealed class UpdateDictDataCommandHandler(
     IAggregateRepository<SysDictData> dictDataRepository,
     IAggregateRepository<SysDictType> dictTypeRepository,
-    ICache cache,
+    IDomainEventPublisher domainEventPublisher,
     IMapper mapper) : CommandHandler<UpdateDictDataCommand>
 {
     /// <inheritdoc />
@@ -163,12 +166,9 @@ public sealed class UpdateDictDataCommandHandler(
         mapper.Map(request, entity);
         await dictDataRepository.UpdateAsync(entity, cancellationToken);
 
-        // 类型迁移时新旧类型缓存均失效，保证两个维度都立即读到最新数据
-        await cache.RemoveAsync(DictRules.DataTypeCacheKey(dictType));
-        if (!string.Equals(originalType, dictType, StringComparison.Ordinal))
-        {
-            await cache.RemoveAsync(DictRules.DataTypeCacheKey(originalType));
-        }
+        // 关键节点发布字典数据更新领域事件（类型迁移时新旧类型缓存均由监听器失效）
+        await domainEventPublisher.PublishAsync(
+            new DictDataChangedEvent(command.Id, dictType, AggregateChangeType.Updated, originalType), cancellationToken);
     }
 
     /// <summary>校验同字典类型下标签 / 键值未被占用（更新时排除自身）。</summary>
@@ -194,9 +194,10 @@ public sealed class UpdateDictDataCommandHandler(
 
 /// <summary>更新字典类型命令处理器。</summary>
 /// <remarks>构造函数。</remarks>
-/// <param name="dictTypeRepository">字典类型仓储。</param>
-/// <param name="mapper">DTO → 实体映射。</param>
-public sealed class UpdateDictTypeCommandHandler(IAggregateRepository<SysDictType> dictTypeRepository, IMapper mapper) : CommandHandler<UpdateDictTypeCommand>
+public sealed class UpdateDictTypeCommandHandler(
+    IAggregateRepository<SysDictType> dictTypeRepository,
+    IDomainEventPublisher domainEventPublisher,
+    IMapper mapper) : CommandHandler<UpdateDictTypeCommand>
 {
     /// <inheritdoc />
     protected override async Task HandleAsync(UpdateDictTypeCommand command, CancellationToken cancellationToken)
@@ -213,5 +214,8 @@ public sealed class UpdateDictTypeCommandHandler(IAggregateRepository<SysDictTyp
 
         mapper.Map(request, entity);
         await dictTypeRepository.UpdateAsync(entity, cancellationToken);
+
+        // 关键节点发布字典类型更新领域事件（清理等响应动作由监听器处理）
+        await domainEventPublisher.PublishAsync(new DictTypeChangedEvent(command.Id, AggregateChangeType.Updated), cancellationToken);
     }
 }

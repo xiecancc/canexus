@@ -4,13 +4,16 @@ using Application.Abstractions;
 using Application.Contracts.Commands;
 using Application.Contracts.Depts;
 using Domain.Entities;
+using Domain.Events;
 using Domain.Repositories;
+using Domain.Services.Events;
+using Domain.Shared.Enums;
 using Domain.Shared.Exceptions;
 using Domain.Shared.Results;
 
 /// <summary>创建部门命令处理器。</summary>
 /// <remarks>构造函数。</remarks>
-public sealed class CreateDeptCommandHandler(IAggregateTreeRepository<SysDept> deptRepository) : CommandHandler<CreateDeptCommand, Guid>
+public sealed class CreateDeptCommandHandler(IAggregateTreeRepository<SysDept> deptRepository, IDomainEventPublisher domainEventPublisher) : CommandHandler<CreateDeptCommand, Guid>
 {
     /// <inheritdoc />
     protected override async Task<Guid> HandleAsync(CreateDeptCommand command, CancellationToken cancellationToken)
@@ -35,6 +38,9 @@ public sealed class CreateDeptCommandHandler(IAggregateTreeRepository<SysDept> d
             Status = request.Status
         };
         var inserted = await deptRepository.InsertAsync(dept, cancellationToken);
+
+        // 关键节点发布部门创建领域事件（清理等响应动作由监听器处理）
+        await domainEventPublisher.PublishAsync(new DeptChangedEvent(inserted.Id, AggregateChangeType.Created), cancellationToken);
         return inserted.Id;
     }
 }
@@ -43,7 +49,8 @@ public sealed class CreateDeptCommandHandler(IAggregateTreeRepository<SysDept> d
 /// <remarks>构造函数。</remarks>
 public sealed class DeleteDeptCommandHandler(
     IAggregateTreeRepository<SysDept> deptRepository,
-    IAggregateRepository<SysUser> userRepository) : CommandHandler<DeleteDeptCommand>
+    IAggregateRepository<SysUser> userRepository,
+    IDomainEventPublisher domainEventPublisher) : CommandHandler<DeleteDeptCommand>
 {
     /// <inheritdoc />
     protected override async Task HandleAsync(DeleteDeptCommand command, CancellationToken cancellationToken)
@@ -62,6 +69,9 @@ public sealed class DeleteDeptCommandHandler(
         }
 
         await deptRepository.DeleteAsync(dept, cancellationToken);
+
+        // 关键节点发布部门删除领域事件（清理等响应动作由监听器处理）
+        await domainEventPublisher.PublishAsync(new DeptChangedEvent(command.Id, AggregateChangeType.Deleted), cancellationToken);
     }
 }
 
@@ -69,6 +79,7 @@ public sealed class DeleteDeptCommandHandler(
 /// <remarks>构造函数。</remarks>
 public sealed class UpdateDeptCommandHandler(
     IAggregateTreeRepository<SysDept> deptRepository,
+    IDomainEventPublisher domainEventPublisher,
     IUnitOfWork unitOfWork) : CommandHandler<UpdateDeptCommand>
 {
     /// <inheritdoc />
@@ -101,5 +112,8 @@ public sealed class UpdateDeptCommandHandler(
                     EntityName: "部门"), cancellationToken);
             }
         }, cancellationToken);
+
+        // 关键节点发布部门更新领域事件（含挂载点变化，清理等响应动作由监听器处理）
+        await domainEventPublisher.PublishAsync(new DeptChangedEvent(command.Id, AggregateChangeType.Updated), cancellationToken);
     }
 }

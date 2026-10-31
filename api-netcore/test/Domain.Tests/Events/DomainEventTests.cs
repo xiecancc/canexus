@@ -116,3 +116,165 @@ public class DomainEventTests
         });
     }
 }
+
+/// <summary>新增领域事件单元测试（部门 / 字典 / 配置 / 通知 / 租户 / 作业 / 日志域）。</summary>
+[TestFixture]
+public class AdditionalDomainEventTests
+{
+    private static readonly Guid AggregateId = Guid.Parse("00000000-0000-0000-0000-000000000001");
+
+    [Test]
+    public void DeptChangedEvent_CarriesDeptIdAndChangeType()
+    {
+        var domainEvent = new DeptChangedEvent(AggregateId, AggregateChangeType.Updated);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(domainEvent.EventName, Is.EqualTo("DeptChangedEvent"));
+            Assert.That(domainEvent.EventType, Is.EqualTo("dept.changed"));
+            Assert.That(domainEvent.DeptId, Is.EqualTo(AggregateId));
+            Assert.That(domainEvent.ChangeType, Is.EqualTo(AggregateChangeType.Updated));
+        });
+    }
+
+    [Test]
+    public void DictTypeChangedEvent_CarriesTypeIdAndChangeType()
+    {
+        var domainEvent = new DictTypeChangedEvent(AggregateId, AggregateChangeType.Deleted);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(domainEvent.EventType, Is.EqualTo("dict.type.changed"));
+            Assert.That(domainEvent.DictTypeId, Is.EqualTo(AggregateId));
+            Assert.That(domainEvent.ChangeType, Is.EqualTo(AggregateChangeType.Deleted));
+        });
+    }
+
+    [Test]
+    public void DictDataChangedEvent_CarriesTypeAndMigrationInfo()
+    {
+        // 类型迁移：载荷携带迁移前旧类型
+        var domainEvent = new DictDataChangedEvent(AggregateId, "new_type", AggregateChangeType.Updated, "old_type");
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(domainEvent.EventType, Is.EqualTo("dict.data.changed"));
+            Assert.That(domainEvent.DictDataId, Is.EqualTo(AggregateId));
+            Assert.That(domainEvent.DictType, Is.EqualTo("new_type"));
+            Assert.That(domainEvent.OriginalDictType, Is.EqualTo("old_type"));
+            Assert.That(domainEvent.Payload["dictType"], Is.EqualTo("new_type"));
+            Assert.That(domainEvent.Payload["originalDictType"], Is.EqualTo("old_type"));
+        });
+    }
+
+    [Test]
+    public void DictDataChangedEvent_WithoutMigration_OriginalTypeIsNull()
+    {
+        var domainEvent = new DictDataChangedEvent(AggregateId, "some_type", AggregateChangeType.Created);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(domainEvent.OriginalDictType, Is.Null);
+            Assert.That(domainEvent.Payload["originalDictType"], Is.Null);
+        });
+    }
+
+    [Test]
+    public void ConfigChangedEvent_CarriesKeyAndMigrationInfo()
+    {
+        // 键名变更：载荷携带变更前旧键名
+        var domainEvent = new ConfigChangedEvent(AggregateId, "new_key", AggregateChangeType.Updated, "old_key");
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(domainEvent.EventType, Is.EqualTo("config.changed"));
+            Assert.That(domainEvent.ConfigId, Is.EqualTo(AggregateId));
+            Assert.That(domainEvent.ConfigKey, Is.EqualTo("new_key"));
+            Assert.That(domainEvent.OriginalConfigKey, Is.EqualTo("old_key"));
+            Assert.That(domainEvent.Payload["configKey"], Is.EqualTo("new_key"));
+            Assert.That(domainEvent.Payload["originalConfigKey"], Is.EqualTo("old_key"));
+        });
+    }
+
+    [Test]
+    public void NoticeChangedEvent_CarriesNoticeIdAndChangeType()
+    {
+        var domainEvent = new NoticeChangedEvent(AggregateId, AggregateChangeType.Created);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(domainEvent.EventType, Is.EqualTo("notice.changed"));
+            Assert.That(domainEvent.NoticeId, Is.EqualTo(AggregateId));
+            Assert.That(domainEvent.ChangeType, Is.EqualTo(AggregateChangeType.Created));
+        });
+    }
+
+    [Test]
+    public void TenantChangedEvent_CarriesTenantIdAndChangeType()
+    {
+        var domainEvent = new TenantChangedEvent(AggregateId, AggregateChangeType.Updated);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(domainEvent.EventType, Is.EqualTo("tenant.changed"));
+            Assert.That(domainEvent.TenantId, Is.EqualTo(AggregateId));
+            Assert.That(domainEvent.ChangeType, Is.EqualTo(AggregateChangeType.Updated));
+        });
+    }
+
+    [Test]
+    public void JobChangedEvent_CarriesJobIdAndChangeType()
+    {
+        var domainEvent = new JobChangedEvent(AggregateId, AggregateChangeType.Deleted);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(domainEvent.EventType, Is.EqualTo("job.changed"));
+            Assert.That(domainEvent.JobId, Is.EqualTo(AggregateId));
+            Assert.That(domainEvent.ChangeType, Is.EqualTo(AggregateChangeType.Deleted));
+        });
+    }
+
+    [Test]
+    public void LogChangedEvent_SingleDelete_CarriesLogId()
+    {
+        // 单条删除：聚合根标识即日志 Id
+        var domainEvent = new LogChangedEvent(LogChangedEvent.OperLogType, AggregateChangeType.Deleted, AggregateId);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(domainEvent.EventType, Is.EqualTo("log.changed"));
+            Assert.That(domainEvent.LogType, Is.EqualTo("oper"));
+            Assert.That(domainEvent.ChangeType, Is.EqualTo(AggregateChangeType.Deleted));
+            Assert.That(domainEvent.LogId, Is.EqualTo(AggregateId));
+            Assert.That(domainEvent.AggregateId, Is.EqualTo(AggregateId));
+        });
+    }
+
+    [Test]
+    public void LogChangedEvent_CleanAll_LogIdIsNull()
+    {
+        // 清空全部：无单条定位，聚合根标识为 null
+        var domainEvent = new LogChangedEvent(LogChangedEvent.LoginLogType, AggregateChangeType.Deleted);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(domainEvent.LogType, Is.EqualTo("login"));
+            Assert.That(domainEvent.LogId, Is.Null);
+            Assert.That(domainEvent.AggregateId, Is.Null);
+        });
+    }
+
+    [Test]
+    public void UserChangedEvent_PasswordReset_CarriesChangeType()
+    {
+        // 重置密码：使用专用变更类型，为强制下线等监听器预留语义
+        var domainEvent = new UserChangedEvent(AggregateId, AggregateChangeType.PasswordReset);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(domainEvent.ChangeType, Is.EqualTo(AggregateChangeType.PasswordReset));
+            Assert.That(domainEvent.Payload["changeType"], Is.EqualTo("PasswordReset"));
+        });
+    }
+}
