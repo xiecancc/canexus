@@ -64,7 +64,7 @@ public sealed class DeleteMenuCommandHandler(
         // 变更前捕获菜单状态快照（软删除可能回填墓碑字段）
         var snapshot = menu.Snapshot<SysMenu>();
 
-        await menuRepository.DeleteAsync(menu, cancellationToken);
+        await menuRepository.DeleteAsync(command.Id, cancellationToken);
 
         // 关键节点发布菜单删除领域事件（携带删除前的菜单状态）
         await domainEventPublisher.PublishAsync(new MenuDeletedEvent(snapshot), cancellationToken);

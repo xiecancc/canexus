@@ -194,7 +194,7 @@ public class DataAccessIntegrationTests
         // 软删除：删除后默认查询不可见，但物理行仍存在且标记为已删除
         var inserted = await _softDeleteRepository.InsertAsync(new SoftDeleteTestEntity { Name = "将被删除" });
 
-        await _softDeleteRepository.DeleteAsync(inserted);
+        await _softDeleteRepository.DeleteAsync(inserted.Id);
 
         var fetched = await _softDeleteRepository.GetAsync([it => it.Id == inserted.Id]);
         var count = await _softDeleteRepository.CountAsync();
@@ -214,7 +214,7 @@ public class DataAccessIntegrationTests
     {
         // 关闭软删除过滤开关后，已删除数据恢复可见
         var inserted = await _softDeleteRepository.InsertAsync(new SoftDeleteTestEntity { Name = "过滤开关" });
-        await _softDeleteRepository.DeleteAsync(inserted);
+        await _softDeleteRepository.DeleteAsync(inserted.Id);
 
         _dataFilter.SoftDeleteEnabled = false;
         var count = await _softDeleteRepository.CountAsync();
@@ -223,14 +223,50 @@ public class DataAccessIntegrationTests
     }
 
     [Test]
-    public async Task HardDelete_PlainEntity_PhysicalDelete()
+    public async Task DeleteByPredicate_Aggregate_SoftDelete()
     {
-        // 物理删除：行被真正移除，不走软删除墓碑
-        var inserted = await _plainRepository.InsertAsync(new PlainTestEntity { Name = "物理删除" });
-        await _plainRepository.HardDeleteAsync(inserted);
+        // 条件删除对聚合重写为软删除：默认查询不再可见，物理行保留且标记 IsDeleted = 1
+        var inserted = await _plainRepository.InsertAsync(new PlainTestEntity { Name = "条件软删除" });
+        var affected = await _plainRepository.DeleteAsync(it => it.Id == inserted.Id);
 
         var count = await _plainRepository.CountAsync();
-        Assert.That(count, Is.EqualTo(0));
+        var physicalCount = Convert.ToInt32(
+            await _client.Ado.GetScalarAsync("SELECT COUNT(*) FROM it_plain_entity WHERE IsDeleted = 1"));
+        // 按列更新绕过审计切面：仓储应兜底填充更新时间；无登录上下文时更新人保持 null（可空语义）
+        var updatedAt = await _client.Ado.GetScalarAsync("SELECT UpdatedAt FROM it_plain_entity WHERE IsDeleted = 1");
+        var updatedBy = await _client.Ado.GetScalarAsync("SELECT UpdatedBy FROM it_plain_entity WHERE IsDeleted = 1");
+        // 版本令牌轮换：删除也推进版本，使旧令牌持有的实体更新失效（防墓碑复活）
+        var version = await _client.Ado.GetScalarAsync("SELECT Version FROM it_plain_entity WHERE IsDeleted = 1");
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(affected, Is.EqualTo(1), "返回值应为软删除的行数");
+            Assert.That(count, Is.EqualTo(0), "软删除后默认查询不应可见");
+            Assert.That(physicalCount, Is.EqualTo(1), "物理行应保留且标记 IsDeleted = 1");
+            Assert.That(updatedAt, Is.Not.Null, "软删除应兜底填充更新时间");
+            Assert.That(updatedBy is DBNull, Is.True, "无登录上下文时更新人应为 null");
+            Assert.That(Convert.ToString(version), Is.Not.EqualTo(inserted.Version.ToString()), "软删除应轮换版本令牌");
+        });
+    }
+
+    [Test]
+    public async Task SoftDelete_RotatesVersion_StaleEntityUpdateRejected()
+    {
+        // 防复活：软删除轮换版本令牌后，持删除前旧快照的实体更新（OptLock）应版本冲突被拒，
+        // 否则旧快照的全字段 UPDATE（含 IsDeleted = false）会把墓碑复活
+        var inserted = await _softDeleteRepository.InsertAsync(new SoftDeleteTestEntity { Name = "防复活" });
+        var stale = inserted.Snapshot<SoftDeleteTestEntity>();
+
+        await _softDeleteRepository.DeleteAsync(inserted.Id);
+
+        stale.Name = "旧令牌更新";
+        var ex = Assert.ThrowsAsync<BusinessException>(() => _softDeleteRepository.UpdateAsync(stale));
+        Assert.That(ex!.Message, Does.Contain("版本号"), "应以并发冲突拒绝旧令牌更新");
+
+        // 墓碑未被复活：物理行仍保留且 IsDeleted = 1
+        var physicalCount = Convert.ToInt32(
+            await _client.Ado.GetScalarAsync("SELECT COUNT(*) FROM it_soft_delete_entity WHERE IsDeleted = 1"));
+        Assert.That(physicalCount, Is.EqualTo(1), "软删除标记不应被旧令牌更新翻转");
     }
 
     [Test]
@@ -241,11 +277,96 @@ public class DataAccessIntegrationTests
         await _softDeleteRepository.DeleteAsync(inserted.Id);
         Assert.That(await _softDeleteRepository.CountAsync(), Is.EqualTo(0), "删除后默认不可见");
 
-        await _softDeleteRepository.RestoreAsync(inserted.Id);
+        var restored = await _softDeleteRepository.RestoreAsync(inserted.Id);
+        var countAfterRestore = await _softDeleteRepository.CountAsync();
 
-        Assert.That(await _softDeleteRepository.CountAsync(), Is.EqualTo(1), "恢复后应重新可见");
-        var restored = await _softDeleteRepository.GetAsync([it => it.Id == inserted.Id]);
-        Assert.That(restored!.IsDeleted, Is.False);
+        Assert.Multiple(() =>
+        {
+            Assert.That(restored, Is.EqualTo(1), "恢复应返回受影响行数");
+            Assert.That(countAfterRestore, Is.EqualTo(1), "恢复后应重新可见");
+        });
+        var reloaded = await _softDeleteRepository.GetAsync([it => it.Id == inserted.Id]);
+        Assert.That(reloaded!.IsDeleted, Is.False);
+    }
+
+    [Test]
+    public async Task Version_AutoUpdateMatrix_OnlyOptLockRotates()
+    {
+        // 版本特性边界实证：SugarColumn(IsEnableUpdateVersionValidation = true) 只在
+        // ExecuteCommandWithOptLock（实体更新）路径自动轮换 Version；
+        // 普通实体更新（ExecuteCommand）与按列更新（SetColumns）均不会自动维护该列——
+        // 需要轮换的写入必须经仓储统一入口（UpdateAsync / ExecDeleteOrRestore 已兜底）
+        var inserted = await _softDeleteRepository.InsertAsync(new SoftDeleteTestEntity { Name = "版本矩阵" });
+        var original = inserted.Version;
+
+        // 1. 普通实体更新（不走 OptLock）：不 WHERE 版本、不 SET 版本，令牌原地不动
+        var plain = await _softDeleteRepository.GetAsync([it => it.Id == inserted.Id]);
+        plain!.Name = "普通实体更新";
+        await _client.Updateable(plain).ExecuteCommandAsync();
+        var afterPlain = await GetVersionFromDbAsync(inserted.Id);
+        Assert.That(afterPlain, Is.EqualTo(original), "普通实体更新不应自动轮换 Version");
+
+        // 2. 按列更新：同样不自动维护 Version
+        await _client.Updateable<SoftDeleteTestEntity>()
+            .SetColumns(it => it.Name == "按列更新")
+            .Where(it => it.Id == inserted.Id)
+            .ExecuteCommandAsync();
+        var afterSetColumns = await GetVersionFromDbAsync(inserted.Id);
+        Assert.That(afterSetColumns, Is.EqualTo(original), "按列更新不应自动轮换 Version");
+
+        // 3. OptLock 实体更新：自动轮换（对照组，机制详见 InsertAndUpdate_FillsAuditFields）
+        var latest = await _softDeleteRepository.GetAsync([it => it.Id == inserted.Id]);
+        latest!.Name = "OptLock 更新";
+        await _softDeleteRepository.UpdateAsync(latest);
+        var afterOptLock = await GetVersionFromDbAsync(inserted.Id);
+        Assert.That(afterOptLock, Is.Not.EqualTo(original), "OptLock 实体更新应自动轮换 Version");
+    }
+
+    /// <summary>绕过仓储直查库中指定行的 Version（规避默认查询过滤器对墓碑行的屏蔽）。</summary>
+    private async Task<Guid> GetVersionFromDbAsync(Guid id)
+    {
+        var value = await _client.Ado.GetScalarAsync(
+            "SELECT Version FROM it_soft_delete_entity WHERE Id = @id",
+            new { id });
+        return Guid.Parse(Convert.ToString(value)!);
+    }
+
+    [Test]
+    public async Task DeleteAndRestore_ByIdsAndPredicate_BatchSoftDelete()
+    {
+        // 批量软删除 / 恢复：ids 与 predicate 重载均基于单条 SQL 按列更新，返回受影响行数
+        var e1 = await _softDeleteRepository.InsertAsync(new SoftDeleteTestEntity { Name = "批量1" });
+        var e2 = await _softDeleteRepository.InsertAsync(new SoftDeleteTestEntity { Name = "批量2" });
+
+        var deleted = await _softDeleteRepository.DeleteAsync([e1.Id, e2.Id]);
+        var countAfterDelete = await _softDeleteRepository.CountAsync();
+        Assert.Multiple(() =>
+        {
+            Assert.That(deleted, Is.EqualTo(2), "按主键集合删除应返回软删除行数");
+            Assert.That(countAfterDelete, Is.EqualTo(0), "删除后默认查询不可见");
+        });
+
+        // 重复删除同一批：墓碑行不再计入，幂等返回 0
+        var deletedAgain = await _softDeleteRepository.DeleteAsync([e1.Id, e2.Id]);
+        Assert.That(deletedAgain, Is.EqualTo(0), "已删除行不应重复计入");
+
+        // 按主键集合恢复：仅恢复第一行
+        var restoredByIds = await _softDeleteRepository.RestoreAsync([e1.Id]);
+        var countAfterRestoreByIds = await _softDeleteRepository.CountAsync();
+        Assert.Multiple(() =>
+        {
+            Assert.That(restoredByIds, Is.EqualTo(1));
+            Assert.That(countAfterRestoreByIds, Is.EqualTo(1));
+        });
+
+        // 按条件恢复剩余墓碑
+        var restoredByPredicate = await _softDeleteRepository.RestoreAsync(it => it.Id == e2.Id);
+        var countAfterRestoreAll = await _softDeleteRepository.CountAsync();
+        Assert.Multiple(() =>
+        {
+            Assert.That(restoredByPredicate, Is.EqualTo(1));
+            Assert.That(countAfterRestoreAll, Is.EqualTo(2), "全部恢复后应重新可见");
+        });
     }
 
     [Test]

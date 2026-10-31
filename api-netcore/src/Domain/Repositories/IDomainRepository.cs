@@ -24,6 +24,16 @@ public interface IDomainRepository<TEntity>
         IEnumerable<Expression<Func<TEntity, bool>>>? predicates = null,
         CancellationToken cancellationToken = default);
 
+    /// <summary>投影查询首条记录：支持多条件（AND 组合），结果按属性名自动映射到指定 DTO 类型，无匹配返回 null。</summary>
+    /// <typeparam name="TDto">投影结果类型；属性名与实体匹配的字段自动赋值，未匹配字段为类型默认值。</typeparam>
+    /// <param name="predicates">条件集合，各条件以 AND 组合后应用；null 或空集合表示不加过滤。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>投影结果；不存在时返回 null。</returns>
+    public Task<TDto?> GetAsync<TDto>(
+        IEnumerable<Expression<Func<TEntity, bool>>>? predicates = null,
+        CancellationToken cancellationToken = default)
+        where TDto : class, new();
+
     /// <summary>动态查询实体列表：支持多条件（AND 组合）与多重排序。</summary>
     /// <param name="predicates">条件集合，各条件以 AND 组合后应用；null 或空集合表示不加过滤。</param>
     /// <param name="orders">排序集合，按字典顺序依次应用多重排序；
@@ -47,24 +57,6 @@ public interface IDomainRepository<TEntity>
         IDictionary<Expression<Func<TEntity, object>>, bool?>? orders = null,
         CancellationToken cancellationToken = default)
         where TDto : class, new();
-
-    /// <summary>投影查询首条记录：支持多条件（AND 组合），结果按属性名自动映射到指定 DTO 类型，无匹配返回 null。</summary>
-    /// <typeparam name="TDto">投影结果类型；属性名与实体匹配的字段自动赋值，未匹配字段为类型默认值。</typeparam>
-    /// <param name="predicates">条件集合，各条件以 AND 组合后应用；null 或空集合表示不加过滤。</param>
-    /// <param name="cancellationToken">取消令牌。</param>
-    /// <returns>投影结果；不存在时返回 null。</returns>
-    public Task<TDto?> GetAsync<TDto>(
-        IEnumerable<Expression<Func<TEntity, bool>>>? predicates = null,
-        CancellationToken cancellationToken = default)
-        where TDto : class, new();
-
-    /// <summary>判断是否存在满足条件的实体。</summary>
-    /// <param name="predicates">条件集合，各条件以 AND 组合后应用；null 或空集合表示不加过滤。</param>
-    /// <param name="cancellationToken">取消令牌。</param>
-    /// <returns>存在返回 true。</returns>
-    public Task<bool> AnyAsync(
-        IEnumerable<Expression<Func<TEntity, bool>>>? predicates = null,
-        CancellationToken cancellationToken = default);
 
     /// <summary>分页查询：支持多条件（AND 组合）与多重排序；页参数由 <see cref="PagedRequest"/> 在 setter 中越界收敛。</summary>
     /// <param name="request">分页请求（PageIndex / PageSize 已收敛：页码从 1 起，页大小 1~500）。</param>
@@ -95,6 +87,14 @@ public interface IDomainRepository<TEntity>
         CancellationToken cancellationToken = default)
         where TDto : class, new();
 
+    /// <summary>判断是否存在满足条件的实体。</summary>
+    /// <param name="predicates">条件集合，各条件以 AND 组合后应用；null 或空集合表示不加过滤。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>存在返回 true。</returns>
+    public Task<bool> AnyAsync(
+        IEnumerable<Expression<Func<TEntity, bool>>>? predicates = null,
+        CancellationToken cancellationToken = default);
+
     /// <summary>统计实体数（条件集合 AND 组合过滤）。</summary>
     /// <param name="predicates">条件集合，各条件以 AND 组合后应用；null 或空集合表示全量统计。</param>
     /// <param name="cancellationToken">取消令牌。</param>
@@ -110,25 +110,18 @@ public interface IDomainRepository<TEntity>
     /// <returns>插入后的实体。</returns>
     public Task<TEntity> InsertAsync(TEntity entity, CancellationToken cancellationToken = default);
 
-    /// <summary>物理删除实体（直接从数据库移除，不产生软删除墓碑），不存在时静默忽略（幂等）。
-    /// 语义说明：本方法对关联表等普通实体为物理删除；聚合根仓储（<see cref="IAggregateRepository{TEntity}"/>）
-    /// 的实现类在类层面将其重写为软删除（虚分派对两种引用类型一致生效），聚合的物理删除请使用 HardDeleteAsync。</summary>
-    /// <param name="entity">实体。</param>
-    /// <param name="cancellationToken">取消令牌。</param>
-    /// <returns>表示异步操作的任务。</returns>
-    public Task DeleteAsync(TEntity entity, CancellationToken cancellationToken = default);
-
-    /// <summary>按条件批量物理删除（单条 SQL，避免循环逐条删除的 N+1 往返）。
-    /// 典型场景：关联表全量替换时按所属键清除旧关联。注意为物理删除语义。</summary>
-    /// <param name="predicate">删除条件。</param>
-    /// <param name="cancellationToken">取消令牌。</param>
-    /// <returns>受影响的行数。</returns>
-    public Task<int> DeleteRangeAsync(Expression<Func<TEntity, bool>> predicate, CancellationToken cancellationToken = default);
-
     /// <summary>批量插入（单条 SQL 多值插入，避免循环逐条插入的 N+1 往返）。
     /// 审计填充等 Aop.DataExecuting 行为对每个实体同样生效。</summary>
     /// <param name="entities">实体集合。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>表示异步操作的任务。</returns>
-    public Task InsertRangeAsync(IEnumerable<TEntity> entities, CancellationToken cancellationToken = default);
+    public Task InsertAsync(IEnumerable<TEntity> entities, CancellationToken cancellationToken = default);
+
+    /// <summary>按条件删除（单条 SQL）。
+    /// 语义说明：本方法对关联表等普通实体为物理删除；聚合根仓储（<see cref="IAggregateRepository{TEntity}"/>）
+    /// 的实现类在类层面将其重写为软删除（虚分派对两种引用类型一致生效；聚合侧为按列更新，不填更新审计、不轮换版本令牌）。</summary>
+    /// <param name="predicate">删除条件。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>受影响的行数。</returns>
+    public Task<int> DeleteAsync(Expression<Func<TEntity, bool>> predicate, CancellationToken cancellationToken = default);
 }

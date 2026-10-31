@@ -25,8 +25,8 @@ public abstract class AggregateBase : DomainBase, IEquatable<AggregateBase>
     /// <summary>最后更新时间，从未更新过为 null，由数据访问层自动填充。</summary>
     public virtual DateTime? UpdatedAt { get; set; }
 
-    /// <summary>最后更新人（用户 Id），从未更新过为 <see cref="Guid.Empty"/>，由数据访问层自动填充。</summary>
-    public virtual Guid UpdatedBy { get; set; }
+    /// <summary>最后更新人（用户 Id），从未更新过为 null，由数据访问层自动填充。</summary>
+    public virtual Guid? UpdatedBy { get; set; }
 
     /// <summary>描述 / 备注。</summary>
     [SugarColumn(IsNullable = true, Length = 500)]

@@ -107,7 +107,7 @@ public sealed class DeleteDictDataCommandHandler(
         // 变更前捕获字典数据状态快照（软删除可能回填墓碑字段）
         var snapshot = entity.Snapshot<SysDictData>();
 
-        await dictDataRepository.DeleteAsync(entity, cancellationToken);
+        await dictDataRepository.DeleteAsync(command.Id, cancellationToken);
 
         // 关键节点发布字典数据删除领域事件（携带删除前的字典数据状态）
         await domainEventPublisher.PublishAsync(new DictDataDeletedEvent(snapshot), cancellationToken);
@@ -135,7 +135,7 @@ public sealed class DeleteDictTypeCommandHandler(
         // 变更前捕获字典类型状态快照（软删除可能回填墓碑字段）
         var snapshot = entity.Snapshot<SysDictType>();
 
-        await dictTypeRepository.DeleteAsync(entity, cancellationToken);
+        await dictTypeRepository.DeleteAsync(command.Id, cancellationToken);
 
         // 关键节点发布字典类型删除领域事件（携带删除前的字典类型状态）
         await domainEventPublisher.PublishAsync(new DictTypeDeletedEvent(snapshot), cancellationToken);

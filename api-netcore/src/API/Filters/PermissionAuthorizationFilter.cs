@@ -24,7 +24,7 @@ namespace API.Filters;
 /// <param name="logger">日志器（记录权限拒绝事件）。</param>
 public sealed class PermissionAuthorizationFilter(
     IPermissionChecker permissionChecker,
-    UserContext currentUser,
+    IUserContext currentUser,
     ILogger<PermissionAuthorizationFilter> logger) : IAsyncAuthorizationFilter
 {
     /// <inheritdoc />

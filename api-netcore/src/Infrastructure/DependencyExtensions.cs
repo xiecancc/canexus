@@ -103,7 +103,7 @@ public static class DependencyExtensions
     public static IServiceCollection AddSecurity(this IServiceCollection services)
     {
         // 当前用户上下文：单例 + IHttpContextAccessor，请求间天然隔离
-        services.AddSingleton<UserContext, HttpContextUserContext>();
+        services.AddSingleton<IUserContext, HttpContextUserContext>();
 
         // 密码哈希（BCrypt）：无状态单例
         services.AddSingleton<IPasswordHasher, BCryptPasswordHasher>();
@@ -193,7 +193,7 @@ public static class DependencyExtensions
     public static IServiceCollection AddDataAccess(this IServiceCollection services)
     {
         // SqlSugar 审计 Aop 依赖当前用户上下文：数据访问可独立使用（如集成测试），已注册时跳过
-        services.TryAddSingleton<UserContext, HttpContextUserContext>();
+        services.TryAddSingleton<IUserContext, HttpContextUserContext>();
         services.AddSingleton<ITenantContext, TenantContext>();
         services.AddSingleton<IDataFilter, DataFilter>();
         services.AddHttpContextAccessor();

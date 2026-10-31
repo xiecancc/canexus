@@ -71,7 +71,7 @@ public sealed class DeleteDeptCommandHandler(
         // 变更前捕获部门状态快照（软删除可能回填墓碑字段）
         var snapshot = dept.Snapshot<SysDept>();
 
-        await deptRepository.DeleteAsync(dept, cancellationToken);
+        await deptRepository.DeleteAsync(command.Id, cancellationToken);
 
         // 关键节点发布部门删除领域事件（携带删除前的部门状态）
         await domainEventPublisher.PublishAsync(new DeptDeletedEvent(snapshot), cancellationToken);

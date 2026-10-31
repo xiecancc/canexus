@@ -42,7 +42,7 @@ public sealed class DeleteNoticeCommandHandler(IAggregateRepository<SysNotice> n
         // 变更前捕获公告状态快照（软删除可能回填墓碑字段）
         var snapshot = entity.Snapshot<SysNotice>();
 
-        await noticeRepository.DeleteAsync(entity, cancellationToken);
+        await noticeRepository.DeleteAsync(command.Id, cancellationToken);
 
         // 关键节点发布通知公告删除领域事件（响应动作由监听器处理）
         await domainEventPublisher.PublishAsync(new NoticeDeletedEvent(snapshot), cancellationToken);

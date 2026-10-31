@@ -35,8 +35,8 @@ internal static class UserRoleSupport
     /// <summary>全量替换用户-角色关联（批量删除 + 批量插入，调用方需保证工作单元事务内执行）。</summary>
     public static async Task ReplaceUserRolesAsync(IDomainRepository<SysUserRole> userRoleRepository, Guid userId, List<Guid> roleIds, CancellationToken cancellationToken)
     {
-        await userRoleRepository.DeleteRangeAsync(ur => ur.UserId == userId, cancellationToken);
-        await userRoleRepository.InsertRangeAsync(
+        await userRoleRepository.DeleteAsync(ur => ur.UserId == userId, cancellationToken);
+        await userRoleRepository.InsertAsync(
             roleIds.Distinct().Select(roleId => new SysUserRole { UserId = userId, RoleId = roleId }),
             cancellationToken);
     }
@@ -107,7 +107,7 @@ public sealed class DeleteUserCommandHandler(
     IAggregateRepository<SysUser> userRepository,
     IDomainRepository<SysUserRole> userRoleRepository,
     IDomainEventPublisher domainEventPublisher,
-    UserContext currentUser,
+    IUserContext currentUser,
     IUnitOfWork unitOfWork) : CommandHandler<DeleteUserCommand>
 {
     /// <summary>内置超管账号用户名。</summary>
@@ -133,13 +133,9 @@ public sealed class DeleteUserCommandHandler(
 
         await unitOfWork.RunInTransactionAsync(async () =>
         {
-            // 软删除用户与其角色关联（保持可追溯）
-            await userRepository.DeleteAsync(user, cancellationToken);
-            var relations = await userRoleRepository.GetListAsync([ur => ur.UserId == command.Id], cancellationToken: cancellationToken);
-            foreach (var relation in relations)
-            {
-                await userRoleRepository.DeleteAsync(relation, cancellationToken);
-            }
+            // 软删除用户与其角色关联（保持可追溯）；关联表按条件物理删除（单条 SQL）
+            await userRepository.DeleteAsync(command.Id, cancellationToken);
+            await userRoleRepository.DeleteAsync(ur => ur.UserId == command.Id, cancellationToken);
         }, cancellationToken);
 
         // 关键节点发布用户删除领域事件（携带删除前的用户状态）

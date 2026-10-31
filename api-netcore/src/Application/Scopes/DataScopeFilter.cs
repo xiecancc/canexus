@@ -36,7 +36,7 @@ public sealed class DataScopeFilter(
     IDomainRepository<SysRole> roleRepository,
     IAggregateTreeRepository<SysDept> deptRepository,
     IDomainRepository<SysRoleDept> roleDeptRepository,
-    UserContext currentUser) : IDataScopeFilter
+    IUserContext currentUser) : IDataScopeFilter
 {
     /// <summary>请求内缓存：已解析的数据范围。</summary>
     private UserDataScope? _scope;

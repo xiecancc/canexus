@@ -44,7 +44,7 @@ public sealed class GetUserPageQueryHandler(
     IAggregateTreeRepository<SysDept> deptRepository,
     IDomainRepository<SysUserRole> userRoleRepository,
     IDataScopeFilter dataScopeFilter,
-    UserContext currentUser,
+    IUserContext currentUser,
     IMapper mapper) : QueryHandler<GetUserPageQuery, PagedResult<UserListVO>>
 {
     /// <inheritdoc />

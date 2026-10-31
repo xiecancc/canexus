@@ -35,7 +35,7 @@ internal static class SqlSugarClientFactory
         // 单例服务被闭包捕获是安全的：TenantContext 基于 AsyncLocal、其余为无状态开关
         var tenantContext = serviceProvider.GetRequiredService<ITenantContext>();
         var dataFilter = serviceProvider.GetRequiredService<IDataFilter>();
-        var currentUser = serviceProvider.GetRequiredService<UserContext>();
+        var currentUser = serviceProvider.GetRequiredService<IUserContext>();
         var logger = serviceProvider.GetRequiredService<ILoggerFactory>().CreateLogger("SqlSugar");
 
         var connectionConfig = new ConnectionConfig
@@ -87,7 +87,7 @@ internal static class SqlSugarClientFactory
     /// <param name="tenantContext">租户上下文（租户归属填充来源）。</param>
     private static void ConfigureExecutingAop(
         ISqlSugarClient client,
-        UserContext currentUser,
+        IUserContext currentUser,
         ITenantContext tenantContext)
     {
         // 审计自动填充 + 主键/软删除初始化：直接修改实体实例属性，SqlSugar 构建 SQL 时会取到新值

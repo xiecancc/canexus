@@ -34,11 +34,8 @@ internal static class RoleMenuSupport
     /// <summary>全量替换角色-菜单授权（先删后插，调用方需保证工作单元事务内执行）。</summary>
     public static async Task ReplaceRoleMenusAsync(IDomainRepository<SysRoleMenu> roleMenuRepository, Guid roleId, List<Guid> menuIds, CancellationToken cancellationToken)
     {
-        var existing = await roleMenuRepository.GetListAsync([rm => rm.RoleId == roleId], cancellationToken: cancellationToken);
-        foreach (var relation in existing)
-        {
-            await roleMenuRepository.DeleteAsync(relation, cancellationToken);
-        }
+        // 按条件物理删除旧授权（单条 SQL），再插入新授权集合
+        await roleMenuRepository.DeleteAsync(rm => rm.RoleId == roleId, cancellationToken);
 
         foreach (var menuId in menuIds.Distinct())
         {
@@ -128,12 +125,8 @@ public sealed class DeleteRoleCommandHandler(
 
         await unitOfWork.RunInTransactionAsync(async () =>
         {
-            await roleRepository.DeleteAsync(role, cancellationToken);
-            var relations = await roleMenuRepository.GetListAsync([rm => rm.RoleId == command.Id], cancellationToken: cancellationToken);
-            foreach (var relation in relations)
-            {
-                await roleMenuRepository.DeleteAsync(relation, cancellationToken);
-            }
+            await roleRepository.DeleteAsync(command.Id, cancellationToken);
+            await roleMenuRepository.DeleteAsync(rm => rm.RoleId == command.Id, cancellationToken);
         }, cancellationToken);
 
         // 关键节点发布角色删除领域事件（携带删除前的角色状态）

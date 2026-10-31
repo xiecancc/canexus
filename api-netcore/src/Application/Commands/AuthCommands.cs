@@ -158,7 +158,7 @@ public sealed class LoginCommandHandler(
 public sealed class LogoutCommandHandler(
     ISysRefreshTokenRepository refreshTokenRepository,
     ITokenService tokenService,
-    UserContext currentUser) : CommandHandler<LogoutCommand>
+    IUserContext currentUser) : CommandHandler<LogoutCommand>
 {
     /// <inheritdoc />
     protected override async Task HandleAsync(LogoutCommand command, CancellationToken cancellationToken)

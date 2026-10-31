@@ -66,7 +66,7 @@ public sealed class DeleteTenantCommandHandler(
         // 变更前捕获租户状态快照（软删除可能回填墓碑字段）
         var snapshot = entity.Snapshot<SysTenant>();
 
-        await tenantRepository.DeleteAsync(entity, cancellationToken);
+        await tenantRepository.DeleteAsync(command.Id, cancellationToken);
 
         // 关键节点发布租户删除领域事件（响应动作由监听器处理）
         await domainEventPublisher.PublishAsync(new TenantDeletedEvent(snapshot), cancellationToken);

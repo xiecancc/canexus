@@ -57,7 +57,7 @@ public sealed class DeleteJobCommandHandler(IAggregateRepository<SysJob> jobRepo
         var snapshot = entity.Snapshot<SysJob>();
 
         await scheduleManager.RemoveAsync(entity.Id, entity.JobGroup, cancellationToken);
-        await jobRepository.DeleteAsync(entity, cancellationToken);
+        await jobRepository.DeleteAsync(command.Id, cancellationToken);
 
         // 关键节点发布定时任务删除领域事件（携带删除前的任务状态）
         await domainEventPublisher.PublishAsync(new JobDeletedEvent(snapshot), cancellationToken);

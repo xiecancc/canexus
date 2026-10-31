@@ -1,6 +1,7 @@
 
 using Domain.Entities;
 using Domain.Repositories;
+using Domain.Services.Users;
 using Domain.Shared.Exceptions;
 using Domain.Shared.Results;
 using SqlSugar;
@@ -15,7 +16,7 @@ namespace Infrastructure.Repositories;
 /// <typeparam name="TAggregate">树形聚合类型。</typeparam>
 /// <remarks>构造函数。</remarks>
 /// <param name="client">SqlSugar 客户端。</param>
-public class AggregateTreeRepository<TAggregate>(ISqlSugarClient client) : AggregateRepository<TAggregate>(client), IAggregateTreeRepository<TAggregate>
+public class AggregateTreeRepository<TAggregate>(ISqlSugarClient client, IUserContext currentUser) : AggregateRepository<TAggregate>(client, currentUser), IAggregateTreeRepository<TAggregate>
     where TAggregate : AggregateTreeBase<TAggregate>, new()
 {
     /// <inheritdoc />

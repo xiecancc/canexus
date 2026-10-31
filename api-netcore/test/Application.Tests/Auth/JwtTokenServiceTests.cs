@@ -159,28 +159,37 @@ internal sealed class InMemoryRefreshTokenRepository : ISysRefreshTokenRepositor
     }
 
     /// <inheritdoc />
-    public Task DeleteAsync(Guid id, CancellationToken cancellationToken = default)
+    public Task<int> DeleteAsync(Guid id, CancellationToken cancellationToken = default)
+        => Task.FromResult(_store.RemoveAll(e => e.Id == id));
+
+    /// <inheritdoc />
+    public Task<int> DeleteAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken = default)
+        => Task.FromResult(_store.RemoveAll(e => ids.Contains(e.Id)));
+
+    /// <inheritdoc />
+    public Task<int> RestoreAsync(Guid id, CancellationToken cancellationToken = default)
+        => RestoreAsync(e => e.Id == id, cancellationToken);
+
+    /// <inheritdoc />
+    public Task<int> RestoreAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken = default)
+        => RestoreAsync(e => ids.Contains(e.Id), cancellationToken);
+
+    /// <inheritdoc />
+    public Task<int> RestoreAsync(Expression<Func<SysRefreshToken, bool>> predicate, CancellationToken cancellationToken = default)
     {
-        _store.RemoveAll(e => e.Id == id);
-        return Task.CompletedTask;
+        // 与 SqlSugar 实现语义对齐：仅解除已删除行的墓碑，返回解除数量
+        var restored = 0;
+        foreach (var entity in _store.Where(new Func<SysRefreshToken, bool>(predicate.Compile())))
+        {
+            if (entity.IsDeleted)
+            {
+                entity.IsDeleted = false;
+                restored++;
+            }
+        }
+
+        return Task.FromResult(restored);
     }
-
-    /// <inheritdoc />
-    public Task DeleteAsync(SysRefreshToken entity, CancellationToken cancellationToken = default)
-        => DeleteAsync(entity.Id, cancellationToken);
-
-    /// <inheritdoc />
-    public Task RestoreAsync(Guid id, CancellationToken cancellationToken = default)
-    {
-        var entity = _store.FirstOrDefault(e => e.Id == id);
-        entity?.IsDeleted = false;
-
-        return Task.CompletedTask;
-    }
-
-    /// <inheritdoc />
-    public Task HardDeleteAsync(SysRefreshToken entity, CancellationToken cancellationToken = default)
-        => DeleteAsync(entity.Id, cancellationToken);
 
     /// <inheritdoc />
     public Task<long> CountAsync(
@@ -204,11 +213,11 @@ internal sealed class InMemoryRefreshTokenRepository : ISysRefreshTokenRepositor
     }
 
     /// <inheritdoc />
-    public Task<int> DeleteRangeAsync(Expression<Func<SysRefreshToken, bool>> predicate, CancellationToken cancellationToken = default)
+    public Task<int> DeleteAsync(Expression<Func<SysRefreshToken, bool>> predicate, CancellationToken cancellationToken = default)
         => Task.FromResult(_store.RemoveAll(new Predicate<SysRefreshToken>(predicate.Compile())));
 
     /// <inheritdoc />
-    public Task InsertRangeAsync(IEnumerable<SysRefreshToken> entities, CancellationToken cancellationToken = default)
+    public Task InsertAsync(IEnumerable<SysRefreshToken> entities, CancellationToken cancellationToken = default)
     {
         _store.AddRange(entities);
         return Task.CompletedTask;

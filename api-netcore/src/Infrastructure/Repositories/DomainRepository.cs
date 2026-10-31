@@ -128,14 +128,7 @@ public class DomainRepository<TEntity>(ISqlSugarClient client) : IDomainReposito
     }
 
     /// <inheritdoc />
-    public virtual async Task DeleteAsync(TEntity entity, CancellationToken cancellationToken = default)
-    {
-        // 物理删除：按主键（含联合主键）直接移除，不产生软删除墓碑；不存在时静默忽略（幂等）
-        await client.Deleteable(entity).ExecuteCommandAsync(cancellationToken);
-    }
-
-    /// <inheritdoc />
-    public virtual async Task<int> DeleteRangeAsync(Expression<Func<TEntity, bool>> predicate, CancellationToken cancellationToken = default)
+    public virtual async Task<int> DeleteAsync(Expression<Func<TEntity, bool>> predicate, CancellationToken cancellationToken = default)
     {
         // 批量物理删除：单条 DELETE ... WHERE；聚合根软删除场景请勿使用本方法
         return await client.Deleteable<TEntity>()
@@ -144,7 +137,7 @@ public class DomainRepository<TEntity>(ISqlSugarClient client) : IDomainReposito
     }
 
     /// <inheritdoc />
-    public virtual async Task InsertRangeAsync(IEnumerable<TEntity> entities, CancellationToken cancellationToken = default)
+    public virtual async Task InsertAsync(IEnumerable<TEntity> entities, CancellationToken cancellationToken = default)
     {
         // 批量插入：单条多值 INSERT；Aop.DataExecuting 对每个实体生效（审计 / 主键填充）
         await client.Insertable(entities.ToList()).ExecuteCommandAsync(cancellationToken);

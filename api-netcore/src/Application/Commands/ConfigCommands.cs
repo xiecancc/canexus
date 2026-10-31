@@ -54,7 +54,7 @@ public sealed class DeleteConfigCommandHandler(IAggregateRepository<SysConfig> c
         // 变更前捕获配置状态快照（软删除可能回填墓碑字段）
         var snapshot = entity.Snapshot<SysConfig>();
 
-        await configRepository.DeleteAsync(entity, cancellationToken);
+        await configRepository.DeleteAsync(command.Id, cancellationToken);
 
         // 关键节点发布参数配置删除领域事件（携带删除前的配置状态）
         await domainEventPublisher.PublishAsync(new ConfigDeletedEvent(snapshot), cancellationToken);

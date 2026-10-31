@@ -23,7 +23,7 @@ namespace API.Filters;
 /// <param name="operLogRepository">操作日志仓储。</param>
 /// <param name="currentUser">当前用户上下文。</param>
 /// <param name="logger">日志。</param>
-public sealed class OperLogActionFilter(IOperLogRepository operLogRepository, UserContext currentUser, ILogger<OperLogActionFilter> logger) : IAsyncActionFilter
+public sealed class OperLogActionFilter(IOperLogRepository operLogRepository, IUserContext currentUser, ILogger<OperLogActionFilter> logger) : IAsyncActionFilter
 {
     /// <inheritdoc />
     public async Task OnActionExecutionAsync(ActionExecutingContext context, ActionExecutionDelegate next)

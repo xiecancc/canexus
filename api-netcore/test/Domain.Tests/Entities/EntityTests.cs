@@ -126,7 +126,7 @@ public class AggregateBaseTests
             Assert.That(entity.TenantId, Is.Null);
             Assert.That(entity.CreatedBy, Is.EqualTo(Guid.Empty));
             Assert.That(entity.UpdatedAt, Is.Null);
-            Assert.That(entity.UpdatedBy, Is.EqualTo(Guid.Empty));
+            Assert.That(entity.UpdatedBy, Is.Null);
             Assert.That(entity.Description, Is.Null);
         });
     }

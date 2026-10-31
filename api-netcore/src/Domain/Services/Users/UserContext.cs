@@ -4,7 +4,7 @@ namespace Domain.Services.Users;
 /// 当前用户上下文：基于认证主体（JWT claims）解析的当前用户完整信息。
 /// <para>统一入口：权限校验、数据范围过滤、审计字段填充等场景均经本接口取当前用户。</para>
 /// </summary>
-public interface UserContext
+public interface IUserContext
 {
     /// <summary>当前用户 Id；未认证时为 null。</summary>
     public Guid? UserId { get; }

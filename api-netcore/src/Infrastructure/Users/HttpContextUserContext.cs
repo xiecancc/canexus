@@ -10,7 +10,7 @@ namespace Infrastructure.Users;
 /// </summary>
 /// <remarks>构造函数。</remarks>
 /// <param name="httpContextAccessor">HTTP 上下文访问器。</param>
-public sealed class HttpContextUserContext(IHttpContextAccessor httpContextAccessor) : UserContext
+public sealed class HttpContextUserContext(IHttpContextAccessor httpContextAccessor) : IUserContext
 {
     private ClaimsPrincipal? Principal => httpContextAccessor.HttpContext?.User;
 

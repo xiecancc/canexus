@@ -40,7 +40,7 @@ public sealed class GetRoutesQueryHandler(
     IAggregateTreeRepository<SysMenu> menuRepository,
     IDomainRepository<SysUserRole> userRoleRepository,
     IDomainRepository<SysRoleMenu> roleMenuRepository,
-    UserContext currentUser) : QueryHandler<GetRoutesQuery, List<RouteVO>>
+    IUserContext currentUser) : QueryHandler<GetRoutesQuery, List<RouteVO>>
 {
     /// <summary>根节点父 Id（Guid.Empty 表示无父级）。</summary>
     private static readonly Guid RootParentId = Guid.Empty;
@@ -154,7 +154,7 @@ public sealed class GetUserInfoQueryHandler(
     IAggregateRepository<SysRole> roleRepository,
     IDomainRepository<SysUserRole> userRoleRepository,
     IPermissionChecker permissionChecker,
-    UserContext currentUser) : QueryHandler<GetUserInfoQuery, UserInfoResult>
+    IUserContext currentUser) : QueryHandler<GetUserInfoQuery, UserInfoResult>
 {
     /// <inheritdoc />
     protected override async Task<UserInfoResult> HandleAsync(GetUserInfoQuery query, CancellationToken cancellationToken)
