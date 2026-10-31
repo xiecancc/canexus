@@ -6,7 +6,7 @@ using Domain.Entities;
 /// <param name="Entity">创建后的用户。</param>
 public sealed class UserCreatedEvent(SysUser entity) : AggregateCreatedEvent<SysUser>(entity);
 
-/// <summary>用户修改领域事件：用户更新（含字段修改、状态调整）成功后发布，Domain 为变更后状态、Before 为变更前快照。</summary>
+/// <summary>用户修改领域事件：用户更新（含字段修改、状态调整）成功后发布，Domain 为变更后状态、OldEntity 为变更前快照。</summary>
 /// <param name="Before">变更前的用户快照。</param>
 /// <param name="After">变更后的用户。</param>
 public sealed class UserUpdatedEvent(SysUser before, SysUser after) : AggregateUpdatedEvent<SysUser>(before, after);

@@ -6,7 +6,7 @@ using Domain.Entities;
 /// <param name="Entity">创建后的参数配置。</param>
 public sealed class ConfigCreatedEvent(SysConfig entity) : AggregateCreatedEvent<SysConfig>(entity);
 
-/// <summary>参数配置修改领域事件：配置更新成功后发布，Domain 为变更后状态、Before 为变更前快照——键名变更时旧键名由 Before.ConfigKey 表达，监听器可据此双失效缓存。</summary>
+/// <summary>参数配置修改领域事件：配置更新成功后发布，Domain 为变更后状态、OldEntity 为变更前快照——键名变更时旧键名由 OldEntity.ConfigKey 表达，监听器可据此双失效缓存。</summary>
 /// <param name="Before">变更前的配置快照。</param>
 /// <param name="After">变更后的配置。</param>
 public sealed class ConfigUpdatedEvent(SysConfig before, SysConfig after) : AggregateUpdatedEvent<SysConfig>(before, after);

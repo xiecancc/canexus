@@ -51,7 +51,7 @@ public class AggregateEventBaseTests
         Assert.Multiple(() =>
         {
             Assert.That(domainEvent.EventName, Is.EqualTo("TestCreatedEvent"));
-            Assert.That(domainEvent.Domain, Is.SameAs(entity));
+            Assert.That(domainEvent.NewEntity, Is.SameAs(entity));
         });
     }
 
@@ -65,9 +65,9 @@ public class AggregateEventBaseTests
         Assert.Multiple(() =>
         {
             Assert.That(domainEvent.EventName, Is.EqualTo("TestUpdatedEvent"));
-            Assert.That(domainEvent.Before, Is.SameAs(before));
+            Assert.That(domainEvent.OldEntity, Is.SameAs(before));
             // Domain 即变更后状态
-            Assert.That(domainEvent.Domain, Is.SameAs(after));
+            Assert.That(domainEvent.NewEntity, Is.SameAs(after));
         });
     }
 
@@ -80,7 +80,7 @@ public class AggregateEventBaseTests
         Assert.Multiple(() =>
         {
             Assert.That(domainEvent.EventName, Is.EqualTo("TestDeletedEvent"));
-            Assert.That(domainEvent.Domain, Is.SameAs(entity));
+            Assert.That(domainEvent.NewEntity, Is.SameAs(entity));
         });
     }
 
@@ -93,7 +93,7 @@ public class AggregateEventBaseTests
         Assert.Multiple(() =>
         {
             Assert.That(domainEvent.EventName, Is.EqualTo("TestRestoredEvent"));
-            Assert.That(domainEvent.Domain, Is.SameAs(entity));
+            Assert.That(domainEvent.NewEntity, Is.SameAs(entity));
         });
     }
 
@@ -152,7 +152,7 @@ public class ConcreteDomainEventTests
         Assert.Multiple(() =>
         {
             Assert.That(created.EventName, Is.EqualTo("UserCreatedEvent"));
-            Assert.That(created.Domain.Id, Is.EqualTo(EntityId));
+            Assert.That(created.NewEntity.Id, Is.EqualTo(EntityId));
             Assert.That(new UserUpdatedEvent(before, after).EventName, Is.EqualTo("UserUpdatedEvent"));
             Assert.That(new UserPasswordResetEvent(EntityId).EventName, Is.EqualTo("UserPasswordResetEvent"));
             Assert.That(new UserDeletedEvent(before).EventName, Is.EqualTo("UserDeletedEvent"));
@@ -169,7 +169,7 @@ public class ConcreteDomainEventTests
 
         Assert.Multiple(() =>
         {
-            Assert.That(domainEvent.Domain, Is.SameAs(user));
+            Assert.That(domainEvent.NewEntity, Is.SameAs(user));
             Assert.That(domainEvent.BeforeRoleIds, Is.EqualTo(oldRoleIds));
             Assert.That(domainEvent.AfterRoleIds, Is.EqualTo(newRoleIds));
         });
@@ -187,30 +187,30 @@ public class ConcreteDomainEventTests
     [Test]
     public void DictDataUpdatedEvent_ExposesMigrationInfoViaBefore()
     {
-        // 类型迁移：旧类型由 Before.DictType 表达，无需独立迁移字段
+        // 类型迁移：旧类型由 OldEntity.DictType 表达，无需独立迁移字段
         var before = new SysDictData { Id = EntityId, DictType = "old_type" };
         var after = new SysDictData { Id = EntityId, DictType = "new_type" };
         var domainEvent = new DictDataUpdatedEvent(before, after);
 
         Assert.Multiple(() =>
         {
-            Assert.That(domainEvent.Before.DictType, Is.EqualTo("old_type"));
-            Assert.That(domainEvent.Domain.DictType, Is.EqualTo("new_type"));
+            Assert.That(domainEvent.OldEntity.DictType, Is.EqualTo("old_type"));
+            Assert.That(domainEvent.NewEntity.DictType, Is.EqualTo("new_type"));
         });
     }
 
     [Test]
     public void ConfigUpdatedEvent_ExposesRenamedKeyViaBefore()
     {
-        // 键名变更：旧键名由 Before.ConfigKey 表达
+        // 键名变更：旧键名由 OldEntity.ConfigKey 表达
         var before = new SysConfig { Id = EntityId, ConfigKey = "old_key" };
         var after = new SysConfig { Id = EntityId, ConfigKey = "new_key" };
         var domainEvent = new ConfigUpdatedEvent(before, after);
 
         Assert.Multiple(() =>
         {
-            Assert.That(domainEvent.Before.ConfigKey, Is.EqualTo("old_key"));
-            Assert.That(domainEvent.Domain.ConfigKey, Is.EqualTo("new_key"));
+            Assert.That(domainEvent.OldEntity.ConfigKey, Is.EqualTo("old_key"));
+            Assert.That(domainEvent.NewEntity.ConfigKey, Is.EqualTo("new_key"));
         });
     }
 

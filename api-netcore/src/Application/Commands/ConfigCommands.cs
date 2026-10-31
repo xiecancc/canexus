@@ -78,7 +78,7 @@ public sealed class UpdateConfigCommandHandler(IAggregateRepository<SysConfig> c
             throw new BusinessException(ErrorCodes.ConfigKeyDuplicate, $"参数键名「{configKey}」已存在");
         }
 
-        // 变更前捕获配置状态快照（键名变更时旧键名由 Before.ConfigKey 表达）
+        // 变更前捕获配置状态快照（键名变更时旧键名由 OldEntity.ConfigKey 表达）
         var before = entity.Snapshot<SysConfig>();
 
         mapper.Map(request, entity);

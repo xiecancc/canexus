@@ -6,7 +6,7 @@ using Domain.Entities;
 /// <param name="Entity">创建后的通知公告。</param>
 public sealed class NoticeCreatedEvent(SysNotice entity) : AggregateCreatedEvent<SysNotice>(entity);
 
-/// <summary>通知公告修改领域事件：公告更新成功后发布，Domain 为变更后状态、Before 为变更前快照。</summary>
+/// <summary>通知公告修改领域事件：公告更新成功后发布，Domain 为变更后状态、OldEntity 为变更前快照。</summary>
 /// <param name="Before">变更前的公告快照。</param>
 /// <param name="After">变更后的公告。</param>
 public sealed class NoticeUpdatedEvent(SysNotice before, SysNotice after) : AggregateUpdatedEvent<SysNotice>(before, after);

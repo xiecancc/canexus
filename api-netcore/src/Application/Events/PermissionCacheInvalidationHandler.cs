@@ -26,19 +26,19 @@ public sealed class PermissionCacheInvalidationHandler(IPermissionChecker permis
         {
             // 用户事件：仅失效该用户的权限缓存
             case UserCreatedEvent userCreated:
-                await permissionChecker.InvalidateAsync(userCreated.Domain.Id);
+                await permissionChecker.InvalidateAsync(userCreated.NewEntity.Id);
                 break;
             case UserUpdatedEvent userUpdated:
-                await permissionChecker.InvalidateAsync(userUpdated.Domain.Id);
+                await permissionChecker.InvalidateAsync(userUpdated.NewEntity.Id);
                 break;
             case UserRolesUpdatedEvent userRolesUpdated:
-                await permissionChecker.InvalidateAsync(userRolesUpdated.Domain.Id);
+                await permissionChecker.InvalidateAsync(userRolesUpdated.NewEntity.Id);
                 break;
             case UserPasswordResetEvent passwordReset:
                 await permissionChecker.InvalidateAsync(passwordReset.UserId);
                 break;
             case UserDeletedEvent userDeleted:
-                await permissionChecker.InvalidateAsync(userDeleted.Domain.Id);
+                await permissionChecker.InvalidateAsync(userDeleted.NewEntity.Id);
                 break;
 
             // 角色 / 菜单事件：影响任意持有（已授权）用户的权限，全量失效

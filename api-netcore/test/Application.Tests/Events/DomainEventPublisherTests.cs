@@ -229,7 +229,7 @@ public class DictCacheInvalidationHandlerTests
     [Test]
     public async Task Handle_DictTypeMigrated_InvalidatesBothCaches()
     {
-        // 类型迁移：旧类型由 Before.DictType 表达，新旧类型缓存均失效
+        // 类型迁移：旧类型由 OldEntity.DictType 表达，新旧类型缓存均失效
         var cache = new RecordingCache();
         var handler = new DictCacheInvalidationHandler(cache);
 
@@ -289,7 +289,7 @@ public class ConfigCacheInvalidationHandlerTests
     [Test]
     public async Task Handle_ConfigKeyRenamed_InvalidatesBothCaches()
     {
-        // 键名变更：旧键名由 Before.ConfigKey 表达，新旧键缓存均失效
+        // 键名变更：旧键名由 OldEntity.ConfigKey 表达，新旧键缓存均失效
         var cache = new RecordingCache();
         var handler = new ConfigCacheInvalidationHandler(cache);
 
@@ -327,13 +327,13 @@ public class ConfigCacheInvalidationHandlerTests
 
 /// <summary>领域事件审计日志监听器单元测试。</summary>
 [TestFixture]
-public class DomainEventLoggingHandlerTests
+public class DomainEventAuditHandlerTests
 {
     [Test]
     public async Task Handle_AnyEvent_CompletesWithoutError()
     {
         // 通用监听器（TEvent = DomainEvent 全量订阅）：任意领域事件均可安全记录
-        var handler = new DomainEventLoggingHandler(NullLogger<DomainEventLoggingHandler>.Instance);
+        var handler = new DomainEventAuditHandler(NullLogger<DomainEventAuditHandler>.Instance);
 
         Assert.DoesNotThrowAsync(async () => await handler.Handle(
             new DomainEventNotification(new UserPasswordResetEvent(Guid.NewGuid())),

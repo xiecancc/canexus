@@ -6,7 +6,7 @@ using Domain.Entities;
 /// <param name="Entity">创建后的定时任务。</param>
 public sealed class JobCreatedEvent(SysJob entity) : AggregateCreatedEvent<SysJob>(entity);
 
-/// <summary>定时任务修改领域事件：任务更新（含启停与调度同步）成功后发布，Domain 为变更后状态、Before 为变更前快照。</summary>
+/// <summary>定时任务修改领域事件：任务更新（含启停与调度同步）成功后发布，Domain 为变更后状态、OldEntity 为变更前快照。</summary>
 /// <param name="Before">变更前的任务快照。</param>
 /// <param name="After">变更后的任务。</param>
 public sealed class JobUpdatedEvent(SysJob before, SysJob after) : AggregateUpdatedEvent<SysJob>(before, after);

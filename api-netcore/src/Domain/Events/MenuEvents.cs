@@ -6,7 +6,7 @@ using Domain.Entities;
 /// <param name="Entity">创建后的菜单。</param>
 public sealed class MenuCreatedEvent(SysMenu entity) : AggregateCreatedEvent<SysMenu>(entity);
 
-/// <summary>菜单修改领域事件：菜单更新（含挂载点变化）成功后发布，Domain 为变更后状态、Before 为变更前快照。菜单 perms / 挂载点变更可能影响全部已授权角色的权限。</summary>
+/// <summary>菜单修改领域事件：菜单更新（含挂载点变化）成功后发布，Domain 为变更后状态、OldEntity 为变更前快照。菜单 perms / 挂载点变更可能影响全部已授权角色的权限。</summary>
 /// <param name="Before">变更前的菜单快照。</param>
 /// <param name="After">变更后的菜单。</param>
 public sealed class MenuUpdatedEvent(SysMenu before, SysMenu after) : AggregateUpdatedEvent<SysMenu>(before, after);

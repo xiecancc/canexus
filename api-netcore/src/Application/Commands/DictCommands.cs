@@ -168,7 +168,7 @@ public sealed class UpdateDictDataCommandHandler(
 
         await EnsureNotDuplicateAsync(dictType, request.DictLabel.Trim(), request.DictValue.Trim(), excludeId: command.Id, cancellationToken);
 
-        // 变更前捕获字典数据状态快照（类型迁移时旧类型由 Before.DictType 表达）
+        // 变更前捕获字典数据状态快照（类型迁移时旧类型由 OldEntity.DictType 表达）
         var before = entity.Snapshot<SysDictData>();
 
         mapper.Map(request, entity);

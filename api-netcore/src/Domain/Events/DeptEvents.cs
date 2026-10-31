@@ -6,7 +6,7 @@ using Domain.Entities;
 /// <param name="Entity">创建后的部门。</param>
 public sealed class DeptCreatedEvent(SysDept entity) : AggregateCreatedEvent<SysDept>(entity);
 
-/// <summary>部门修改领域事件：部门更新（含挂载点变化）成功后发布，Domain 为变更后状态、Before 为变更前快照。部门树变更可能影响数据范围（DeptAndBelow 等）的解析结果。</summary>
+/// <summary>部门修改领域事件：部门更新（含挂载点变化）成功后发布，Domain 为变更后状态、OldEntity 为变更前快照。部门树变更可能影响数据范围（DeptAndBelow 等）的解析结果。</summary>
 /// <param name="Before">变更前的部门快照。</param>
 /// <param name="After">变更后的部门。</param>
 public sealed class DeptUpdatedEvent(SysDept before, SysDept after) : AggregateUpdatedEvent<SysDept>(before, after);

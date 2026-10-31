@@ -289,7 +289,7 @@ public sealed class UpdateUserStatusCommandHandler(
         user.Status = command.Request.Status;
         await userRepository.UpdateAsync(user, cancellationToken);
 
-        // 关键节点发布用户修改领域事件（携带变更前后用户状态，状态变化可由监听器比对 Before/After）
+        // 关键节点发布用户修改领域事件（携带变更前后用户状态，状态变化可由监听器比对 OldEntity/After）
         await domainEventPublisher.PublishAsync(new UserUpdatedEvent(before, user), cancellationToken);
     }
 }

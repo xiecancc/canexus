@@ -6,7 +6,7 @@ using Domain.Entities;
 /// <param name="Entity">创建后的租户。</param>
 public sealed class TenantCreatedEvent(SysTenant entity) : AggregateCreatedEvent<SysTenant>(entity);
 
-/// <summary>租户修改领域事件：租户更新成功后发布，Domain 为变更后状态、Before 为变更前快照（租户标识不可变更，无迁移语义）。</summary>
+/// <summary>租户修改领域事件：租户更新成功后发布，Domain 为变更后状态、OldEntity 为变更前快照（租户标识不可变更，无迁移语义）。</summary>
 /// <param name="Before">变更前的租户快照。</param>
 /// <param name="After">变更后的租户。</param>
 public sealed class TenantUpdatedEvent(SysTenant before, SysTenant after) : AggregateUpdatedEvent<SysTenant>(before, after);

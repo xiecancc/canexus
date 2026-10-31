@@ -25,16 +25,11 @@ public abstract class DomainEvent
 /// </summary>
 /// <typeparam name="TDomain">领域实体类型。</typeparam>
 /// <param name="Domain">事件关联的领域实体。</param>
-public abstract class DomainEvent<TDomain> : DomainEvent
+/// <remarks>构造函数：由派生事件传入关联的领域实体。</remarks>
+/// <param name="entity">事件关联的领域实体。</param>
+public abstract class DomainEvent<TDomain>(TDomain entity) : DomainEvent
     where TDomain : DomainBase
 {
-    /// <summary>构造函数：由派生事件传入关联的领域实体。</summary>
-    /// <param name="domain">事件关联的领域实体。</param>
-    protected DomainEvent(TDomain domain)
-    {
-        Domain = domain;
-    }
-
     /// <summary>事件关联的领域实体（按事件语义为创建后 / 变更后 / 删除前等状态，见具体基类说明）。</summary>
-    public TDomain Domain { get; }
+    public TDomain NewEntity { get; } = entity;
 }
