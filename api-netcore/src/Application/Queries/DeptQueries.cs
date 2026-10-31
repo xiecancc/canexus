@@ -1,4 +1,3 @@
-namespace Application.Queries;
 
 using Application.Abstractions;
 using Application.Contracts.Abstractions;
@@ -12,6 +11,7 @@ using Domain.Shared.Enums;
 using Domain.Shared.Exceptions;
 using Domain.Shared.Results;
 
+namespace Application.Queries;
 /// <summary>获取部门详情查询处理器。</summary>
 /// <remarks>构造函数。</remarks>
 public sealed class GetDeptDetailQueryHandler(IAggregateTreeRepository<SysDept> deptRepository, IMapper mapper) : QueryHandler<GetDeptDetailQuery, DeptDetailVO>
@@ -36,8 +36,8 @@ public sealed class GetDeptTreeQueryHandler(IAggregateTreeRepository<SysDept> de
         var filtered = depts.Where(d =>
             (string.IsNullOrWhiteSpace(query.Keyword)
                 || d.DeptName.Contains(query.Keyword.Trim(), StringComparison.OrdinalIgnoreCase)
-                || (d.Leader != null && d.Leader.Contains(query.Keyword.Trim(), StringComparison.OrdinalIgnoreCase)))
-            && (query.Status == null || d.Status == query.Status.Value)).ToList();
+                || (d.Leader is not null && d.Leader.Contains(query.Keyword.Trim(), StringComparison.OrdinalIgnoreCase)))
+            && (query.Status is null || d.Status == query.Status.Value)).ToList();
 
         // 过滤后经聚合基类装配为树（孤儿部门挂到根级不丢失），实体树递归映射为 VO 树
         return mapper.Map<List<DeptTreeVO>>(SysDept.BuildTree(filtered));

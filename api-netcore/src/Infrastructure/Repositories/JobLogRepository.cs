@@ -1,4 +1,3 @@
-namespace Infrastructure.Repositories;
 
 using System.Linq.Expressions;
 using Domain.Entities;
@@ -6,6 +5,7 @@ using Domain.Repositories;
 using Domain.Shared.Paging;
 using SqlSugar;
 
+namespace Infrastructure.Repositories;
 /// <summary>基于 SqlSugar 的定时任务执行日志仓储实现（按触发时间倒序分页，最新记录在前）。</summary>
 /// <remarks>构造函数。</remarks>
 /// <param name="client">SqlSugar 客户端。</param>
@@ -19,7 +19,7 @@ public class JobLogRepository(ISqlSugarClient client) : AggregateRepository<SysJ
     {
         var total = new RefAsync<int>();
         var query = Client.Queryable<SysJobLog>();
-        if (predicate != null)
+        if (predicate is not null)
         {
             query = query.Where(predicate);
         }

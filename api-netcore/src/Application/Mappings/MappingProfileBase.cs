@@ -1,7 +1,7 @@
-namespace Application.Mappings;
 
 using AutoMapper;
 
+namespace Application.Mappings;
 /// <summary>
 /// 映射配置基类：统一注册跨模块的映射约定。
 /// <para>字符串值转换器：DTO → 实体 / 实体 → VO 的全部字符串属性自动去首尾空格

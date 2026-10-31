@@ -1,9 +1,9 @@
-namespace API.Logging;
 
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
+namespace API.Logging;
 /// <summary>
 /// 操作日志数据清洗器（纯逻辑，供过滤器与单元测试复用）：
 /// <list type="bullet">

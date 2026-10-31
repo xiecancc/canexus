@@ -38,5 +38,5 @@ public class RouteVO
     public RouteMeta Meta { get; set; } = new();
 
     /// <summary>子路由。</summary>
-    public List<RouteVO> Children { get; set; } = new();
+    public List<RouteVO> Children { get; set; } = [];
 }

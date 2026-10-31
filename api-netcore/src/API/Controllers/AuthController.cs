@@ -1,4 +1,3 @@
-namespace API.Controllers;
 
 using Application.Contracts.Auth;
 using Application.Contracts.Commands;
@@ -8,6 +7,7 @@ using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
+namespace API.Controllers;
 /// <summary>认证授权接口：验证码、登录、刷新令牌、登出、用户信息与路由。</summary>
 /// <remarks>构造函数。</remarks>
 /// <param name="sender">MediatR 请求发送器（CQRS 分发入口）。</param>

@@ -1,10 +1,10 @@
-namespace Application.Validators.Common;
 
 using Domain.Shared.Enums;
 using Domain.Shared.Exceptions;
 using Domain.Shared.Results;
 using FluentValidation;
 
+namespace Application.Validators.Common;
 /// <summary>
 /// 通用验证规则扩展（Must 风格，失败聚合为 CommonValidationFailed 40001）：
 /// 供各模块验证器复用，消除逐模块重复定义；需要模块错误码的规则在模块内以 Custom 规则抛 BusinessException。

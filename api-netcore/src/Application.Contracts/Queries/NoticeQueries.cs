@@ -1,9 +1,9 @@
-namespace Application.Contracts.Queries;
 
 using Application.Contracts.Abstractions;
 using Application.Contracts.Notices;
 using Domain.Shared.Paging;
 
+namespace Application.Contracts.Queries;
 /// <summary>查询最新通知公告（仅正常状态，按创建时间倒序取 N 条；供首页公告卡片）。</summary>
 /// <param name="Count">返回条数（≤ 20，缺省 5）。</param>
 public sealed record GetLatestNoticesQuery(int Count) : IQuery<List<NoticeLatestVO>>;

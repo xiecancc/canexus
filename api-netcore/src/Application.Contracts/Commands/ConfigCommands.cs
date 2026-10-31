@@ -1,8 +1,8 @@
-namespace Application.Contracts.Commands;
 
 using Application.Contracts.Abstractions;
 using Application.Contracts.Configs;
 
+namespace Application.Contracts.Commands;
 /// <summary>创建参数配置命令（configKey 唯一，创建项一律非内置）。</summary>
 /// <param name="Request">创建请求。</param>
 public sealed record CreateConfigCommand(ConfigCreateRequest Request) : ICommand<Guid>;

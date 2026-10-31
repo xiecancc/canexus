@@ -7,26 +7,26 @@ namespace Domain.Services.Users;
 public interface UserContext
 {
     /// <summary>当前用户 Id；未认证时为 null。</summary>
-    Guid? UserId { get; }
+    public Guid? UserId { get; }
 
     /// <summary>当前用户名；未认证时为 null。</summary>
-    string? UserName { get; }
+    public string? UserName { get; }
 
     /// <summary>当前用户所属部门 Id；未分配或未认证时为 null。</summary>
-    Guid? DeptId { get; }
+    public Guid? DeptId { get; }
 
     /// <summary>当前用户的角色 Id 集合。</summary>
-    IReadOnlyList<Guid> RoleIds { get; }
+    public IReadOnlyList<Guid> RoleIds { get; }
 
     /// <summary>当前用户的角色权限字符串（roleKey）集合。</summary>
-    IReadOnlyList<string> Roles { get; }
+    public IReadOnlyList<string> Roles { get; }
 
     /// <summary>当前用户所属租户 Id；null 表示平台级。</summary>
-    Guid? TenantId { get; }
+    public Guid? TenantId { get; }
 
     /// <summary>是否已通过认证。</summary>
-    bool IsAuthenticated { get; }
+    public bool IsAuthenticated { get; }
 
     /// <summary>是否超级管理员（任一角色 roleKey 为 super_admin，放行全部权限）。</summary>
-    bool IsSuperAdmin { get; }
+    public bool IsSuperAdmin { get; }
 }

@@ -1,4 +1,3 @@
-namespace Application.Commands;
 
 using Application.Abstractions;
 using Application.Contracts.Commands;
@@ -7,6 +6,7 @@ using Domain.Repositories;
 using Domain.Services.Events;
 using Domain.Shared.Enums;
 
+namespace Application.Commands;
 /// <summary>清空全部登录日志命令处理器。</summary>
 /// <remarks>构造函数。</remarks>
 /// <param name="loginLogRepository">登录日志仓储（物理清空）。</param>

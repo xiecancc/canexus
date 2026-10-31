@@ -1,8 +1,8 @@
-namespace Application.Validators;
 
 using Application.Contracts.Commands;
 using FluentValidation;
 
+namespace Application.Validators;
 /// <summary>创建租户命令验证器：标识 / 名称非空且长度受列宽约束，状态取值合法（消息与原服务层文案逐字一致）。</summary>
 public sealed class CreateTenantCommandValidator : AbstractValidator<CreateTenantCommand>
 {

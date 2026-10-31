@@ -1,9 +1,12 @@
-namespace Infrastructure.Auth;
 
 using Domain.Services.Auth;
+using Microsoft.Extensions.Logging;
 
+namespace Infrastructure.Auth;
 /// <summary>基于 BCrypt 的密码哈希实现（BCrypt.Net-Next，自动生成盐，成本因子 11）。</summary>
-public sealed class BCryptPasswordHasher : IPasswordHasher
+/// <remarks>构造函数。</remarks>
+/// <param name="logger">日志器（记录校验异常）。</param>
+public sealed class BCryptPasswordHasher(ILogger<BCryptPasswordHasher> logger) : IPasswordHasher
 {
     /// <summary>BCrypt 计算成本因子（2^11 轮，兼顾安全与性能）。</summary>
     private const int WorkFactor = 11;
@@ -22,8 +25,9 @@ public sealed class BCryptPasswordHasher : IPasswordHasher
         {
             return BCrypt.Net.BCrypt.Verify(password, hash);
         }
-        catch (Exception)
+        catch (Exception exception)
         {
+            logger.LogWarning(exception, "密码哈希校验失败（哈希格式非法或算法不兼容）");
             return false;
         }
     }

@@ -1,8 +1,8 @@
-namespace Application.Contracts.Depts;
 
 using Application.Contracts.Common;
 using Domain.Shared.Enums;
 
+namespace Application.Contracts.Depts;
 /// <summary>部门 VO 公共基类：对齐 SysDept 聚合的业务字段。</summary>
 public abstract class DeptBaseVO
 {

@@ -1,7 +1,7 @@
-namespace Application.Abstractions;
 
 using Application.Contracts.Abstractions;
 
+namespace Application.Abstractions;
 /// <summary>
 /// 查询处理器基类：继承 <see cref="RequestHandler{TRequest, TResponse}"/>，
 /// 仅接受 <see cref="IQuery{TResponse}"/> 请求；查询特有的公共逻辑（如缓存、只读约束）在此层扩展。

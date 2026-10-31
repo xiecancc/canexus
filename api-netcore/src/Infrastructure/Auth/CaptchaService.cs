@@ -1,4 +1,3 @@
-namespace Infrastructure.Auth;
 
 using System.Globalization;
 using System.Security.Cryptography;
@@ -6,6 +5,7 @@ using System.Text;
 using Domain.Services.Security;
 using Infrastructure.Shared.Caching;
 
+namespace Infrastructure.Auth;
 /// <summary>
 /// 图形验证码实现（自绘 SVG，不依赖第三方包）：生成时按 Hot 档写入双层缓存，校验一次性失效。
 /// </summary>
@@ -26,7 +26,7 @@ public sealed class CaptchaService(ICache cache) : ICaptchaService
         var normalized = new string(code).ToUpperInvariant();
         var captchaId = Guid.NewGuid().ToString("N");
         var svg = BuildSvg(code);
-        var imageBase64 = "data:image/svg+xml;base64," + Convert.ToBase64String(Encoding.UTF8.GetBytes(svg));
+        var imageBase64 = $"data:image/svg+xml;base64,{Convert.ToBase64String(Encoding.UTF8.GetBytes(svg))}";
 
         // Hot 档：L1 30s（本实例秒级校验）/ L2 5min（分布式部署跨实例校验）
         await cache.SetAsync(ICaptchaService.CacheKeyPrefix + captchaId, normalized, CacheTtl.Hot, cancellationToken);

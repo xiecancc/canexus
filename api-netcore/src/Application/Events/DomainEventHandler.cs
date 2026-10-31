@@ -1,8 +1,8 @@
-namespace Application.Events;
 
 using Domain.Events;
 using MediatR;
 
+namespace Application.Events;
 /// <summary>
 /// 领域事件监听器基类：订阅非泛型通知信封，仅响应 <typeparamref name="TEvent"/> 类型的事件，
 /// 屏蔽各监听器重复的「类型过滤守卫」样板，子类只实现关心事件的处理逻辑。

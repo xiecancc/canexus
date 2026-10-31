@@ -1,4 +1,3 @@
-namespace Infrastructure.Repositories;
 
 using Domain.Entities;
 using Domain.Repositories;
@@ -6,6 +5,7 @@ using Domain.Shared.Exceptions;
 using Domain.Shared.Results;
 using SqlSugar;
 
+namespace Infrastructure.Repositories;
 /// <summary>
 /// 基于 SqlSugar 的树形聚合仓储实现（对应 <see cref="AggregateTreeBase{TAggregate}"/>）：
 /// 在聚合仓储能力之上提供树形数据的查询与装配。
@@ -30,9 +30,9 @@ public class AggregateTreeRepository<TAggregate>(ISqlSugarClient client) : Aggre
     /// <inheritdoc />
     public virtual async Task<List<TAggregate>> GetDescendantsAsync(Guid id, CancellationToken cancellationToken = default)
     {
-        var descendants = new List<TAggregate>();
-        var visited = new HashSet<Guid> { id };
-        var currentIds = new List<Guid> { id };
+        List<TAggregate> descendants = [];
+        HashSet<Guid> visited = [id];
+        List<Guid> currentIds = [id];
 
         // 广度优先逐层下探，visited 防御环状脏数据导致死循环
         while (currentIds.Count > 0)
@@ -43,7 +43,7 @@ public class AggregateTreeRepository<TAggregate>(ISqlSugarClient client) : Aggre
                 .ToListAsync();
 
             descendants.AddRange(children.Where(it => visited.Add(it.Id)));
-            currentIds = children.Select(it => it.Id).Where(visited.Contains).ToList();
+            currentIds = [.. children.Select(it => it.Id).Where(visited.Contains)];
         }
 
         return descendants;
@@ -52,8 +52,8 @@ public class AggregateTreeRepository<TAggregate>(ISqlSugarClient client) : Aggre
     /// <inheritdoc />
     public virtual async Task<List<TAggregate>> GetAncestorsAsync(Guid id, CancellationToken cancellationToken = default)
     {
-        var ancestors = new List<TAggregate>();
-        var visited = new HashSet<Guid> { id };
+        List<TAggregate> ancestors = [];
+        HashSet<Guid> visited = [id];
         var node = await GetAsync(id, cancellationToken);
 
         // 自父节点起逐级向上至根，visited 防御环状脏数据导致死循环

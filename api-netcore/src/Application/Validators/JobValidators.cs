@@ -1,4 +1,3 @@
-namespace Application.Validators;
 
 using Application.Contracts.Commands;
 using Application.Validators.Common;
@@ -7,6 +6,7 @@ using Domain.Shared.Exceptions;
 using Domain.Shared.Results;
 using FluentValidation;
 
+namespace Application.Validators;
 /// <summary>创建定时任务命令验证器：名称 / 分组非空且长度受列宽约束、状态取值合法、
 /// Cron 表达式与任务类型经调度端口由底层调度器判定（错误码保持 CronInvalid / JobTypeInvalid）。</summary>
 public sealed class CreateJobCommandValidator : AbstractValidator<CreateJobCommand>

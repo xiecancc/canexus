@@ -1,8 +1,8 @@
-namespace Application.Mappings;
 
 using Application.Contracts.Roles;
 using Domain.Entities;
 
+namespace Application.Mappings;
 /// <summary>角色模块映射：实体 → 列表 / 下拉 / 详情（MenuIds 由处理器组装）；创建 / 更新请求 → 实体。</summary>
 public sealed class SysRoleProfile : MappingProfileBase
 {

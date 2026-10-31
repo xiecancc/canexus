@@ -1,4 +1,3 @@
-namespace API.Controllers;
 
 using API.Authorization;
 using Application.Contracts.Commands;
@@ -9,6 +8,7 @@ using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
+namespace API.Controllers;
 /// <summary>操作日志接口：分页查询与清空（写入由 [OperLog] 特性 + 全局过滤器自动完成）。</summary>
 /// <remarks>构造函数。</remarks>
 /// <param name="sender">MediatR 请求发送器（CQRS 分发入口）。</param>

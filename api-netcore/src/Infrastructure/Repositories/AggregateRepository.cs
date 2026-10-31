@@ -1,4 +1,3 @@
-namespace Infrastructure.Repositories;
 
 using Domain.Entities;
 using Domain.Repositories;
@@ -6,6 +5,7 @@ using Domain.Shared.Exceptions;
 using Domain.Shared.Results;
 using SqlSugar;
 
+namespace Infrastructure.Repositories;
 /// <summary>
 /// 基于 SqlSugar 的聚合仓储实现（对应 <see cref="AggregateBase"/>）：
 /// 继承领域仓储（查询 / 插入 / 物理删除），重写删除为软删除，并补充乐观并发更新与恢复能力。

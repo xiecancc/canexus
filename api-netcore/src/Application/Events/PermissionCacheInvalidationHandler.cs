@@ -1,9 +1,9 @@
-namespace Application.Events;
 
 using Application.Permissions;
 using Domain.Events;
 using MediatR;
 
+namespace Application.Events;
 /// <summary>
 /// 权限缓存失效监听器（用户 / 角色 / 菜单领域监听器）：订阅权限相关领域事件并触发权限缓存清理，
 /// 业务处理器只负责发布事件、不感知清理细节，实现业务逻辑与清理逻辑解耦。
@@ -22,30 +22,21 @@ public sealed class PermissionCacheInvalidationHandler(IPermissionChecker permis
     /// <inheritdoc />
     public async Task Handle(DomainEventNotification notification, CancellationToken cancellationToken)
     {
-        switch (notification.DomainEvent)
+        await (notification.DomainEvent switch
         {
             // 用户事件：仅失效该用户的权限缓存
-            case UserCreatedEvent userCreated:
-                await permissionChecker.InvalidateAsync(userCreated.NewEntity.Id);
-                break;
-            case UserUpdatedEvent userUpdated:
-                await permissionChecker.InvalidateAsync(userUpdated.NewEntity.Id);
-                break;
-            case UserRolesUpdatedEvent userRolesUpdated:
-                await permissionChecker.InvalidateAsync(userRolesUpdated.NewEntity.Id);
-                break;
-            case UserPasswordResetEvent passwordReset:
-                await permissionChecker.InvalidateAsync(passwordReset.UserId);
-                break;
-            case UserDeletedEvent userDeleted:
-                await permissionChecker.InvalidateAsync(userDeleted.NewEntity.Id);
-                break;
+            UserCreatedEvent userCreated => permissionChecker.InvalidateAsync(userCreated.NewEntity.Id),
+            UserUpdatedEvent userUpdated => permissionChecker.InvalidateAsync(userUpdated.NewEntity.Id),
+            UserRolesUpdatedEvent userRolesUpdated => permissionChecker.InvalidateAsync(userRolesUpdated.NewEntity.Id),
+            UserPasswordResetEvent passwordReset => permissionChecker.InvalidateAsync(passwordReset.UserId),
+            UserDeletedEvent userDeleted => permissionChecker.InvalidateAsync(userDeleted.NewEntity.Id),
 
             // 角色 / 菜单事件：影响任意持有（已授权）用户的权限，全量失效
-            case RoleCreatedEvent or RoleUpdatedEvent or RoleDeletedEvent
-                or MenuCreatedEvent or MenuUpdatedEvent or MenuDeletedEvent:
-                await permissionChecker.InvalidateAllAsync();
-                break;
-        }
+            RoleCreatedEvent or RoleUpdatedEvent or RoleDeletedEvent
+                or MenuCreatedEvent or MenuUpdatedEvent or MenuDeletedEvent
+                => permissionChecker.InvalidateAllAsync(),
+
+            _ => Task.CompletedTask,
+        });
     }
 }

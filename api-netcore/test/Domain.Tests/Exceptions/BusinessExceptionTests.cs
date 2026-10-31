@@ -1,8 +1,8 @@
-namespace Domain.Tests.Exceptions;
 
 using Domain.Shared.Exceptions;
 using Domain.Shared.Results;
 
+namespace Domain.Tests.Exceptions;
 /// <summary>BusinessException 业务异常单元测试。</summary>
 [TestFixture]
 public class BusinessExceptionTests

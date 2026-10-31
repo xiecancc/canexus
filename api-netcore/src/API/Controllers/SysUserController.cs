@@ -1,4 +1,3 @@
-namespace API.Controllers;
 
 using API.Authorization;
 using API.Logging;
@@ -11,6 +10,7 @@ using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
+namespace API.Controllers;
 /// <summary>用户管理接口：分页、详情、增删改、状态维护、重置密码与角色分配。</summary>
 /// <remarks>构造函数。</remarks>
 /// <param name="sender">MediatR 请求发送器（CQRS 分发入口）。</param>

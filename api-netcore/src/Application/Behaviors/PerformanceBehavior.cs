@@ -1,9 +1,9 @@
-namespace Application.Behaviors;
 
 using System.Diagnostics;
 using MediatR;
 using Microsoft.Extensions.Logging;
 
+namespace Application.Behaviors;
 /// <summary>
 /// 性能监控管道行为：统计每个请求的处理耗时，超过阈值（500ms）输出告警日志。
 /// </summary>

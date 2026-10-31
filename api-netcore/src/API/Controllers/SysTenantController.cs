@@ -1,4 +1,3 @@
-namespace API.Controllers;
 
 using API.Authorization;
 using API.Logging;
@@ -11,6 +10,7 @@ using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
+namespace API.Controllers;
 /// <summary>租户管理接口：分页、启用项简易列表、增删改（tenantKey 唯一且不可变更；存在归属用户拒绝删除）。</summary>
 /// <remarks>构造函数。</remarks>
 /// <param name="sender">MediatR 请求发送器（CQRS 分发入口）。</param>

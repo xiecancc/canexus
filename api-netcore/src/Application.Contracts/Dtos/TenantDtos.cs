@@ -1,9 +1,9 @@
-namespace Application.Contracts.Tenants;
 
 using Application.Contracts.Common;
 using Domain.Shared.Enums;
 using Domain.Shared.Paging;
 
+namespace Application.Contracts.Tenants;
 /// <summary>租户分页查询请求（GET /api/system/tenant/page）。</summary>
 public class TenantPageRequest : PagedRequest
 {

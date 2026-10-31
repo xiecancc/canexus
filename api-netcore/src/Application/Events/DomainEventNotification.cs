@@ -1,8 +1,8 @@
-namespace Application.Events;
 
 using Domain.Events;
 using MediatR;
 
+namespace Application.Events;
 /// <summary>
 /// 领域事件通知信封：将领域事件包装为 MediatR 进程内通知（INotification），供监听器订阅。
 /// <para>非泛型信封使通用监听器（如事件审计日志）只需订阅单一通知类型即可接收全部事件；

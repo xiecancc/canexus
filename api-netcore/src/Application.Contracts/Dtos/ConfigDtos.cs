@@ -1,8 +1,8 @@
-namespace Application.Contracts.Configs;
 
 using Application.Contracts.Common;
 using Domain.Shared.Paging;
 
+namespace Application.Contracts.Configs;
 /// <summary>参数配置分页查询请求（GET /api/system/config/page）。</summary>
 public class ConfigPageRequest : PagedRequest
 {

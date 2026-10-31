@@ -1,4 +1,3 @@
-namespace API.Tests;
 
 using System.Net;
 using System.Net.Http.Headers;
@@ -18,6 +17,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using SqlSugar;
 
+namespace API.Tests;
 /// <summary>
 /// 认证授权集成测试：通过 WebApplicationFactory 走真实 HTTP 管道 + 真实 MySQL（默认库 super_admin_test）。
 /// <para>连接串可通过环境变量 SUPER_ADMIN_TEST_CONN 覆盖（沿用 B2 约定）。</para>

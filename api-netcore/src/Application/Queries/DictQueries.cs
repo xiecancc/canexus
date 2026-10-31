@@ -1,4 +1,3 @@
-namespace Application.Queries;
 
 using System.Linq.Expressions;
 using Application.Abstractions;
@@ -13,6 +12,7 @@ using Domain.Shared.Enums;
 using Domain.Shared.Paging;
 using Infrastructure.Shared.Caching;
 
+namespace Application.Queries;
 /// <summary>按字典类型查询字典数据处理器。</summary>
 /// <remarks>构造函数。</remarks>
 /// <param name="dictDataRepository">字典数据仓储。</param>

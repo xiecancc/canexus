@@ -1,4 +1,3 @@
-namespace Application.Queries;
 
 using System.Linq.Expressions;
 using Application.Abstractions;
@@ -16,6 +15,7 @@ using Domain.Shared.Exceptions;
 using Domain.Shared.Paging;
 using Domain.Shared.Results;
 
+namespace Application.Queries;
 /// <summary>获取用户详情查询处理器。</summary>
 /// <remarks>构造函数。</remarks>
 public sealed class GetUserDetailQueryHandler(
@@ -29,10 +29,9 @@ public sealed class GetUserDetailQueryHandler(
         var user = await userRepository.GetAsync(query.Id, cancellationToken)
             ?? throw new BusinessException(ErrorCodes.UserNotFound, $"用户 {query.Id} 不存在");
         var detail = mapper.Map<UserDetailVO>(user);
-        detail.RoleIds = (await userRoleRepository.GetListAsync([ur => ur.UserId == query.Id], cancellationToken: cancellationToken))
+        detail.RoleIds = [.. (await userRoleRepository.GetListAsync([ur => ur.UserId == query.Id], cancellationToken: cancellationToken))
             .Select(ur => ur.RoleId)
-            .Distinct()
-            .ToList();
+            .Distinct()];
         return detail;
     }
 }
@@ -81,7 +80,7 @@ public sealed class GetUserPageQueryHandler(
                 : await roleRepository.GetListAsync([r => roleIds.Contains(r.Id)], cancellationToken: cancellationToken))
             .ToDictionary(r => r.Id, r => r);
 
-        var relatedDeptIds = users.Where(u => u.DeptId != null).Select(u => u.DeptId!.Value).Distinct().ToList();
+        var relatedDeptIds = users.Where(u => u.DeptId is not null).Select(u => u.DeptId!.Value).Distinct().ToList();
         var deptMap = (relatedDeptIds.Count == 0
                 ? []
                 : await deptRepository.GetListAsync([d => relatedDeptIds.Contains(d.Id)], cancellationToken: cancellationToken))
@@ -90,17 +89,16 @@ public sealed class GetUserPageQueryHandler(
         var items = users.Select(user =>
         {
             var vo = mapper.Map<UserListVO>(user);
-            vo.DeptName = user.DeptId != null && deptMap.TryGetValue(user.DeptId.Value, out var dept)
+            vo.DeptName = user.DeptId is not null && deptMap.TryGetValue(user.DeptId.Value, out var dept)
                 ? dept.DeptName
                 : null;
-            vo.Roles = userRoles
+            vo.Roles = [.. userRoles
                 .Where(ur => ur.UserId == user.Id && roleMap.ContainsKey(ur.RoleId))
                 .Select(ur => new UserRoleItemVO
                 {
                     Id = ur.RoleId,
                     RoleName = roleMap[ur.RoleId].RoleName
-                })
-                .ToList();
+                })];
             return vo;
         }).ToList();
 

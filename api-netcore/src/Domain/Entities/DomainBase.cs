@@ -1,7 +1,7 @@
-namespace Domain.Entities;
 
 using SqlSugar;
 
+namespace Domain.Entities;
 /// <summary>
 /// 领域层顶层基类：承载全部实体共有的创建审计（创建时间 / 创建人）与租户归属。
 /// <para>不含主键与软删除语义——主键由具体子类定义（聚合根为单主键 Id，

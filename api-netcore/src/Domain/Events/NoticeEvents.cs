@@ -1,7 +1,7 @@
-namespace Domain.Events;
 
 using Domain.Entities;
 
+namespace Domain.Events;
 /// <summary>通知公告创建领域事件：公告创建成功后发布，Domain 为创建后的状态（消息推送等响应动作可由监听器扩展处理）。</summary>
 /// <param name="Entity">创建后的通知公告。</param>
 public sealed class NoticeCreatedEvent(SysNotice entity) : AggregateCreatedEvent<SysNotice>(entity);

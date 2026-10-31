@@ -1,4 +1,3 @@
-namespace Application.Validators;
 
 using Application.Contracts.Commands;
 using Domain.Shared.Enums;
@@ -6,6 +5,7 @@ using Domain.Shared.Exceptions;
 using Domain.Shared.Results;
 using FluentValidation;
 
+namespace Application.Validators;
 /// <summary>通知公告命令验证器：标题（非空白且 ≤200）、类型（1 通知 / 2 公告）、状态（1 正常 / 0 关闭）、内容非空白。
 /// 错误码保持 NoticeRuleInvalid（401002）与原服务层文案一致；创建 / 更新共用同一校验方法消除重复。</summary>
 public static class NoticeValidation

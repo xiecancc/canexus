@@ -1,7 +1,7 @@
-namespace Domain.Events;
 
 using Domain.Entities;
 
+namespace Domain.Events;
 /// <summary>用户创建领域事件：用户创建成功后发布，Domain 为创建后的用户状态。</summary>
 /// <param name="Entity">创建后的用户。</param>
 public sealed class UserCreatedEvent(SysUser entity) : AggregateCreatedEvent<SysUser>(entity);

@@ -1,8 +1,8 @@
-namespace Application.Contracts.Menus;
 
 using Application.Contracts.Common;
 using Domain.Shared.Enums;
 
+namespace Application.Contracts.Menus;
 /// <summary>菜单 VO 公共基类：对齐 SysMenu 聚合的业务字段（树形结构，无备注字段）。</summary>
 public abstract class MenuBaseVO
 {

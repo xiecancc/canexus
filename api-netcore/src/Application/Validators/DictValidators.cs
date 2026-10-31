@@ -1,4 +1,3 @@
-namespace Application.Validators;
 
 using Application.Contracts.Commands;
 using Application.Contracts.Dicts;
@@ -6,6 +5,7 @@ using Application.Validators.Common;
 using Domain.Entities;
 using FluentValidation;
 
+namespace Application.Validators;
 /// <summary>字典数据请求验证器：标签样式（1~5）与状态（0/1）取值校验（消息与原服务层文案逐字一致）。</summary>
 /// <typeparam name="TRequest">字典数据写入请求类型。</typeparam>
 public class DictDataWriteRequestValidator<TRequest> : AbstractValidator<TRequest>

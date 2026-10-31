@@ -1,4 +1,3 @@
-namespace API.Tests;
 
 using System.Net;
 using System.Net.Http.Headers;
@@ -12,6 +11,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using SqlSugar;
 
+namespace API.Tests;
 /// <summary>
 /// 字典与参数配置（B7）集成测试：
 /// 走真实 HTTP 管道 + 真实 MySQL（默认库 super_admin_test，SUPER_ADMIN_TEST_CONN 可覆盖），

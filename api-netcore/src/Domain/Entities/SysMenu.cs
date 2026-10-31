@@ -1,8 +1,8 @@
-namespace Domain.Entities;
 
 using Domain.Shared.Enums;
 using SqlSugar;
 
+namespace Domain.Entities;
 /// <summary>系统菜单实体：目录 / 菜单 / 按钮统一存储，树形结构。
 /// <para>实体不保留验证逻辑与数据归一化：字段约束（含类型与字段耦合的跨属性规则）
 /// 由 Application 层 FluentValidation Validators 承接，trim 在字段映射阶段自动完成。</para></summary>

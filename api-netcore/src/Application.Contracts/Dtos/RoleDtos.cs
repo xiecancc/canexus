@@ -1,9 +1,9 @@
-namespace Application.Contracts.Roles;
 
 using Application.Contracts.Common;
 using Domain.Shared.Enums;
 using Domain.Shared.Paging;
 
+namespace Application.Contracts.Roles;
 /// <summary>角色分页查询请求（GET /api/system/role/page）。</summary>
 public class RolePageRequest : PagedRequest
 {

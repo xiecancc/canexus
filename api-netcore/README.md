@@ -112,8 +112,10 @@ api-netcore/
 
 ## 构建约束与代码风格
 
-- `Directory.Build.props`（解决方案根）对全部项目生效：**`TreatWarningsAsErrors`（编译警告即错误）** 与 **`EnforceCodeStyleInBuild`（构建期强制 `.editorconfig` 代码风格）**
-- 代码风格基线由 `.editorconfig` 定义（风格类规则为 suggestion 级），格式统一经 `dotnet format api.slnx` 执行
+- 各项目 `.csproj`（src 与 test 共 11 个项目）统一声明：**`TreatWarningsAsErrors`（编译警告即错误）** 与 **`EnforceCodeStyleInBuild`（构建期强制 `.editorconfig` 代码风格）**——不使用 `Directory.Build.props`，配置全部落位在项目文件内
+- 代码风格基线由 `.editorconfig` 定义：风格类规则统一 **warning 级**，配合各项目的 `TreatWarningsAsErrors`，编译警告与代码风格违规在构建期均按**错误**处理（不合规代码无法通过构建）；格式统一经 `dotnet format api.slnx` 执行，各配置项的作用以 `.editorconfig` 内注释为准（该文件是规则与说明的唯一载体）
+- **变量声明优先 `var`**：内置类型 / 类型明显 / 其余场景均用 `var`（`csharp_style_var_*` 三项均为 `true`）
+- **类优先主构造函数 + `get` 只读属性**：依赖与构造参数经 C# 12 主构造函数承载，转存为 `{ get; }` 只读自动属性，避免传统构造函数字段回填样板（`csharp_style_prefer_primary_constructors`）
 - 提交 `.cs` 文件时，仓库级 pre-commit 钩子（husky + lint-staged，见 `admin-vue/README.md`）会自动对其运行 `dotnet format --include`；推送前执行 `dotnet build` 编译检查
 - 新增警告将被构建拒绝：修复警告（或经评审后以 `#pragma` / `.editorconfig` 降级并注明原因），不要绕过
 

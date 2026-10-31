@@ -1,10 +1,10 @@
-namespace Infrastructure.Repositories;
 
 using Domain.Repositories;
 using Domain.Shared.Exceptions;
 using Domain.Shared.Results;
 using SqlSugar;
 
+namespace Infrastructure.Repositories;
 /// <summary>
 /// 基于 SqlSugar Ado 事务的工作单元实现（UseTranAsync）。
 /// <para>开启事务 → 执行委托 → 成功提交 / 异常回滚；回滚后原样透出委托抛出的异常，

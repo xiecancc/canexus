@@ -1,4 +1,3 @@
-namespace Application.Queries;
 
 using System.Linq.Expressions;
 using Application.Abstractions;
@@ -14,6 +13,7 @@ using Domain.Shared.Paging;
 using Domain.Shared.Results;
 using Infrastructure.Shared.Caching;
 
+namespace Application.Queries;
 /// <summary>按参数键名查询参数值处理器。</summary>
 /// <remarks>构造函数。</remarks>
 /// <param name="configRepository">参数配置仓储（只读）。</param>

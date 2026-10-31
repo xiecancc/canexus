@@ -1,9 +1,9 @@
-namespace Application.Contracts.Queries;
 
 using Application.Contracts.Abstractions;
 using Application.Contracts.Depts;
 using Domain.Shared.Enums;
 
+namespace Application.Contracts.Queries;
 /// <summary>获取部门详情。</summary>
 /// <param name="Id">部门 Id。</param>
 public sealed record GetDeptDetailQuery(Guid Id) : IQuery<DeptDetailVO>;

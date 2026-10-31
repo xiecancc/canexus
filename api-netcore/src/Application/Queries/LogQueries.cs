@@ -1,4 +1,3 @@
-namespace Application.Queries;
 
 using System.Linq.Expressions;
 using Application.Abstractions;
@@ -11,6 +10,7 @@ using Domain.Repositories;
 using Domain.Services.Rules;
 using Domain.Shared.Paging;
 
+namespace Application.Queries;
 /// <summary>分页查询登录日志处理器。</summary>
 /// <remarks>构造函数。</remarks>
 /// <param name="loginLogRepository">登录日志仓储（只读）。</param>

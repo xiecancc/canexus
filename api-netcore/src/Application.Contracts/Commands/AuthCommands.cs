@@ -1,8 +1,8 @@
-namespace Application.Contracts.Commands;
 
 using Application.Contracts.Abstractions;
 using Application.Contracts.Auth;
 
+namespace Application.Contracts.Commands;
 /// <summary>账号密码登录命令（验证码校验 + 失败锁定策略）。</summary>
 /// <param name="Request">登录请求。</param>
 /// <param name="Ip">客户端 IP（写入登录日志）。</param>

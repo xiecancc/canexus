@@ -1,8 +1,8 @@
-namespace Application.Contracts.Commands;
 
 using Application.Contracts.Abstractions;
 using Application.Contracts.Roles;
 
+namespace Application.Contracts.Commands;
 /// <summary>创建角色命令（roleKey 唯一且不可使用保留值 super_admin；菜单授权全删全插）。</summary>
 /// <param name="Request">创建请求。</param>
 public sealed record CreateRoleCommand(RoleCreateRequest Request) : ICommand<Guid>;

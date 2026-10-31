@@ -1,4 +1,3 @@
-namespace Infrastructure.Tests;
 
 using Domain.Repositories;
 using Domain.Shared.Exceptions;
@@ -10,8 +9,10 @@ using Infrastructure.Shared.Options;
 using Infrastructure.Shared.Tenants;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using SqlSugar;
 
+namespace Infrastructure.Tests;
 /// <summary>
 /// 数据访问层集成测试：连接真实 MySQL（默认库 super_admin_test）。
 /// <para>连接串可通过环境变量 SUPER_ADMIN_TEST_CONN 覆盖。</para>
@@ -46,7 +47,8 @@ public class DataAccessIntegrationTests
             .Build();
 
         var services = new ServiceCollection();
-        // 与生产一致：先统一注册全部 Option，再装配数据访问
+        // 与生产一致：先统一注册全部 Option，再装配数据访问；日志供 SqlSugar 工厂 / 初始化器使用
+        services.AddLogging();
         services.RegisterOptions(configuration);
         services.AddDataAccess();
 

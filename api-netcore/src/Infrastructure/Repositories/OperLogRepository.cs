@@ -1,9 +1,9 @@
-namespace Infrastructure.Repositories;
 
 using Domain.Entities;
 using Domain.Repositories;
 using SqlSugar;
 
+namespace Infrastructure.Repositories;
 /// <summary>基于 SqlSugar 的操作日志仓储实现（清空与单条删除均为物理删除）。</summary>
 /// <remarks>构造函数。</remarks>
 /// <param name="client">SqlSugar 客户端。</param>

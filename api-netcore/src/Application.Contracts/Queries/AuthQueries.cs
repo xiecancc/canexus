@@ -1,8 +1,8 @@
-namespace Application.Contracts.Queries;
 
 using Application.Contracts.Abstractions;
 using Application.Contracts.Auth;
 
+namespace Application.Contracts.Queries;
 /// <summary>获取图形验证码（SVG base64，有效期 5 分钟，一次性校验）。</summary>
 public sealed record GetCaptchaQuery : IQuery<CaptchaResult>;
 

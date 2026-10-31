@@ -1,58 +1,136 @@
 # 后端 .NET 解决方案统一代码风格配置（dotnet format 与 IDE 共用）
-# 说明：风格类规则默认 suggestion 级（不阻塞构建）；格式类规则由 dotnet format 强制。
+# 本文件是代码风格规则与说明的唯一载体（不设独立文档），每条规则均有注释说明作用。
+# 严格策略：风格类规则一律 warning 级，配合各项目 .csproj 的 TreatWarningsAsErrors，
+# 编译警告与代码风格违规在构建期均按错误处理（不合规代码无法通过构建）。
+# 顶部为 EditorConfig 标准通用属性，任何环境均可识别；[*.cs] 段内的
+# dotnet_*/csharp_* 属性仅被 .NET 工具链（IDE / dotnet format）读取，
+# 其他环境按 EditorConfig 规范自动忽略未知属性，不影响兼容性。
+#
+# 执行机制：
+#   IDE（Rider / VS）实时提示 warning 级风格问题；
+#   dotnet format api.slnx 按本配置自动改写（提交时经 husky + lint-staged 钩子执行）；
+#   各项目 .csproj 声明 EnforceCodeStyleInBuild + TreatWarningsAsErrors，
+#   风格违规（warning）在构建期即提升为错误，构建失败。
+#   确需豁免某条规则时，经评审后在 .editorconfig 降级并注明原因，不要绕过。
 root = true
 
+# ================= EditorConfig 标准通用属性 =================
+
 [*]
+# 字符编码：统一 UTF-8（无 BOM）
 charset = utf-8
+# 换行符：CRLF（与现有源码及 Windows 开发环境一致）
+end_of_line = crlf
+# 文件末尾保留一个空行
 insert_final_newline = true
+# 去除行尾空白字符
+trim_trailing_whitespace = true
+# 缩进风格：空格（禁用 Tab）
 indent_style = space
+# 默认缩进宽度：4（与 C# 惯例一致）
+indent_size = 4
 
-[*.{yml,yaml,json}]
+# Web / 配置 / 文档类文件：2 空格缩进
+[*.{yml,yaml,json,xml,csproj,props,targets,config,md,html,css,scss,js,ts,vue}]
 indent_size = 2
 
-[*.{csproj,props,targets,xml,config}]
-indent_size = 2
+# 批处理脚本必须使用 CRLF 且 Tab 缩进（cmd 解释器要求）
+[*.{cmd,bat}]
+end_of_line = crlf
+indent_style = tab
+
+# ================= C# 源码（*.cs）=================
 
 [*.cs]
 indent_size = 4
 
+# ---- 文件结构顺序（硬性约定）----
+# .cs 文件结构依次为：using 指令 → 命名空间声明 → 类型代码，三段顺序固定：
+#   1. using 指令置于命名空间外部（文件顶部，System.* 优先）；
+#   2. 命名空间使用文件级声明（namespace X;），其后全部为类型代码；
+#   3. 不再嵌套块级命名空间，保证 using → namespace → 代码 自上而下单遍可读。
+# 以下两条规则共同保证该顺序，违反时 IDE 提示、dotnet format 可自动修正。
+
 # ---- using 指令 ----
+# System.* 命名空间排在 using 块最前；using 置于命名空间外部（文件顶部）
 dotnet_sort_system_directives_first = true
-csharp_using_directive_placement = outside_namespace:suggestion
+csharp_using_directive_placement = outside_namespace:warning
 
 # ---- var 与类型声明 ----
-csharp_style_var_for_built_in_types = true:suggestion
-csharp_style_var_when_type_is_apparent = true:suggestion
-csharp_style_var_elsewhere = false:suggestion
-csharp_style_namespace_declarations = file_scoped:suggestion
+# 变量声明统一优先使用 var（内置类型 / 类型明显 / 类型不明显均适用）：
+#   var user = new SysUser();          // 类型明显
+#   var user = _repo.GetAsync(id);     // 方法返回值
+# 例外 1：右值无法表达类型语义时可显式声明（如 var json = await ReadBodyAsync();）。
+# 例外 2：集合表达式（[...]）无法与 var 组合，采用「显式类型 + 集合表达式」：
+#   List<Guid> ids = [deptId];         // 集合表达式要求显式目标类型，不触发 var 偏好
+# IDE 会以 IDE0007/IDE0008 提示，dotnet format 可自动改写。
+csharp_style_var_for_built_in_types = true:warning
+csharp_style_var_when_type_is_apparent = true:warning
+csharp_style_var_elsewhere = true:warning
+# 文件级命名空间（namespace X;）：声明后直接跟类型代码，不再有大括号包裹
+csharp_style_namespace_declarations = file_scoped:warning
+
+# ---- 集合表达式（C# 12）----
+# 集合初始化一律优先集合表达式 [..]，替代 new List<T> { .. } / new T[] { .. } /
+# new HashSet<T> { .. } 等冗余创建（仅限目标类型明确的场景，IDE0300 系列提示）
+dotnet_style_prefer_collection_expression = true:warning
+
+# ---- 主构造函数与只读属性 ----
+# 类/结构体优先使用 C# 12 主构造函数（primary constructor）承载依赖，
+# 配合 { get; } 只读自动属性在构造时固化参数，替代传统构造函数字段赋值样板。
+# 标准写法（与领域事件基类一致）：
+#   public class AggregateCreatedEvent<TAggregate>(TAggregate domain) : DomainEvent
+#   {
+#       public TAggregate Domain { get; } = domain;   // ✅ 推荐
+#   }
+#   // ❌ 避免：传统构造函数 + 私有字段回填
+# 注意：主构造函数参数不要在方法中直接引用，应转存为属性；DI 服务类同样适用。
+# 对应 IDE0290 提示。
+csharp_style_prefer_primary_constructors = true:warning
+# 属性/索引器优先表达式体（=>），与 get 只读属性风格配套
+csharp_style_expression_bodied_properties = true:warning
 
 # ---- 表达式偏好 ----
-csharp_prefer_braces = true:suggestion
-csharp_style_prefer_switch_expression = true:suggestion
-csharp_style_pattern_matching_over_is_with_cast_check = true:suggestion
-csharp_style_pattern_local_over_anonymous_function = true:suggestion
-dotnet_style_object_initializer = true:suggestion
-dotnet_style_collection_initializer = true:suggestion
-dotnet_style_prefer_conditional_expression_over_return = false:suggestion
+# if/for 等语句必须带大括号
+csharp_prefer_braces = true:warning
+# 优先 switch 表达式（=> x switch { ... }）
+csharp_style_prefer_switch_expression = true:warning
+# is T t 模式匹配替代 is + 强转
+csharp_style_pattern_matching_over_is_with_cast_check = true:warning
+# is not null / is null 模式匹配替代 == null / != null（普通代码与内存集合 lambda；
+# SqlSugar / LINQ 表达式树内不支持 is 模式，保留 == null 写法，分析器不会误报）
+csharp_style_pattern_matching_over_as_with_null_check = true:warning
+# 局部函数优先于匿名委托
+csharp_style_pattern_local_over_anonymous_function = true:warning
+# 优先对象/集合初始化器；返回处不强制三元表达式
+dotnet_style_object_initializer = true:warning
+dotnet_style_collection_initializer = true:warning
+dotnet_style_prefer_conditional_expression_over_return = false:warning
 
 # ---- 空值与可空性 ----
-csharp_style_conditional_delegate_call = true:suggestion
-dotnet_style_coalesce_expression = true:suggestion
-dotnet_style_null_propagation = true:suggestion
-dotnet_style_prefer_is_null_check_over_reference_equality_method = true:suggestion
+# 委托/事件调用前 ?.Invoke() 判空；优先 ?? 与 ?.；用 is null 判空
+csharp_style_conditional_delegate_call = true:warning
+dotnet_style_coalesce_expression = true:warning
+dotnet_style_null_propagation = true:warning
+dotnet_style_prefer_is_null_check_over_reference_equality_method = true:warning
 
 # ---- 成员访问与修饰符 ----
-dotnet_style_require_accessibility_modifiers = always:suggestion
-csharp_preferred_modifier_order = public,private,protected,internal,static,extern,new,virtual,abstract,sealed,override,readonly,unsafe,volatile,async:suggestion
+# 成员必须显式写访问修饰符；修饰符按 .NET 官方顺序排列
+dotnet_style_require_accessibility_modifiers = always:warning
+csharp_preferred_modifier_order = public,private,protected,internal,static,extern,new,virtual,abstract,sealed,override,readonly,unsafe,volatile,async:warning
 
 # ---- this 与限定 ----
-dotnet_style_qualification_for_field = false:suggestion
-dotnet_style_qualification_for_property = false:suggestion
-dotnet_style_qualification_for_method = false:suggestion
-dotnet_style_qualification_for_event = false:suggestion
+# 访问实例成员不加 this. 前缀
+dotnet_style_qualification_for_field = false:warning
+dotnet_style_qualification_for_property = false:warning
+dotnet_style_qualification_for_method = false:warning
+dotnet_style_qualification_for_event = false:warning
 
-# ---- 命名约定（接口 I 前缀；其余遵循既有 PascalCase/camelCase 事实标准，suggestion 级）----
-dotnet_naming_rule.interfaces_start_with_i.severity = suggestion
+# ---- 命名约定 ----
+# 唯一强制性命名规则：接口必须以大写 I 前缀（PascalCase）；
+# 其余标识符遵循既有 PascalCase（类型/成员）/ camelCase（局部变量/参数）事实标准，warning 级
+# 注意：配合「var 优先」策略，局部变量经 var 声明后由 IDE 自动推断命名风格
+dotnet_naming_rule.interfaces_start_with_i.severity = warning
 dotnet_naming_rule.interfaces_start_with_i.symbols = interfaces
 dotnet_naming_rule.interfaces_start_with_i.style = prefix_i
 dotnet_naming_symbols.interfaces.applicable_kinds = interface

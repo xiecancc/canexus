@@ -1,4 +1,3 @@
-namespace API;
 
 using API.Extensions;
 using API.Filters;
@@ -11,6 +10,7 @@ using Infrastructure.DataAccess;
 using Microsoft.AspNetCore.Mvc;
 using Serilog;
 
+namespace API;
 /// <summary>应用程序入口。</summary>
 public class Program
 {

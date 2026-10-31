@@ -1,4 +1,3 @@
-namespace Application.Commands;
 
 using Application.Abstractions;
 using Application.Contracts.Commands;
@@ -12,6 +11,7 @@ using Domain.Shared.Enums;
 using Domain.Shared.Exceptions;
 using Domain.Shared.Results;
 
+namespace Application.Commands;
 /// <summary>创建字典数据命令处理器。</summary>
 /// <remarks>构造函数。</remarks>
 public sealed class CreateDictDataCommandHandler(
@@ -48,7 +48,7 @@ public sealed class CreateDictDataCommandHandler(
     /// <summary>校验同字典类型下标签 / 键值未被占用（更新时排除自身）。</summary>
     private async Task EnsureNotDuplicateAsync(string dictType, string label, string value, Guid? excludeId, CancellationToken cancellationToken)
     {
-        System.Linq.Expressions.Expression<Func<SysDictData, bool>> labelPredicate = excludeId == null
+        System.Linq.Expressions.Expression<Func<SysDictData, bool>> labelPredicate = excludeId is null
             ? d => d.DictType == dictType && d.DictLabel == label
             : d => d.DictType == dictType && d.DictLabel == label && d.Id != excludeId.Value;
         if (await dictDataRepository.CountAsync(labelPredicate, cancellationToken) > 0)
@@ -56,7 +56,7 @@ public sealed class CreateDictDataCommandHandler(
             throw new BusinessException(ErrorCodes.DictDataDuplicate, $"字典类型「{dictType}」下标签「{label}」已存在");
         }
 
-        System.Linq.Expressions.Expression<Func<SysDictData, bool>> valuePredicate = excludeId == null
+        System.Linq.Expressions.Expression<Func<SysDictData, bool>> valuePredicate = excludeId is null
             ? d => d.DictType == dictType && d.DictValue == value
             : d => d.DictType == dictType && d.DictValue == value && d.Id != excludeId.Value;
         if (await dictDataRepository.CountAsync(valuePredicate, cancellationToken) > 0)
@@ -181,7 +181,7 @@ public sealed class UpdateDictDataCommandHandler(
     /// <summary>校验同字典类型下标签 / 键值未被占用（更新时排除自身）。</summary>
     private async Task EnsureNotDuplicateAsync(string dictType, string label, string value, Guid? excludeId, CancellationToken cancellationToken)
     {
-        System.Linq.Expressions.Expression<Func<SysDictData, bool>> labelPredicate = excludeId == null
+        System.Linq.Expressions.Expression<Func<SysDictData, bool>> labelPredicate = excludeId is null
             ? d => d.DictType == dictType && d.DictLabel == label
             : d => d.DictType == dictType && d.DictLabel == label && d.Id != excludeId.Value;
         if (await dictDataRepository.CountAsync(labelPredicate, cancellationToken) > 0)
@@ -189,7 +189,7 @@ public sealed class UpdateDictDataCommandHandler(
             throw new BusinessException(ErrorCodes.DictDataDuplicate, $"字典类型「{dictType}」下标签「{label}」已存在");
         }
 
-        System.Linq.Expressions.Expression<Func<SysDictData, bool>> valuePredicate = excludeId == null
+        System.Linq.Expressions.Expression<Func<SysDictData, bool>> valuePredicate = excludeId is null
             ? d => d.DictType == dictType && d.DictValue == value
             : d => d.DictType == dictType && d.DictValue == value && d.Id != excludeId.Value;
         if (await dictDataRepository.CountAsync(valuePredicate, cancellationToken) > 0)

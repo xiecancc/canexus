@@ -1,9 +1,9 @@
-namespace Infrastructure.Shared.Options;
 
 using System.Reflection;
 using Domain.Entities;
 using SqlSugar;
 
+namespace Infrastructure.Shared.Options;
 /// <summary>
 /// 数据访问配置项（绑定配置节 "Database"，由 AddDataAccess 读取或配置委托填充）。
 /// </summary>

@@ -1,7 +1,7 @@
-namespace Domain.Events;
 
 using Domain.Entities;
 
+namespace Domain.Events;
 /// <summary>定时任务创建领域事件：任务创建成功后发布，Domain 为创建后的状态（调度同步仍由处理器经 IJobScheduleManager 完成，本事件面向后续监听扩展）。</summary>
 /// <param name="Entity">创建后的定时任务。</param>
 public sealed class JobCreatedEvent(SysJob entity) : AggregateCreatedEvent<SysJob>(entity);

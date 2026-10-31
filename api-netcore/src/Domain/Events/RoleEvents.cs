@@ -1,7 +1,7 @@
-namespace Domain.Events;
 
 using Domain.Entities;
 
+namespace Domain.Events;
 /// <summary>角色创建领域事件：角色创建成功后发布，Domain 为创建后的角色状态。新角色尚未被用户持有，通常无权限影响。</summary>
 /// <param name="Entity">创建后的角色。</param>
 public sealed class RoleCreatedEvent(SysRole entity) : AggregateCreatedEvent<SysRole>(entity);

@@ -1,7 +1,7 @@
-namespace Infrastructure.Filtering;
 
 using Infrastructure.Shared.Filtering;
 
+namespace Infrastructure.Filtering;
 /// <summary>数据过滤开关实现：软删除与租户过滤默认启用。</summary>
 public sealed class DataFilter : IDataFilter
 {

@@ -1,4 +1,3 @@
-namespace Application.Queries;
 
 using System.Linq.Expressions;
 using Application.Abstractions;
@@ -10,6 +9,7 @@ using Domain.Entities;
 using Domain.Repositories;
 using Domain.Shared.Paging;
 
+namespace Application.Queries;
 /// <summary>分页查询任务执行日志处理器。</summary>
 /// <remarks>构造函数。</remarks>
 /// <param name="jobLogRepository">任务执行日志仓储（倒序分页）。</param>

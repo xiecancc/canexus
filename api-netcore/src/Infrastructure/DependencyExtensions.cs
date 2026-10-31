@@ -1,4 +1,3 @@
-namespace Infrastructure;
 
 using Domain.Repositories;
 using Domain.Services;
@@ -28,6 +27,7 @@ using Microsoft.Extensions.Options;
 using Quartz;
 using SqlSugar;
 
+namespace Infrastructure;
 /// <summary>
 /// 基础设施层依赖注册扩展（全部 DI 装配声明统一收敛于本文件，按功能分区组织）：
 /// <list type="bullet">

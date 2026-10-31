@@ -1,8 +1,8 @@
-namespace Domain.Tests.Rules;
 
 using Domain.Services.Rules;
 using NUnit.Framework;
 
+namespace Domain.Tests.Rules;
 /// <summary>日志查询时间边界纯逻辑单元测试（B8）。</summary>
 [TestFixture]
 public class LogQueryBoundsTests

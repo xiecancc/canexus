@@ -1,7 +1,7 @@
-namespace Domain.Entities;
 
 using SqlSugar;
 
+namespace Domain.Entities;
 /// <summary>
 /// 角色与菜单关联实体（关联表）：无独立主键，以 (RoleId, MenuId) 联合主键唯一定位；
 /// 仅创建审计，无更新审计 / 租户 / 乐观并发语义，删除为物理删除。

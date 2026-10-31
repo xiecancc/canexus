@@ -1,4 +1,3 @@
-namespace Application.Validators;
 
 using Application.Contracts.Commands;
 using Application.Contracts.Users;
@@ -8,6 +7,7 @@ using Domain.Shared.Exceptions;
 using Domain.Shared.Results;
 using FluentValidation;
 
+namespace Application.Validators;
 /// <summary>修改用户状态命令验证器：状态仅允许 1 启用 / 0 停用（错误码与原处理器文案一致）。</summary>
 public sealed class UpdateUserStatusCommandValidator : AbstractValidator<UpdateUserStatusCommand>
 {

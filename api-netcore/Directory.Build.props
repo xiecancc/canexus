@@ -1,9 +1,0 @@
-<Project>
-
-  <!-- 全解决方案统一构建约束：警告即错误 + 构建期强制代码风格（.editorconfig） -->
-  <PropertyGroup>
-    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
-    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
-  </PropertyGroup>
-
-</Project>

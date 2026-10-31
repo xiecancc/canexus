@@ -1,4 +1,3 @@
-namespace Infrastructure.Auth;
 
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
@@ -8,9 +7,11 @@ using Domain.Entities;
 using Domain.Repositories;
 using Domain.Services.Auth;
 using Infrastructure.Shared.Options;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 
+namespace Infrastructure.Auth;
 /// <summary>
 /// 基于 JWT 的令牌服务：发放 accessToken（HS256 签名）与 refreshToken（随机 64 位十六进制串，持久化到 sys_refresh_token 表）。
 /// <para>claims 约定：sub=用户 Id、unique_name=用户名、deptId=部门、roleId/role=角色、tenantId=租户。</para>
@@ -18,7 +19,8 @@ using Microsoft.IdentityModel.Tokens;
 /// <remarks>构造函数。</remarks>
 /// <param name="options">JWT 配置监视器。</param>
 /// <param name="refreshTokenRepository">刷新令牌仓储。</param>
-public sealed class JwtTokenService(IOptionsMonitor<JwtOption> options, ISysRefreshTokenRepository refreshTokenRepository) : ITokenService
+/// <param name="logger">日志器。</param>
+public sealed class JwtTokenService(IOptionsMonitor<JwtOption> options, ISysRefreshTokenRepository refreshTokenRepository, ILogger<JwtTokenService> logger) : ITokenService
 {
     /// <summary>令牌处理器：关闭入站 claim 映射，保持 sub / unique_name / role 等原始名称（与 JwtBearer 配置一致）。</summary>
     private static readonly JwtSecurityTokenHandler TokenHandler = new() { MapInboundClaims = false };
@@ -96,6 +98,8 @@ public sealed class JwtTokenService(IOptionsMonitor<JwtOption> options, ISysRefr
         catch (Exception exception) when (exception is SecurityTokenException or ArgumentException)
         {
             // 签名无效、过期、格式错误等统一返回 null，由调用方决定 401 响应
+            // 记录失败原因（不含令牌本身，避免敏感信息入日志），便于排查鉴权问题
+            logger.LogWarning(exception, "accessToken 校验失败：{Reason}", exception.Message);
             return null;
         }
     }
@@ -128,11 +132,11 @@ public sealed class JwtTokenService(IOptionsMonitor<JwtOption> options, ISysRefr
     /// <summary>构造 accessToken claims（未认证 claims 如 jti 不参与业务，略去）。</summary>
     private List<Claim> BuildClaims(TokenSubject subject)
     {
-        var claims = new List<Claim>
-        {
+        List<Claim> claims =
+        [
             new(JwtRegisteredClaimNames.Sub, subject.UserId.ToString()),
             new("unique_name", subject.UserName)
-        };
+        ];
 
         if (subject.DeptId.HasValue)
         {

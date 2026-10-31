@@ -13,14 +13,14 @@ public interface ICaptchaService
     /// <summary>生成验证码并写入缓存（等待写入完成后返回，保证读到自己写的值）。</summary>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>验证码 Id 与图片（SVG base64）。</returns>
-    ValueTask<CaptchaImage> GenerateAsync(CancellationToken cancellationToken = default);
+    public ValueTask<CaptchaImage> GenerateAsync(CancellationToken cancellationToken = default);
 
     /// <summary>校验验证码（一次性：无论命中与否均移除，防止重放；大小写不敏感）。</summary>
     /// <param name="captchaId">验证码 Id。</param>
     /// <param name="code">用户输入。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>校验通过返回 true。</returns>
-    ValueTask<bool> ValidateAsync(string captchaId, string code, CancellationToken cancellationToken = default);
+    public ValueTask<bool> ValidateAsync(string captchaId, string code, CancellationToken cancellationToken = default);
 }
 
 /// <summary>验证码图片：Id 与 SVG base64 内容。</summary>

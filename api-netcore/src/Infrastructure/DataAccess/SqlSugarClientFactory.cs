@@ -1,4 +1,3 @@
-namespace Infrastructure.DataAccess;
 
 using System.Collections.Concurrent;
 using System.Reflection;
@@ -8,9 +7,11 @@ using Infrastructure.Shared.Filtering;
 using Infrastructure.Shared.Options;
 using Infrastructure.Shared.Tenants;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using SqlSugar;
 
+namespace Infrastructure.DataAccess;
 /// <summary>
 /// SqlSugar 客户端工厂：构建单例 SqlSugarScope（线程安全，内部按异步上下文隔离连接与过滤器）。
 /// <para>启动快照（连接串 / DbType / IsAutoCloseConnection / 实体程序集）取自首次创建客户端时的
@@ -35,6 +36,7 @@ internal static class SqlSugarClientFactory
         var tenantContext = serviceProvider.GetRequiredService<ITenantContext>();
         var dataFilter = serviceProvider.GetRequiredService<IDataFilter>();
         var currentUser = serviceProvider.GetRequiredService<UserContext>();
+        var logger = serviceProvider.GetRequiredService<ILoggerFactory>().CreateLogger("SqlSugar");
 
         var connectionConfig = new ConnectionConfig
         {
@@ -47,7 +49,7 @@ internal static class SqlSugarClientFactory
                 // 字符串与可空值类型属性默认生成可空列，兼容审计 / 租户等可空字段，避免 CodeFirst 生成过严约束
                 EntityService = (property, column) =>
                 {
-                    if (property.PropertyType == typeof(string) || Nullable.GetUnderlyingType(property.PropertyType) != null)
+                    if (property.PropertyType == typeof(string) || Nullable.GetUnderlyingType(property.PropertyType) is not null)
                     {
                         column.IsNullable = true;
                     }
@@ -64,15 +66,17 @@ internal static class SqlSugarClientFactory
             ConfigureExecutingAop(client, currentUser, tenantContext);
             ConfigureGlobalQueryFilters(client, options, dataFilter, tenantContext);
 
-            // SQL 执行日志：输出执行的 SQL 与参数（调试用）；开关读取监视器最新值，运行期改配置即可生效
+            // SQL 执行日志：经 Serilog 统一输出执行的 SQL 与参数（调试用，结构化日志）；
+            // 开关读取监视器最新值，运行期改配置即可生效
             if (monitor.CurrentValue.SqlLogEnabled)
             {
-                client.Aop.OnLogExecuting = (sql, parameters) => Console.WriteLine(
-                    "[SqlSugar] {0}{1}",
-                    sql,
-                    parameters.Length == 0
+                client.Aop.OnLogExecuting = (sql, parameters) =>
+                {
+                    var parameterText = parameters.Length == 0
                         ? string.Empty
-                        : "\n    参数: " + string.Join(", ", parameters.Select(p => $"{p.ParameterName}={p.Value}")));
+                        : $"\n    参数: {string.Join(", ", parameters.Select(p => $"{p.ParameterName}={p.Value}"))}";
+                    logger.LogInformation("[SqlSugar] {Sql}{Parameters}", sql, parameterText);
+                };
             }
         });
     }

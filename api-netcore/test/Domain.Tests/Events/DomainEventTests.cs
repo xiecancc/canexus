@@ -1,8 +1,8 @@
-namespace Domain.Tests.Events;
 
 using Domain.Entities;
 using Domain.Events;
 
+namespace Domain.Tests.Events;
 /// <summary>用于测试的领域事件（无实体状态）。</summary>
 public class TestDomainEvent : DomainEvent;
 
@@ -163,8 +163,8 @@ public class ConcreteDomainEventTests
     public void UserRolesUpdatedEvent_CarriesUserAndRoleIdsBeforeAndAfter()
     {
         var user = new SysUser { Id = EntityId, UserName = "user" };
-        var oldRoleIds = new List<Guid> { Guid.Parse("00000000-0000-0000-0000-000000000002") };
-        var newRoleIds = new List<Guid> { Guid.Parse("00000000-0000-0000-0000-000000000003") };
+        List<Guid> oldRoleIds = [Guid.Parse("00000000-0000-0000-0000-000000000002")];
+        List<Guid> newRoleIds = [Guid.Parse("00000000-0000-0000-0000-000000000003")];
         var domainEvent = new UserRolesUpdatedEvent(user, oldRoleIds, newRoleIds);
 
         Assert.Multiple(() =>

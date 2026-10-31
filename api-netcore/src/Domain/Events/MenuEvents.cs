@@ -1,7 +1,7 @@
-namespace Domain.Events;
 
 using Domain.Entities;
 
+namespace Domain.Events;
 /// <summary>菜单创建领域事件：菜单创建成功后发布，Domain 为创建后的菜单状态。新菜单可能携带 perms 并被分配角色。</summary>
 /// <param name="Entity">创建后的菜单。</param>
 public sealed class MenuCreatedEvent(SysMenu entity) : AggregateCreatedEvent<SysMenu>(entity);

@@ -1,10 +1,10 @@
-namespace Infrastructure.Tests;
 
 using Infrastructure.Shared.Options;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 
+namespace Infrastructure.Tests;
 /// <summary>
 /// 配置选项验证单元测试：覆盖三个 Option 的合法默认值与各类非法取值（空值 / 越界 / 业务不变量），
 /// 保证 Options 管道校验（启动 ValidateOnStart 与热加载重校验）能可靠拦截坏配置。

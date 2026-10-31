@@ -11,21 +11,21 @@ public interface IPermissionChecker
     /// <param name="userId">用户 Id。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>权限标识集合。</returns>
-    Task<IReadOnlySet<string>> GetPermissionsAsync(Guid userId, CancellationToken cancellationToken = default);
+    public Task<IReadOnlySet<string>> GetPermissionsAsync(Guid userId, CancellationToken cancellationToken = default);
 
     /// <summary>判断用户是否拥有指定权限。</summary>
     /// <param name="userId">用户 Id。</param>
     /// <param name="permission">权限标识。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>拥有返回 true。</returns>
-    Task<bool> HasPermissionAsync(Guid userId, string permission, CancellationToken cancellationToken = default);
+    public Task<bool> HasPermissionAsync(Guid userId, string permission, CancellationToken cancellationToken = default);
 
     /// <summary>失效指定用户的权限缓存（角色分配、角色菜单变更时调用）。</summary>
     /// <param name="userId">用户 Id。</param>
     /// <returns>表示异步操作的任务。</returns>
-    Task InvalidateAsync(Guid userId);
+    public Task InvalidateAsync(Guid userId);
 
     /// <summary>失效全部用户的权限缓存（角色 / 菜单本身变更时调用）。</summary>
     /// <returns>表示异步操作的任务。</returns>
-    Task InvalidateAllAsync();
+    public Task InvalidateAllAsync();
 }

@@ -1,4 +1,3 @@
-namespace Infrastructure.DataAccess;
 
 using Domain.Entities;
 using Domain.Services.Auth;
@@ -6,6 +5,7 @@ using Domain.Shared.Enums;
 using Microsoft.Extensions.Logging;
 using SqlSugar;
 
+namespace Infrastructure.DataAccess;
 /// <summary>
 /// 种子数据初始化器：启动时幂等执行，提供基础运行数据。
 /// <list type="bullet">

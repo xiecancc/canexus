@@ -1,4 +1,3 @@
-namespace API.Tests;
 
 using System.Net;
 using System.Net.Http.Headers;
@@ -12,6 +11,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using SqlSugar;
 
+namespace API.Tests;
 /// <summary>
 /// 通知公告（B12）集成测试：
 /// 走真实 HTTP 管道 + 真实 MySQL（默认库 super_admin_test，SUPER_ADMIN_TEST_CONN 可覆盖），
@@ -250,7 +250,7 @@ public class NoticeApiTests
         });
 
         // 连续创建 21 条正常公告（创建时间单调不减、Id 单调递增）
-        var createdIds = new List<Guid>();
+        List<Guid> createdIds = [];
         for (var i = 1; i <= 21; i++)
         {
             var id = (await SendForJsonAsync(HttpMethod.Post, "/api/system/notice", new

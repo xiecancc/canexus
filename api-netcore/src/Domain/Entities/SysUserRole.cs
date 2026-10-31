@@ -1,6 +1,6 @@
-namespace Domain.Entities;
-
 using SqlSugar;
+
+namespace Domain.Entities;
 
 /// <summary>
 /// 用户与角色关联实体（关联表）：无独立主键，以 (UserId, RoleId) 联合主键唯一定位；

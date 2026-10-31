@@ -1,4 +1,3 @@
-namespace Application.Queries;
 
 using System.Linq.Expressions;
 using Application.Abstractions;
@@ -13,6 +12,7 @@ using Domain.Shared.Exceptions;
 using Domain.Shared.Paging;
 using Domain.Shared.Results;
 
+namespace Application.Queries;
 /// <summary>查询最新通知公告处理器。</summary>
 /// <remarks>构造函数。</remarks>
 /// <param name="noticeRepository">通知公告仓储。</param>
@@ -24,12 +24,11 @@ public sealed class GetLatestNoticesQueryHandler(IAggregateRepository<SysNotice>
     {
         var limit = NoticeQueryLimits.NormalizeLatestCount(query.Count);
         var notices = await noticeRepository.GetListAsync([n => n.Status == CommonStatus.Enabled], cancellationToken: cancellationToken);
-        return notices
+        return [.. notices
             .OrderByDescending(n => n.CreatedAt)
             .ThenByDescending(n => n.Id)
             .Take(limit)
-            .Select(n => mapper.Map<NoticeLatestVO>(n))
-            .ToList();
+            .Select(n => mapper.Map<NoticeLatestVO>(n))];
     }
 }
 

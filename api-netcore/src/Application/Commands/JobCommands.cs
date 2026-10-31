@@ -1,4 +1,3 @@
-namespace Application.Commands;
 
 using Application.Abstractions;
 using Application.Contracts.Commands;
@@ -14,6 +13,7 @@ using Domain.Shared.Enums;
 using Domain.Shared.Exceptions;
 using Domain.Shared.Results;
 
+namespace Application.Commands;
 /// <summary>创建定时任务命令处理器。</summary>
 /// <remarks>构造函数。</remarks>
 /// <param name="jobRepository">定时任务仓储。</param>

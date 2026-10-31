@@ -1,9 +1,9 @@
-namespace Application.Contracts.Queries;
 
 using Application.Contracts.Abstractions;
 using Application.Contracts.Menus;
 using Domain.Shared.Enums;
 
+namespace Application.Contracts.Queries;
 /// <summary>获取菜单详情。</summary>
 /// <param name="Id">菜单 Id。</param>
 public sealed record GetMenuDetailQuery(Guid Id) : IQuery<MenuDetailVO>;

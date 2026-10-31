@@ -1,4 +1,3 @@
-namespace Application.Validators;
 
 using Application.Contracts.Commands;
 using Domain.Shared.Enums;
@@ -6,6 +5,7 @@ using Domain.Shared.Exceptions;
 using Domain.Shared.Results;
 using FluentValidation;
 
+namespace Application.Validators;
 /// <summary>菜单命令验证器：菜单类型 / 名称 / 状态 / 显示标记取值，
 /// 以及类型与字段耦合的跨属性规则（目录必有 path、菜单必有 path 与 component、按钮必有 perms）。
 /// 错误码保持 MenuRuleInvalid（400404）与原服务层文案一致；创建 / 更新共用同一校验方法消除重复。</summary>

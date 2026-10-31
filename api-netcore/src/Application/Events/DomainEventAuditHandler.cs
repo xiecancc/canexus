@@ -1,8 +1,8 @@
-namespace Application.Events;
 
 using Domain.Events;
 using Microsoft.Extensions.Logging;
 
+namespace Application.Events;
 /// <summary>
 /// 领域事件审计监听器（通用监听器）：订阅全部领域事件并写入结构化日志，
 /// 为事件链路提供统一审计跟踪，也是各领域事件最基础的响应动作。

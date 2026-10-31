@@ -1,9 +1,10 @@
-namespace Infrastructure.DataAccess;
 
 using Domain.Entities;
 using Infrastructure.Shared.Options;
+using Microsoft.Extensions.Logging;
 using SqlSugar;
 
+namespace Infrastructure.DataAccess;
 /// <summary>
 /// 数据库初始化器（CodeFirst）：自动建库 + 同步表结构。
 /// <para>扫描配置程序集中继承 <see cref="DomainBase"/> 体系（含聚合基类与树形聚合基类）的具体实体类型（排除抽象类与泛型定义）。</para>
@@ -11,7 +12,8 @@ using SqlSugar;
 /// <remarks>构造函数。</remarks>
 /// <param name="client">SqlSugar 客户端。</param>
 /// <param name="options">数据访问配置。</param>
-public sealed class DbInitializer(ISqlSugarClient client, DatabaseOption options)
+/// <param name="logger">日志器（记录初始化过程）。</param>
+public sealed class DbInitializer(ISqlSugarClient client, DatabaseOption options, ILogger<DbInitializer> logger)
 {
     /// <summary>初始化数据库：按配置自动建库（AutoCreateTable）、同步表结构（AutoSyncStructure）。</summary>
     /// <param name="cancellationToken">取消令牌。</param>
@@ -23,6 +25,7 @@ public sealed class DbInitializer(ISqlSugarClient client, DatabaseOption options
         // 两个开关均关闭时跳过初始化（由外部自行管理数据库结构）
         if (!options.AutoCreateTable && !options.AutoSyncStructure)
         {
+            logger.LogInformation("数据库初始化已跳过：AutoCreateTable 与 AutoSyncStructure 均为关闭");
             return;
         }
 
@@ -41,6 +44,7 @@ public sealed class DbInitializer(ISqlSugarClient client, DatabaseOption options
         if (options.AutoCreateTable)
         {
             client.DbMaintenance.CreateDatabase();
+            logger.LogInformation("数据库创建检查完成（不存在时已自动建库）");
         }
 
         // CodeFirst 建表 / 同步表结构（SqlSugar 的 InitTables 同时承担缺失表的创建与已有表的结构同步；
@@ -48,11 +52,13 @@ public sealed class DbInitializer(ISqlSugarClient client, DatabaseOption options
         if (options.AutoCreateTable || options.AutoSyncStructure)
         {
             client.CodeFirst.InitTables(entityTypes);
+            logger.LogInformation("CodeFirst 表结构同步完成：共 {EntityCount} 个实体类型", entityTypes.Length);
         }
 
         // 事务支持要求 InnoDB：若服务器默认存储引擎为 MyISAM（不支持事务），将框架管理的表统一修正为 InnoDB
         if (options.AutoSyncStructure)
         {
+            List<string> alteredTables = [];
             foreach (var entityType in entityTypes)
             {
                 var tableName = client.EntityMaintenance.GetEntityInfo(entityType).DbTableName;
@@ -63,7 +69,14 @@ public sealed class DbInitializer(ISqlSugarClient client, DatabaseOption options
                 if (!string.Equals(engine?.ToString(), "InnoDB", StringComparison.OrdinalIgnoreCase))
                 {
                     await client.Ado.ExecuteCommandAsync($"ALTER TABLE `{tableName}` ENGINE = InnoDB");
+                    alteredTables.Add(tableName);
                 }
+            }
+
+            if (alteredTables.Count > 0)
+            {
+                logger.LogWarning("已将 {Count} 个非 InnoDB 表修正为 InnoDB：{Tables}",
+                    alteredTables.Count, string.Join(", ", alteredTables));
             }
         }
     }

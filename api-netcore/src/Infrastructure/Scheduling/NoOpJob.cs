@@ -1,7 +1,7 @@
-namespace Infrastructure.Scheduling;
 
 using Quartz;
 
+namespace Infrastructure.Scheduling;
 /// <summary>
 /// 内置示例空任务：执行本身不做任何业务，仅供演示与集成测试；
 /// 执行日志由调度包装任务（JobExecuteWrapper）统一记录，单次执行产生一条执行历史。

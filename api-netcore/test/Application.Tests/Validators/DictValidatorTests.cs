@@ -1,4 +1,3 @@
-namespace Application.Tests.Validators;
 
 using Application.Contracts.Commands;
 using Application.Contracts.Dicts;
@@ -7,6 +6,7 @@ using Domain.Shared.Enums;
 using FluentValidation.TestHelper;
 using NUnit.Framework;
 
+namespace Application.Tests.Validators;
 /// <summary>创建字典数据命令验证器单元测试（标签样式 / 状态取值，自 Domain.Tests/Rules/DictRulesTests 迁入）。</summary>
 [TestFixture]
 public class DictValidatorTests

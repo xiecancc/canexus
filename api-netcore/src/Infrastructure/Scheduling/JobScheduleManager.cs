@@ -1,4 +1,3 @@
-namespace Infrastructure.Scheduling;
 
 using Domain.Entities;
 using Domain.Repositories;
@@ -7,6 +6,7 @@ using Domain.Shared.Enums;
 using Microsoft.Extensions.Logging;
 using Quartz;
 
+namespace Infrastructure.Scheduling;
 /// <summary>
 /// 定时任务调度管理实现（Quartz）：JobKey 以「sys_job_{Id}」为名称、JobGroup 为分组，
 /// 实际入调度的是包装任务（JobExecuteWrapper / DisallowConcurrent 变体），目标 IJob 类型由包装任务反射解析。

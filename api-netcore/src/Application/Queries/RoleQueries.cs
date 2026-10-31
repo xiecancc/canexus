@@ -1,4 +1,3 @@
-namespace Application.Queries;
 
 using System.Linq.Expressions;
 using Application.Abstractions;
@@ -13,6 +12,7 @@ using Domain.Shared.Exceptions;
 using Domain.Shared.Paging;
 using Domain.Shared.Results;
 
+namespace Application.Queries;
 /// <summary>获取全部启用角色查询处理器。</summary>
 /// <remarks>构造函数。</remarks>
 public sealed class GetAllEnabledRolesQueryHandler(IAggregateRepository<SysRole> roleRepository, IMapper mapper) : QueryHandler<GetAllEnabledRolesQuery, List<RoleSimpleVO>>
@@ -21,10 +21,9 @@ public sealed class GetAllEnabledRolesQueryHandler(IAggregateRepository<SysRole>
     protected override async Task<List<RoleSimpleVO>> HandleAsync(GetAllEnabledRolesQuery query, CancellationToken cancellationToken)
     {
         var roles = await roleRepository.GetListAsync([r => r.Status == CommonStatus.Enabled], cancellationToken: cancellationToken);
-        return roles
+        return [.. roles
             .OrderBy(r => r.Id)
-            .Select(r => mapper.Map<RoleSimpleVO>(r))
-            .ToList();
+            .Select(r => mapper.Map<RoleSimpleVO>(r))];
     }
 }
 
@@ -41,10 +40,9 @@ public sealed class GetRoleDetailQueryHandler(
         var role = await roleRepository.GetAsync(query.Id, cancellationToken)
             ?? throw new BusinessException(ErrorCodes.RoleNotFound, $"角色 {query.Id} 不存在");
         var detail = mapper.Map<RoleDetailVO>(role);
-        detail.MenuIds = (await roleMenuRepository.GetListAsync([rm => rm.RoleId == query.Id], cancellationToken: cancellationToken))
+        detail.MenuIds = [.. (await roleMenuRepository.GetListAsync([rm => rm.RoleId == query.Id], cancellationToken: cancellationToken))
             .Select(rm => rm.MenuId)
-            .Distinct()
-            .ToList();
+            .Distinct()];
         return detail;
     }
 }

@@ -1,4 +1,3 @@
-namespace Application.Permissions;
 
 using Domain.Entities;
 using Domain.Repositories;
@@ -6,6 +5,7 @@ using Domain.Services.Users;
 using Domain.Shared.Enums;
 using Infrastructure.Shared.Caching;
 
+namespace Application.Permissions;
 /// <summary>
 /// 权限校验器实现：双层缓存按 userId 缓存权限集合（L1 2 分钟 / L2 10 分钟）。
 /// <para>全局版本号存于缓存（<see cref="VersionCacheKey"/>），全量失效时递增，旧 key 自然失配，无需遍历缓存。</para>
@@ -109,7 +109,7 @@ public sealed class PermissionChecker(
         var perms = (await menuRepository.GetListAsync([m => m.Status == CommonStatus.Enabled && menuIds.Contains(m.Id)], cancellationToken: cancellationToken))
             .Where(m => !string.IsNullOrWhiteSpace(m.Perms))
             .Select(m => m.Perms!.Trim());
-        return perms.ToHashSet();
+        return [.. perms];
     }
 
     /// <summary>读取当前全局版本号（未命中时默认 0）。</summary>

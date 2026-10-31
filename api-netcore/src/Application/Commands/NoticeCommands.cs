@@ -1,4 +1,3 @@
-namespace Application.Commands;
 
 using Application.Abstractions;
 using Application.Contracts.Commands;
@@ -12,6 +11,7 @@ using Domain.Shared.Enums;
 using Domain.Shared.Exceptions;
 using Domain.Shared.Results;
 
+namespace Application.Commands;
 /// <summary>创建通知公告命令处理器。</summary>
 /// <remarks>构造函数。</remarks>
 public sealed class CreateNoticeCommandHandler(IAggregateRepository<SysNotice> noticeRepository, IDomainEventPublisher domainEventPublisher, IMapper mapper) : CommandHandler<CreateNoticeCommand, Guid>

@@ -1,7 +1,7 @@
-namespace Application.Contracts.Auth;
 
 using System.ComponentModel.DataAnnotations;
 
+namespace Application.Contracts.Auth;
 /// <summary>登录请求。</summary>
 public class LoginRequest
 {

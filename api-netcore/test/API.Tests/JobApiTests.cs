@@ -1,4 +1,3 @@
-namespace API.Tests;
 
 using System.Net;
 using System.Net.Http.Headers;
@@ -13,6 +12,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using SqlSugar;
 
+namespace API.Tests;
 /// <summary>
 /// 定时任务（B10）集成测试：
 /// 走真实 HTTP 管道 + 真实 MySQL（默认库 super_admin_test，SUPER_ADMIN_TEST_CONN 可覆盖）+ 真实 Quartz 调度器，
@@ -252,7 +252,7 @@ public class JobApiTests
         while (DateTime.UtcNow < deadline)
         {
             var body = await GetJsonAsync($"/api/monitor/job-log/page?jobId={jobId}&pageIndex=1&pageSize=10");
-            items = body.RootElement.GetProperty("data").GetProperty("items").EnumerateArray().ToList();
+            items = [.. body.RootElement.GetProperty("data").GetProperty("items").EnumerateArray()];
             if (items.Count >= minimumCount)
             {
                 return items;

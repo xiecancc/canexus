@@ -12,11 +12,11 @@ public interface IUnitOfWork
     /// <param name="action">事务内执行的委托。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>委托返回值。</returns>
-    Task<T> RunInTransactionAsync<T>(Func<Task<T>> action, CancellationToken cancellationToken = default);
+    public Task<T> RunInTransactionAsync<T>(Func<Task<T>> action, CancellationToken cancellationToken = default);
 
     /// <summary>在数据库事务中执行委托（无返回值重载）。</summary>
     /// <param name="action">事务内执行的委托。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>表示异步操作的任务。</returns>
-    Task RunInTransactionAsync(Func<Task> action, CancellationToken cancellationToken = default);
+    public Task RunInTransactionAsync(Func<Task> action, CancellationToken cancellationToken = default);
 }

@@ -1,10 +1,10 @@
-namespace Application.Events;
 
 using Domain.Events;
 using Domain.Services.Rules;
 using Infrastructure.Shared.Caching;
 using MediatR;
 
+namespace Application.Events;
 /// <summary>
 /// 参数配置缓存失效监听器（配置领域监听器）：订阅参数配置领域事件并触发配置值缓存清理，
 /// 业务处理器只负责发布事件、不感知清理细节。

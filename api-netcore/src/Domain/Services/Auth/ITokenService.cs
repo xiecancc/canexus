@@ -1,7 +1,7 @@
-namespace Domain.Services.Auth;
 
 using System.Security.Claims;
 
+namespace Domain.Services.Auth;
 /// <summary>
 /// 令牌发放与刷新令牌管理接口：
 /// <list type="bullet">
@@ -16,24 +16,24 @@ public interface ITokenService
     /// <param name="subject">令牌主题（用户与角色信息）。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>令牌对（ExpiresIn 为 accessToken 有效期秒数）。</returns>
-    Task<TokenPair> GenerateAsync(TokenSubject subject, CancellationToken cancellationToken = default);
+    public Task<TokenPair> GenerateAsync(TokenSubject subject, CancellationToken cancellationToken = default);
 
     /// <summary>校验 accessToken：签名 / 签发者 / 受众 / 生命周期全部通过时返回认证主体，否则返回 null。</summary>
     /// <param name="accessToken">访问令牌。</param>
     /// <returns>认证主体；无效或已过期返回 null。</returns>
-    ClaimsPrincipal? ValidateAccessToken(string accessToken);
+    public ClaimsPrincipal? ValidateAccessToken(string accessToken);
 
     /// <summary>查询活跃（未吊销且未过期）的刷新令牌信息。</summary>
     /// <param name="refreshToken">刷新令牌串。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>刷新令牌信息；不存在、已吊销或已过期返回 null。</returns>
-    Task<RefreshTokenInfo?> GetActiveRefreshTokenAsync(string refreshToken, CancellationToken cancellationToken = default);
+    public Task<RefreshTokenInfo?> GetActiveRefreshTokenAsync(string refreshToken, CancellationToken cancellationToken = default);
 
     /// <summary>吊销刷新令牌（幂等：不存在或已吊销时静默忽略）。</summary>
     /// <param name="refreshToken">刷新令牌串。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>表示异步操作的任务。</returns>
-    Task RevokeAsync(string refreshToken, CancellationToken cancellationToken = default);
+    public Task RevokeAsync(string refreshToken, CancellationToken cancellationToken = default);
 }
 
 /// <summary>令牌对：accessToken + refreshToken 与有效期。</summary>

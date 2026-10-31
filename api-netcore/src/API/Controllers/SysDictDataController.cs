@@ -1,4 +1,3 @@
-namespace API.Controllers;
 
 using API.Authorization;
 using API.Logging;
@@ -11,6 +10,7 @@ using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
+namespace API.Controllers;
 /// <summary>字典数据管理接口：分页、按类型下拉、增删改（同类型下标签 / 键值唯一）。</summary>
 /// <remarks>构造函数。</remarks>
 /// <param name="sender">MediatR 请求发送器（CQRS 分发入口）。</param>

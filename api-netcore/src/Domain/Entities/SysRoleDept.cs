@@ -1,7 +1,7 @@
-namespace Domain.Entities;
 
 using SqlSugar;
 
+namespace Domain.Entities;
 /// <summary>
 /// 角色与部门关联实体（关联表，角色数据范围为自定义 Custom 时的部门授权明细）：
 /// 无独立主键，以 (RoleId, DeptId) 联合主键唯一定位；

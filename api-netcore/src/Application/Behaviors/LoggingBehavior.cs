@@ -1,11 +1,13 @@
-namespace Application.Behaviors;
 
 using MediatR;
 using Microsoft.Extensions.Logging;
 
+namespace Application.Behaviors;
 /// <summary>
 /// 日志管道行为：记录每个请求的开始 / 完成与未处理异常（含耗时），便于排查分发链路问题。
-/// <para>不记录请求负载数据（可能包含密码等敏感信息），仅记录请求类型名称。</para>
+/// <para>级别规范：开始 / 完成为 Debug（正常运行不产生噪音，排查时可临时调高该命名空间级别），
+/// 未处理异常为 Error；请求完成 / 异常均可经 SerilogRequestLogging 的请求日志按 TraceId 关联。
+/// 不记录请求负载数据（可能包含密码等敏感信息），仅记录请求类型名称。</para>
 /// </summary>
 /// <typeparam name="TRequest">请求类型。</typeparam>
 /// <typeparam name="TResponse">响应类型。</typeparam>
@@ -18,11 +20,11 @@ public sealed class LoggingBehavior<TRequest, TResponse>(ILogger<LoggingBehavior
     public async Task<TResponse> Handle(TRequest request, RequestHandlerDelegate<TResponse> next, CancellationToken cancellationToken)
     {
         var requestName = typeof(TRequest).Name;
-        logger.LogInformation("处理请求 {RequestName} 开始", requestName);
+        logger.LogDebug("处理请求 {RequestName} 开始", requestName);
         try
         {
             var response = await next();
-            logger.LogInformation("处理请求 {RequestName} 完成", requestName);
+            logger.LogDebug("处理请求 {RequestName} 完成", requestName);
             return response;
         }
         catch (Exception exception)

@@ -1,9 +1,9 @@
-namespace Application.Contracts.Queries;
 
 using Application.Contracts.Abstractions;
 using Application.Contracts.Users;
 using Domain.Shared.Paging;
 
+namespace Application.Contracts.Queries;
 /// <summary>获取用户详情（含角色 Id 集合）。</summary>
 /// <param name="Id">用户 Id。</param>
 public sealed record GetUserDetailQuery(Guid Id) : IQuery<UserDetailVO>;

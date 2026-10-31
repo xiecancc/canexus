@@ -7,5 +7,5 @@ namespace Infrastructure.Shared.Tenants;
 public interface ITenantContext
 {
     /// <summary>当前租户 Id；null 表示未指定（租户过滤条件不生效）。</summary>
-    Guid? TenantId { get; set; }
+    public Guid? TenantId { get; set; }
 }

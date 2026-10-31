@@ -1,7 +1,7 @@
-namespace Domain.Tests.Results;
 
 using Domain.Shared.Results;
 
+namespace Domain.Tests.Results;
 /// <summary>Result 统一响应工厂方法单元测试。</summary>
 [TestFixture]
 public class ResultTests

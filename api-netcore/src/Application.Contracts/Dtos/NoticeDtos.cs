@@ -1,9 +1,9 @@
-namespace Application.Contracts.Notices;
 
 using Application.Contracts.Common;
 using Domain.Shared.Enums;
 using Domain.Shared.Paging;
 
+namespace Application.Contracts.Notices;
 /// <summary>通知公告分页查询请求（GET /api/system/notice/page）。</summary>
 public class NoticePageRequest : PagedRequest
 {

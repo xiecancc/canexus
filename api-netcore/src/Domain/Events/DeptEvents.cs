@@ -1,7 +1,7 @@
-namespace Domain.Events;
 
 using Domain.Entities;
 
+namespace Domain.Events;
 /// <summary>部门创建领域事件：部门创建成功后发布，Domain 为创建后的部门状态。</summary>
 /// <param name="Entity">创建后的部门。</param>
 public sealed class DeptCreatedEvent(SysDept entity) : AggregateCreatedEvent<SysDept>(entity);

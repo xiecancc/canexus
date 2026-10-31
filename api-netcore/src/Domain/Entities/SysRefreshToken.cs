@@ -1,7 +1,7 @@
-namespace Domain.Entities;
 
 using SqlSugar;
 
+namespace Domain.Entities;
 /// <summary>刷新令牌实体：持久化 refreshToken，支持轮换（旧令牌吊销）与校验。
 /// <para>实体不保留验证逻辑与数据归一化；令牌串由认证服务内部生成（恒非空）。</para></summary>
 [SugarTable("sys_refresh_token")]

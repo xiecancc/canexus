@@ -1,10 +1,10 @@
-namespace Application.Validators;
 
 using Application.Contracts.Commands;
 using Application.Contracts.Depts;
 using Application.Validators.Common;
 using FluentValidation;
 
+namespace Application.Validators;
 /// <summary>部门写入请求验证器：名称非空、状态取值合法（承接自实体 setter 迁移的规则；创建 / 更新共用，消除重复定义）。</summary>
 /// <typeparam name="TRequest">部门写入请求类型。</typeparam>
 public class DeptWriteRequestValidator<TRequest> : AbstractValidator<TRequest>

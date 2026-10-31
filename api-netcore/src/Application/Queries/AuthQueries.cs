@@ -1,4 +1,3 @@
-namespace Application.Queries;
 
 using Application.Abstractions;
 using Application.Contracts.Abstractions;
@@ -14,6 +13,7 @@ using Domain.Shared.Enums;
 using Domain.Shared.Exceptions;
 using Domain.Shared.Results;
 
+namespace Application.Queries;
 /// <summary>获取图形验证码查询处理器。</summary>
 /// <remarks>构造函数。</remarks>
 /// <param name="captchaService">图形验证码服务。</param>
@@ -103,7 +103,7 @@ public sealed class GetRoutesQueryHandler(
         {
             // 顶层路径补 / 前缀；子级拼接到父路径后，用于生成全局唯一的路由 name（如 /system/user → SystemUser）
             var fullPath = parentPath is null
-                ? (menu.Path.StartsWith('/') ? menu.Path : "/" + menu.Path)
+                ? (menu.Path.StartsWith('/') ? menu.Path : $"/{menu.Path}")
                 : $"{parentPath}/{menu.Path}";
             var subTree = BuildTree(menus, menu.Id, fullPath);
             var route = ToRouteVO(menu, subTree, fullPath, parentPath is null);

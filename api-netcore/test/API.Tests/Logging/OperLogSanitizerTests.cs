@@ -1,8 +1,8 @@
-namespace API.Tests.Logging;
 
 using API.Logging;
 using NUnit.Framework;
 
+namespace API.Tests.Logging;
 /// <summary>操作日志数据清洗器单元测试（B8，纯逻辑）。</summary>
 [TestFixture]
 public class OperLogSanitizerTests

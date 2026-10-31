@@ -1,4 +1,3 @@
-namespace API.Controllers;
 
 using API.Authorization;
 using API.Logging;
@@ -11,6 +10,7 @@ using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
+namespace API.Controllers;
 /// <summary>菜单管理接口：树查询、详情、增删改（目录 / 菜单 / 按钮统一维护）。</summary>
 /// <remarks>构造函数。</remarks>
 /// <param name="sender">MediatR 请求发送器（CQRS 分发入口）。</param>

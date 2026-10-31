@@ -1,4 +1,3 @@
-namespace API.Extensions;
 
 using System.Text.Json;
 using Domain.Shared.Results;
@@ -10,6 +9,7 @@ using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi;
 
+namespace API.Extensions;
 /// <summary>认证授权与 OpenAPI 鉴权方案的依赖注册扩展。</summary>
 public static class AuthDependencyExtensions
 {

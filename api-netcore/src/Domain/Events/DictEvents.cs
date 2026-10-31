@@ -1,7 +1,7 @@
-namespace Domain.Events;
 
 using Domain.Entities;
 
+namespace Domain.Events;
 /// <summary>字典类型创建领域事件：字典类型创建成功后发布，Domain 为创建后的状态。</summary>
 /// <param name="Entity">创建后的字典类型。</param>
 public sealed class DictTypeCreatedEvent(SysDictType entity) : AggregateCreatedEvent<SysDictType>(entity);

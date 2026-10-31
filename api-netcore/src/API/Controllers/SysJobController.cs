@@ -1,4 +1,3 @@
-namespace API.Controllers;
 
 using API.Authorization;
 using API.Logging;
@@ -11,6 +10,7 @@ using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
+namespace API.Controllers;
 /// <summary>定时任务管理接口：分页、增删改、启停与立即执行（创建 / 修改 / 启停即时同步 Quartz 调度器）。</summary>
 /// <remarks>构造函数。</remarks>
 /// <param name="sender">MediatR 请求发送器（CQRS 分发入口）。</param>

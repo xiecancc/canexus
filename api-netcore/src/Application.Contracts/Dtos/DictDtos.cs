@@ -1,9 +1,9 @@
-namespace Application.Contracts.Dicts;
 
 using Application.Contracts.Common;
 using Domain.Shared.Enums;
 using Domain.Shared.Paging;
 
+namespace Application.Contracts.Dicts;
 /// <summary>字典类型分页查询请求（GET /api/system/dict-type/page）。</summary>
 public class DictTypePageRequest : PagedRequest
 {

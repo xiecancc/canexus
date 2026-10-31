@@ -1,8 +1,8 @@
-namespace Application.Mappings;
 
 using Application.Contracts.Tenants;
 using Domain.Entities;
 
+namespace Application.Mappings;
 /// <summary>租户模块映射：实体 → 列表 / 简项；创建 / 更新请求 → 实体（TenantKey 更新时由处理器拒绝变更）。</summary>
 public sealed class SysTenantProfile : MappingProfileBase
 {

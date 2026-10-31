@@ -1,9 +1,9 @@
-namespace Application.Contracts.Queries;
 
 using Application.Contracts.Abstractions;
 using Application.Contracts.Configs;
 using Domain.Shared.Paging;
 
+namespace Application.Contracts.Queries;
 /// <summary>按参数键名查询参数值（走缓存，写操作后立即刷新）。</summary>
 /// <param name="ConfigKey">参数键名。</param>
 public sealed record GetConfigByKeyQuery(string ConfigKey) : IQuery<string>;

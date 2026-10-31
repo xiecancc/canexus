@@ -1,4 +1,3 @@
-namespace Infrastructure.Scheduling;
 
 using System.Diagnostics;
 using Domain.Entities;
@@ -10,6 +9,7 @@ using Domain.Shared.Results;
 using Microsoft.Extensions.Logging;
 using Quartz;
 
+namespace Infrastructure.Scheduling;
 /// <summary>
 /// 调度包装任务：按 JobDataMap 中的 jobId 从库中加载任务定义，反射解析目标 IJob 类型并执行；
 /// 执行前后统一写执行日志（SysJobLog），异常信息截断 2000 字符。
@@ -89,16 +89,12 @@ public class JobExecuteWrapper(
 }
 
 /// <summary>禁止并发执行的包装任务：Concurrent=false 的任务以该类型入调度，重叠触发排队执行而非并行。</summary>
+/// <remarks>构造函数（透传依赖到基类）。</remarks>
 [DisallowConcurrentExecution]
-public sealed class JobExecuteWrapperDisallowConcurrent : JobExecuteWrapper
+public sealed class JobExecuteWrapperDisallowConcurrent(
+    IAggregateRepository<SysJob> jobRepository,
+    IAggregateRepository<SysJobLog> jobLogRepository,
+    IServiceProvider serviceProvider,
+    ILogger<JobExecuteWrapper> logger) : JobExecuteWrapper(jobRepository, jobLogRepository, serviceProvider, logger)
 {
-    /// <summary>构造函数（透传依赖到基类）。</summary>
-    public JobExecuteWrapperDisallowConcurrent(
-        IAggregateRepository<SysJob> jobRepository,
-        IAggregateRepository<SysJobLog> jobLogRepository,
-        IServiceProvider serviceProvider,
-        ILogger<JobExecuteWrapper> logger)
-        : base(jobRepository, jobLogRepository, serviceProvider, logger)
-    {
-    }
 }

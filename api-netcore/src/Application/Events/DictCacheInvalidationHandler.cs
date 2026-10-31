@@ -1,10 +1,10 @@
-namespace Application.Events;
 
 using Domain.Events;
 using Domain.Services.Rules;
 using Infrastructure.Shared.Caching;
 using MediatR;
 
+namespace Application.Events;
 /// <summary>
 /// 字典缓存失效监听器（字典领域监听器）：订阅字典数据领域事件并触发字典数据缓存清理，
 /// 业务处理器只负责发布事件、不感知清理细节。字典类型本身不参与缓存，仅需响应数据事件。

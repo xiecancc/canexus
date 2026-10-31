@@ -1,8 +1,8 @@
-namespace Application.Contracts.Commands;
 
 using Application.Contracts.Abstractions;
 using Application.Contracts.Users;
 
+namespace Application.Contracts.Commands;
 /// <summary>创建用户命令（用户名唯一；密码缺省 "123456"）。</summary>
 /// <param name="Request">创建请求。</param>
 public sealed record CreateUserCommand(UserCreateRequest Request) : ICommand<Guid>;

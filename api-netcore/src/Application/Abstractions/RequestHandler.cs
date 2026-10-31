@@ -1,7 +1,7 @@
-namespace Application.Abstractions;
 
 using Application.Contracts.Abstractions;
 
+namespace Application.Abstractions;
 /// <summary>
 /// 请求处理器基类：封装 MediatR <c>IRequestHandler</c> 的适配逻辑（无返回值请求）。
 /// <para>框架分发的公共入口 <see cref="Handle"/> 统一转发给子类实现的 <see cref="HandleAsync"/>，

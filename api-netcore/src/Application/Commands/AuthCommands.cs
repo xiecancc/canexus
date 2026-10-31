@@ -1,4 +1,3 @@
-namespace Application.Commands;
 
 using Application.Abstractions;
 using Application.Contracts.Auth;
@@ -13,6 +12,7 @@ using Domain.Shared.Exceptions;
 using Domain.Shared.Results;
 using Infrastructure.Shared.Caching;
 
+namespace Application.Commands;
 /// <summary>账号密码登录命令处理器。</summary>
 /// <remarks>构造函数。</remarks>
 public sealed class LoginCommandHandler(

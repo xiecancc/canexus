@@ -1,8 +1,8 @@
-namespace Domain.Entities;
 
 using Domain.Shared.Enums;
 using SqlSugar;
 
+namespace Domain.Entities;
 /// <summary>系统角色实体。
 /// <para>实体不保留验证逻辑与数据归一化：字段约束由 Application 层 FluentValidation Validators 承接，
 /// trim 在字段映射阶段自动完成；角色权限字符串唯一性由业务层校验保证。</para></summary>

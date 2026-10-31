@@ -1,8 +1,8 @@
-namespace Infrastructure.Tests;
 
 using Domain.Entities;
 using SqlSugar;
 
+namespace Infrastructure.Tests;
 /// <summary>集成测试实体：聚合根（带审计、乐观锁与软删除）。</summary>
 [SugarTable("it_soft_delete_entity")]
 public class SoftDeleteTestEntity : AggregateBase

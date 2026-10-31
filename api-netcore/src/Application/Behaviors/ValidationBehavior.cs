@@ -1,9 +1,9 @@
-namespace Application.Behaviors;
 
 using Application.Contracts.Abstractions;
 using FluentValidation;
 using MediatR;
 
+namespace Application.Behaviors;
 /// <summary>
 /// 验证管道行为：在请求进入处理器前执行注册的全部 <c>IValidator&lt;TRequest&gt;</c>。
 /// <para>校验失败时抛出 <see cref="ValidationException"/>，由全局异常处理中间件

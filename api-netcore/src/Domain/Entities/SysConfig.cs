@@ -1,7 +1,7 @@
-namespace Domain.Entities;
 
 using SqlSugar;
 
+namespace Domain.Entities;
 /// <summary>系统参数配置实体（键值对形式的全局配置）。
 /// <para>实体不保留验证逻辑与数据归一化：字段约束由 Application 层 FluentValidation Validators 承接，
 /// trim 在字段映射阶段自动完成；键值不做 trim（允许任意内容）。</para></summary>

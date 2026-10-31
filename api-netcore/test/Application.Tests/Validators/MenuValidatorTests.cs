@@ -1,4 +1,3 @@
-namespace Application.Tests.Validators;
 
 using Application.Contracts.Commands;
 using Application.Contracts.Menus;
@@ -9,6 +8,7 @@ using Domain.Shared.Results;
 using FluentValidation.TestHelper;
 using NUnit.Framework;
 
+namespace Application.Tests.Validators;
 /// <summary>创建菜单命令验证器单元测试（跨属性耦合规则，自 Domain.Tests/Rules/MenuRulesTests 迁入）。</summary>
 [TestFixture]
 public class MenuValidatorTests

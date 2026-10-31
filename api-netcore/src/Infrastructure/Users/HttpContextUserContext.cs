@@ -1,9 +1,9 @@
-namespace Infrastructure.Users;
 
 using System.Security.Claims;
 using Domain.Services.Users;
 using Microsoft.AspNetCore.Http;
 
+namespace Infrastructure.Users;
 /// <summary>
 /// 基于 HttpContext 的当前用户上下文实现：从 JWT claims 解析用户 / 部门 / 角色 / 租户信息。
 /// <para>注册为单例（依赖 IHttpContextAccessor），请求间天然隔离；无请求上下文（后台任务等）时各成员返回 null。</para>

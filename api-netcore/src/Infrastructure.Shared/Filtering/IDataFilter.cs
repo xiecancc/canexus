@@ -7,8 +7,8 @@ namespace Infrastructure.Shared.Filtering;
 public interface IDataFilter
 {
     /// <summary>软删除过滤是否启用（对实现 <c>ISoftDelete</c> 的实体生效）。</summary>
-    bool SoftDeleteEnabled { get; set; }
+    public bool SoftDeleteEnabled { get; set; }
 
     /// <summary>租户过滤是否启用（对实现 <c>IMultiTenant</c> 的实体生效）。</summary>
-    bool TenantFilterEnabled { get; set; }
+    public bool TenantFilterEnabled { get; set; }
 }

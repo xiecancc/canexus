@@ -1,4 +1,3 @@
-namespace Application.Tests.Services;
 
 using Application.Contracts.Depts;
 using Application.Contracts.Menus;
@@ -10,6 +9,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using NUnit.Framework;
 
+namespace Application.Tests.Services;
 /// <summary>实体树（BuildTree 装配）→ 契约 VO 的递归映射单元测试（端到端覆盖查询处理器的建树管线）。</summary>
 [TestFixture]
 public class TreeMappingTests
@@ -36,14 +36,14 @@ public class TreeMappingTests
     [Test]
     public void MenuEntityTree_MapsRecursivelyToMenuTreeVO()
     {
-        var menus = new List<SysMenu>
-        {
+        List<SysMenu> menus =
+        [
             new() { Id = Id(100), ParentId = Guid.Empty, MenuType = MenuType.Directory, MenuName = "系统管理", Path = "system", OrderNum = 2 },
             new() { Id = Id(101), ParentId = Id(100), MenuType = MenuType.Menu, MenuName = "用户管理", Path = "user", Component = "system/user/index", OrderNum = 1 },
             new() { Id = Id(1001), ParentId = Id(101), MenuType = MenuType.Button, MenuName = "用户查询", Path = "#", Perms = "system:user:query", OrderNum = 1 }
-        };
+        ];
 
-        List<MenuTreeVO> tree = _mapper.Map<List<MenuTreeVO>>(SysMenu.BuildTree(menus));
+        var tree = _mapper.Map<List<MenuTreeVO>>(SysMenu.BuildTree(menus));
 
         Assert.Multiple(() =>
         {
@@ -61,17 +61,17 @@ public class TreeMappingTests
     [Test]
     public void DeptEntityTree_MapsRecursivelyAndKeepsDeptFields()
     {
-        var depts = new List<SysDept>
-        {
+        List<SysDept> depts =
+        [
             new()
             {
                 Id = Id(101), ParentId = Id(100), DeptName = "研发部", OrderNum = 1,
                 Leader = "张三", Phone = "13800000000", Email = "rd@example.com", Status = CommonStatus.Enabled
             },
             new() { Id = Id(100), ParentId = Guid.Empty, DeptName = "总公司", OrderNum = 1 }
-        };
+        ];
 
-        List<DeptTreeVO> tree = _mapper.Map<List<DeptTreeVO>>(SysDept.BuildTree(depts));
+        var tree = _mapper.Map<List<DeptTreeVO>>(SysDept.BuildTree(depts));
 
         var node = tree.Single(n => n.DeptName == "总公司");
         var child = node.Children.Single();

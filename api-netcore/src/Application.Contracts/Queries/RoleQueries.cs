@@ -1,9 +1,9 @@
-namespace Application.Contracts.Queries;
 
 using Application.Contracts.Abstractions;
 using Application.Contracts.Roles;
 using Domain.Shared.Paging;
 
+namespace Application.Contracts.Queries;
 /// <summary>获取全部启用角色（不分页，含超管角色，用于用户分配角色下拉）。</summary>
 public sealed record GetAllEnabledRolesQuery : IQuery<List<RoleSimpleVO>>;
 

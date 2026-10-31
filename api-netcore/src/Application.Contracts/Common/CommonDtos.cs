@@ -1,7 +1,7 @@
-namespace Application.Contracts.Common;
 
 using Domain.Shared.Enums;
 
+namespace Application.Contracts.Common;
 /// <summary>
 /// 状态请求基类：对齐领域实体的启停语义（Status：启用 / 停用）。
 /// <para>创建请求继承后缺省为启用；仅状态的轻量请求（如 UserStatusRequest）可直接继承本类。</para>

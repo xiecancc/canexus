@@ -1,8 +1,8 @@
-namespace Application.Contracts.Logs;
 
 using Domain.Shared.Enums;
 using Domain.Shared.Paging;
 
+namespace Application.Contracts.Logs;
 /// <summary>操作日志分页查询请求（GET /api/system/oper-log/page；beginTime / endTime 格式 yyyy-MM-dd，可空）。</summary>
 public class OperLogPageRequest : PagedRequest
 {

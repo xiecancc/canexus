@@ -1,8 +1,8 @@
-namespace Application.Mappings;
 
 using Application.Contracts.Jobs;
 using Domain.Entities;
 
+namespace Application.Mappings;
 /// <summary>定时任务模块映射：任务 / 执行日志实体 → 列表；创建 / 更新请求 → 实体。</summary>
 public sealed class SysJobProfile : MappingProfileBase
 {

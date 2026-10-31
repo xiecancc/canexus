@@ -1,7 +1,7 @@
-namespace Application.Contracts.Commands;
 
 using Application.Contracts.Abstractions;
 
+namespace Application.Contracts.Commands;
 /// <summary>清空全部登录日志命令（物理删除，危险操作）。</summary>
 public sealed record CleanLoginLogCommand : ICommand;
 

@@ -15,14 +15,14 @@ public interface ICache
     /// <param name="ttl">TTL 档位（决定 L1 / L2 各自的过期时间）。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>缓存值或回源结果。</returns>
-    ValueTask<T> GetOrCreateAsync<T>(string key, Func<CancellationToken, ValueTask<T>> factory, CacheTtl ttl = CacheTtl.Medium, CancellationToken cancellationToken = default) where T : notnull;
+    public ValueTask<T> GetOrCreateAsync<T>(string key, Func<CancellationToken, ValueTask<T>> factory, CacheTtl ttl = CacheTtl.Medium, CancellationToken cancellationToken = default) where T : notnull;
 
     /// <summary>读取缓存；未命中返回 default（值类型为 0 / 引用类型为 null），不回源。</summary>
     /// <typeparam name="T">缓存值类型。</typeparam>
     /// <param name="key">缓存键。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>缓存值；未命中返回 default。</returns>
-    ValueTask<T?> GetAsync<T>(string key, CancellationToken cancellationToken = default);
+    public ValueTask<T?> GetAsync<T>(string key, CancellationToken cancellationToken = default);
 
     /// <summary>写入缓存：同时写入 L1（短过期）与 L2（长过期）。</summary>
     /// <typeparam name="T">缓存值类型。</typeparam>
@@ -31,7 +31,7 @@ public interface ICache
     /// <param name="ttl">TTL 档位。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>表示异步操作的任务。</returns>
-    Task SetAsync<T>(string key, T value, CacheTtl ttl = CacheTtl.Medium, CancellationToken cancellationToken = default);
+    public Task SetAsync<T>(string key, T value, CacheTtl ttl = CacheTtl.Medium, CancellationToken cancellationToken = default);
 
     /// <summary>写入缓存（显式两级过期时间：需要精确控制时使用，如登录锁定 10 分钟）。</summary>
     /// <typeparam name="T">缓存值类型。</typeparam>
@@ -40,11 +40,11 @@ public interface ICache
     /// <param name="profile">L1 / L2 各自的过期时间。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>表示异步操作的任务。</returns>
-    Task SetAsync<T>(string key, T value, CacheTtlProfile profile, CancellationToken cancellationToken = default);
+    public Task SetAsync<T>(string key, T value, CacheTtlProfile profile, CancellationToken cancellationToken = default);
 
     /// <summary>按缓存键失效：同时清除本实例 L1 与 L2 分布式条目。</summary>
     /// <param name="key">缓存键。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>表示异步操作的任务。</returns>
-    Task RemoveAsync(string key, CancellationToken cancellationToken = default);
+    public Task RemoveAsync(string key, CancellationToken cancellationToken = default);
 }

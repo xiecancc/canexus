@@ -1,4 +1,3 @@
-namespace Application.Validators;
 
 using Application.Contracts.Commands;
 using Application.Contracts.Configs;
@@ -6,6 +5,7 @@ using Application.Validators.Common;
 using Domain.Entities;
 using FluentValidation;
 
+namespace Application.Validators;
 /// <summary>参数配置请求验证器：键名格式 / 名称非空（创建 / 更新共用，消除重复定义）。</summary>
 /// <typeparam name="TRequest">参数配置写入请求类型。</typeparam>
 public class ConfigWriteRequestValidator<TRequest> : AbstractValidator<TRequest>

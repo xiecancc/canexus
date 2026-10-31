@@ -1,4 +1,3 @@
-namespace Application.Tests.Events;
 
 using Application.Events;
 using Application.Permissions;
@@ -10,6 +9,7 @@ using MediatR;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
+namespace Application.Tests.Events;
 /// <summary>用于测试的通知发布器：记录被发布的 MediatR 通知。</summary>
 public class RecordingPublisher : IPublisher
 {

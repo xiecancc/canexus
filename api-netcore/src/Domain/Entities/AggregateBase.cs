@@ -1,7 +1,7 @@
-namespace Domain.Entities;
 
 using SqlSugar;
 
+namespace Domain.Entities;
 /// <summary>
 /// 聚合根基类：在 <see cref="DomainBase"/> 之上统一承载单主键、乐观并发版本、软删除与全量审计字段（创建审计与租户归属继承自 DomainBase）。
 /// <para>实体本身不保留验证逻辑，请求侧字段约束统一由 Application 层 FluentValidation Validators 承接；

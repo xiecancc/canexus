@@ -1,8 +1,9 @@
-namespace API.Middlewares;
 
 using Infrastructure.Shared.Tenants;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 
+namespace API.Middlewares;
 /// <summary>
 /// 租户解析中间件：多租户开关（配置节 MultiTenancy:Enabled，默认 false）启用时，
 /// 从请求头 <see cref="TenantHeader"/> 读取租户标识（非空才设置）写入 <see cref="ITenantContext"/>，
@@ -12,7 +13,11 @@ using Microsoft.Extensions.Configuration;
 /// <remarks>构造函数（由请求管道注入）。</remarks>
 /// <param name="next">管道中的下一个委托。</param>
 /// <param name="tenantContext">租户上下文（AsyncLocal，请求间天然隔离）。</param>
-public sealed class TenantResolutionMiddleware(RequestDelegate next, ITenantContext tenantContext)
+/// <param name="logger">日志器（记录非法租户标识请求头）。</param>
+public sealed class TenantResolutionMiddleware(
+    RequestDelegate next,
+    ITenantContext tenantContext,
+    ILogger<TenantResolutionMiddleware> logger)
 {
     /// <summary>租户标识请求头名称。</summary>
     public const string TenantHeader = "X-Tenant-Id";
@@ -30,6 +35,10 @@ public sealed class TenantResolutionMiddleware(RequestDelegate next, ITenantCont
             if (Guid.TryParse(tenantId, out var tenantGuid) && tenantGuid != Guid.Empty)
             {
                 tenantContext.TenantId = tenantGuid;
+            }
+            else if (!string.IsNullOrWhiteSpace(tenantId))
+            {
+                logger.LogWarning("请求头 {HeaderName} 的值不是有效的租户标识，已忽略", TenantHeader);
             }
         }
 

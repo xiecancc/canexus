@@ -1,9 +1,9 @@
-namespace Application.Contracts.Users;
 
 using Application.Contracts.Common;
 using Domain.Shared.Enums;
 using Domain.Shared.Paging;
 
+namespace Application.Contracts.Users;
 /// <summary>用户分页查询请求（GET /api/system/user/page）。</summary>
 public class UserPageRequest : PagedRequest
 {

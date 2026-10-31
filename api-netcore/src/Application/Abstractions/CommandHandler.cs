@@ -1,7 +1,7 @@
-namespace Application.Abstractions;
 
 using Application.Contracts.Abstractions;
 
+namespace Application.Abstractions;
 /// <summary>
 /// 命令处理器基类（无返回值）：继承 <see cref="RequestHandler{TRequest}"/>，
 /// 仅接受 <see cref="ICommand"/> 请求；命令特有的公共逻辑在此层扩展。

@@ -1,4 +1,3 @@
-namespace Application.Queries;
 
 using System.Linq.Expressions;
 using Application.Abstractions;
@@ -11,6 +10,7 @@ using Domain.Repositories;
 using Domain.Shared.Enums;
 using Domain.Shared.Paging;
 
+namespace Application.Queries;
 /// <summary>查询启用租户简易列表处理器。</summary>
 /// <remarks>构造函数。</remarks>
 /// <param name="tenantRepository">租户仓储。</param>
@@ -21,10 +21,9 @@ public sealed class GetAllTenantsQueryHandler(IAggregateRepository<SysTenant> te
     protected override async Task<List<TenantSimpleVO>> HandleAsync(GetAllTenantsQuery query, CancellationToken cancellationToken)
     {
         var tenants = await tenantRepository.GetListAsync([t => t.Status == CommonStatus.Enabled], cancellationToken: cancellationToken);
-        return tenants
+        return [.. tenants
             .OrderBy(t => t.Id)
-            .Select(t => mapper.Map<TenantSimpleVO>(t))
-            .ToList();
+            .Select(t => mapper.Map<TenantSimpleVO>(t))];
     }
 }
 

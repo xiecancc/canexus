@@ -1,9 +1,9 @@
-namespace Application.Events;
 
 using Domain.Events;
 using Domain.Services.Events;
 using MediatR;
 
+namespace Application.Events;
 /// <summary>基于 MediatR 的领域事件发布器：业务关键节点经此发布事件，全部已订阅监听器依次收到通知。</summary>
 /// <remarks>构造函数。</remarks>
 /// <param name="publisher">MediatR 通知发布器。</param>

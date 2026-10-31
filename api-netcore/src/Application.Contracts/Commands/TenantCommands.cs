@@ -1,8 +1,8 @@
-namespace Application.Contracts.Commands;
 
 using Application.Contracts.Abstractions;
 using Application.Contracts.Tenants;
 
+namespace Application.Contracts.Commands;
 /// <summary>创建租户命令（tenantKey 全局唯一）。</summary>
 /// <param name="Request">创建请求。</param>
 public sealed record CreateTenantCommand(TenantCreateRequest Request) : ICommand<Guid>;

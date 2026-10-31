@@ -1,7 +1,7 @@
-namespace Domain.Repositories;
 
 using Domain.Entities;
 
+namespace Domain.Repositories;
 /// <summary>
 /// 聚合仓储接口（对应 <see cref="AggregateBase"/>）：继承 <see cref="IDomainRepository{TEntity}"/>
 /// （公共查询 / 插入），并补充聚合根专属的乐观并发更新、软删除与恢复能力。
@@ -20,25 +20,25 @@ public interface IAggregateRepository<TEntity> : IDomainRepository<TEntity>
     /// <param name="entity">聚合（其 <see cref="AggregateBase.Version"/> 须为读取时的值）。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>表示异步操作的任务。</returns>
-    Task UpdateAsync(TEntity entity, CancellationToken cancellationToken = default);
+    public Task UpdateAsync(TEntity entity, CancellationToken cancellationToken = default);
 
     /// <summary>按主键删除；自动转为软删除（标记 IsDeleted），主键不存在时静默忽略（幂等）。</summary>
     /// <param name="id">主键。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>表示异步操作的任务。</returns>
-    Task DeleteAsync(Guid id, CancellationToken cancellationToken = default);
+    public Task DeleteAsync(Guid id, CancellationToken cancellationToken = default);
 
     /// <summary>恢复软删除的聚合（标记 IsDeleted = false）；主键不存在或未删除时静默忽略（幂等）。
     /// 注意：恢复操作绕过默认查询过滤与版本校验，不递增版本号。</summary>
     /// <param name="id">主键。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>表示异步操作的任务。</returns>
-    Task RestoreAsync(Guid id, CancellationToken cancellationToken = default);
+    public Task RestoreAsync(Guid id, CancellationToken cancellationToken = default);
 
     /// <summary>物理删除聚合（直接从数据库移除，不走软删除墓碑），不存在时静默忽略（幂等）。
     /// 仅建议用于日志等无需回收站语义的场景。</summary>
     /// <param name="entity">聚合。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>表示异步操作的任务。</returns>
-    Task HardDeleteAsync(TEntity entity, CancellationToken cancellationToken = default);
+    public Task HardDeleteAsync(TEntity entity, CancellationToken cancellationToken = default);
 }

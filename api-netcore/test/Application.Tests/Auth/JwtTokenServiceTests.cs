@@ -1,4 +1,3 @@
-namespace Application.Tests;
 
 using System.Linq.Expressions;
 using System.Security.Claims;
@@ -8,8 +7,10 @@ using Domain.Services.Auth;
 using Domain.Shared.Paging;
 using Infrastructure.Auth;
 using Infrastructure.Shared.Options;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 
+namespace Application.Tests;
 /// <summary>内存仓储替身：仅覆盖令牌单测所需的仓储行为（插入 / 按条件查询 / 更新），避免依赖真实数据库。</summary>
 internal sealed class InMemoryRefreshTokenRepository : ISysRefreshTokenRepository
 {
@@ -119,10 +120,7 @@ internal sealed class InMemoryRefreshTokenRepository : ISysRefreshTokenRepositor
     public Task RestoreAsync(Guid id, CancellationToken cancellationToken = default)
     {
         var entity = _store.FirstOrDefault(e => e.Id == id);
-        if (entity is not null)
-        {
-            entity.IsDeleted = false;
-        }
+        entity?.IsDeleted = false;
 
         return Task.CompletedTask;
     }
@@ -201,7 +199,7 @@ public class JwtTokenServiceTests
     public void SetUp()
     {
         _repository = new InMemoryRefreshTokenRepository();
-        _tokenService = new JwtTokenService(new TestOptionsMonitor<JwtOption>(Options), _repository);
+        _tokenService = new JwtTokenService(new TestOptionsMonitor<JwtOption>(Options), _repository, NullLogger<JwtTokenService>.Instance);
     }
 
     /// <summary>构造测试令牌主题（固定 Guid 便于断言 claim 内容）。</summary>
@@ -345,7 +343,7 @@ public class JwtTokenServiceTests
 [TestFixture]
 public class BCryptPasswordHasherTests
 {
-    private readonly BCryptPasswordHasher _hasher = new();
+    private readonly BCryptPasswordHasher _hasher = new(NullLogger<BCryptPasswordHasher>.Instance);
 
     [Test]
     public void Hash_ProducesVerifiableHashWithSalt()

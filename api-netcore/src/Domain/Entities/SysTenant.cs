@@ -1,8 +1,8 @@
-namespace Domain.Entities;
 
 using Domain.Shared.Enums;
 using SqlSugar;
 
+namespace Domain.Entities;
 /// <summary>
 /// 租户实体：平台级全局表（租户定义不参与租户隔离过滤）。
 /// <para>归属业务数据（如 SysUser）通过其 TenantId 字段（取值为本实体的 Id，即 Guid 主键）建立租户归属关系；TenantKey 为业务侧租户编码。

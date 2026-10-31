@@ -1,4 +1,3 @@
-namespace API.Filters;
 
 using System.Diagnostics;
 using System.Text.Json;
@@ -10,6 +9,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Controllers;
 using Microsoft.AspNetCore.Mvc.Filters;
 
+namespace API.Filters;
 /// <summary>
 /// 全局操作日志过滤器（异步 ActionFilter）：解析端点上的 <see cref="OperLogAttribute"/>，
 /// 记录请求参数（敏感字段脱敏）、成功失败与异常消息、耗时、IP 与操作人，写入 sys_oper_log。
@@ -38,7 +38,6 @@ public sealed class OperLogActionFilter(IOperLogRepository operLogRepository, Us
         }
 
         var stopwatch = Stopwatch.StartNew();
-        var parameters = OperLogSanitizer.MaskSensitiveFields(JsonSerializer.Serialize(context.ActionArguments, JsonOptions));
         var executedContext = await next();
         stopwatch.Stop();
 
@@ -49,6 +48,9 @@ public sealed class OperLogActionFilter(IOperLogRepository operLogRepository, Us
             var actionName = (context.ActionDescriptor as ControllerActionDescriptor)?.ActionName
                              ?? context.ActionDescriptor.DisplayName
                              ?? string.Empty;
+            // 参数序列化 + 脱敏 + 截断统一在 try 内：任一环节失败仅放弃本条操作日志，不影响业务响应
+            var operParam = OperLogSanitizer.Truncate(
+                OperLogSanitizer.MaskSensitiveFields(JsonSerializer.Serialize(context.ActionArguments, JsonOptions)));
             await operLogRepository.InsertAsync(new SysOperLog
             {
                 Title = attribute.Module,
@@ -56,7 +58,7 @@ public sealed class OperLogActionFilter(IOperLogRepository operLogRepository, Us
                 Method = $"{context.Controller.GetType().FullName}.{actionName}",
                 RequestMethod = request.Method,
                 RequestUrl = TruncateUrl($"{request.Path}{request.QueryString}"),
-                OperParam = OperLogSanitizer.Truncate(parameters),
+                OperParam = operParam,
                 OperIp = context.HttpContext.Connection.RemoteIpAddress?.ToString(),
                 OperUserName = currentUser.UserName ?? string.Empty,
                 Status = exception is null

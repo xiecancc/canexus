@@ -1,7 +1,7 @@
-namespace Domain.Entities;
 
 using SqlSugar;
 
+namespace Domain.Entities;
 /// <summary>
 /// 树形聚合根基类：在 <see cref="AggregateBase"/> 之上提供树形结构的统一建模。
 /// <para>持久化字段仅 <see cref="ParentId"/>（Guid.Empty 表示根节点）；
@@ -57,9 +57,8 @@ public abstract class AggregateTreeBase<TAggregate> : AggregateBase
         }
 
         // 根级 = 根节点（ParentId 为 Guid.Empty）与父级缺失的孤儿节点；其余挂到父节点下
-        return list
+        return [.. list
             .Where(n => n.ParentId == RootParentId || !ids.Contains(n.ParentId))
-            .OrderBy(n => n.OrderNum).ThenBy(n => n.Id)
-            .ToList();
+            .OrderBy(n => n.OrderNum).ThenBy(n => n.Id)];
     }
 }

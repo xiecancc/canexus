@@ -1,9 +1,9 @@
-namespace Application.Contracts.Queries;
 
 using Application.Contracts.Abstractions;
 using Application.Contracts.Dicts;
 using Domain.Shared.Paging;
 
+namespace Application.Contracts.Queries;
 /// <summary>按字典类型查询启用状态的字典数据（走缓存，写操作后失效）。</summary>
 /// <param name="DictType">字典类型。</param>
 public sealed record GetDictDataByTypeQuery(string DictType) : IQuery<List<DictDataSimpleVO>>;

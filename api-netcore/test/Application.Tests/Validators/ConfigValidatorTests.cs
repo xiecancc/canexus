@@ -1,4 +1,3 @@
-namespace Application.Tests.Validators;
 
 using Application.Contracts.Commands;
 using Application.Contracts.Configs;
@@ -6,6 +5,7 @@ using Application.Validators;
 using FluentValidation.TestHelper;
 using NUnit.Framework;
 
+namespace Application.Tests.Validators;
 /// <summary>创建参数配置命令验证器单元测试（键名格式，自 Domain.Tests/Rules/ConfigRulesTests 迁入）。</summary>
 [TestFixture]
 public class ConfigValidatorTests

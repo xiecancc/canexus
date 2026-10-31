@@ -1,4 +1,3 @@
-namespace Application.Commands;
 
 using Application.Abstractions;
 using Application.Contracts.Commands;
@@ -12,6 +11,7 @@ using Domain.Shared.Enums;
 using Domain.Shared.Exceptions;
 using Domain.Shared.Results;
 
+namespace Application.Commands;
 /// <summary>角色-菜单授权的共享业务逻辑（菜单存在性校验与全量替换，供角色命令处理器复用）。</summary>
 internal static class RoleMenuSupport
 {

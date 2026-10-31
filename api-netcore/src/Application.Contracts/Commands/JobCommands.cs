@@ -1,8 +1,8 @@
-namespace Application.Contracts.Commands;
 
 using Application.Contracts.Abstractions;
 using Application.Contracts.Jobs;
 
+namespace Application.Contracts.Commands;
 /// <summary>创建定时任务命令（Cron 与任务类型校验；status=1 时创建后立即入调度）。</summary>
 /// <param name="Request">创建请求。</param>
 public sealed record CreateJobCommand(JobCreateRequest Request) : ICommand<Guid>;

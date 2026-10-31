@@ -1,7 +1,7 @@
-namespace Domain.Events;
 
 using Domain.Entities;
 
+namespace Domain.Events;
 /// <summary>参数配置创建领域事件：配置创建成功后发布，Domain 为创建后的状态。</summary>
 /// <param name="Entity">创建后的参数配置。</param>
 public sealed class ConfigCreatedEvent(SysConfig entity) : AggregateCreatedEvent<SysConfig>(entity);

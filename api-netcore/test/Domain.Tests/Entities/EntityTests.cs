@@ -1,8 +1,8 @@
-namespace Domain.Tests.Entities;
 
 using Domain.Entities;
 using Domain.ValueObjects;
 
+namespace Domain.Tests.Entities;
 /// <summary>用于测试的聚合根实体。</summary>
 public class TestAggregate : AggregateBase
 {

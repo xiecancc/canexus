@@ -1,8 +1,8 @@
-namespace Application.Contracts.Commands;
 
 using Application.Contracts.Abstractions;
 using Application.Contracts.Dicts;
 
+namespace Application.Contracts.Commands;
 /// <summary>创建字典数据命令（同字典类型下标签 / 键值唯一，写后失效类型缓存）。</summary>
 /// <param name="Request">创建请求。</param>
 public sealed record CreateDictDataCommand(DictDataCreateRequest Request) : ICommand<Guid>;

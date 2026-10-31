@@ -1,9 +1,9 @@
-namespace Application.Contracts.Jobs;
 
 using Application.Contracts.Common;
 using Domain.Shared.Enums;
 using Domain.Shared.Paging;
 
+namespace Application.Contracts.Jobs;
 /// <summary>定时任务分页查询请求（GET /api/system/job/page）。</summary>
 public class JobPageRequest : PagedRequest
 {

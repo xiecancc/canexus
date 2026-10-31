@@ -1,4 +1,3 @@
-namespace Application.Validators;
 
 using Application.Contracts.Commands;
 using Application.Contracts.Roles;
@@ -7,6 +6,7 @@ using Domain.Shared.Exceptions;
 using Domain.Shared.Results;
 using FluentValidation;
 
+namespace Application.Validators;
 /// <summary>角色命令验证器：名称 / 权限字符非空、数据范围（1~5）、状态（启用/停用）；
 /// 错误码保持 CommonInvalidRequest（40000）与原服务层文案一致；roleKey 唯一性与保留值校验由处理器完成；
 /// 创建 / 更新共用同一校验方法消除重复。</summary>

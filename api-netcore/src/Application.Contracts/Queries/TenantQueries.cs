@@ -1,9 +1,9 @@
-namespace Application.Contracts.Queries;
 
 using Application.Contracts.Abstractions;
 using Application.Contracts.Tenants;
 using Domain.Shared.Paging;
 
+namespace Application.Contracts.Queries;
 /// <summary>查询启用状态的租户简易列表（下拉框等场景）。</summary>
 public sealed record GetAllTenantsQuery : IQuery<List<TenantSimpleVO>>;
 

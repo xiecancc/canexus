@@ -1,4 +1,3 @@
-namespace Application.Commands;
 
 using Application.Abstractions;
 using Application.Contracts.Commands;
@@ -13,6 +12,7 @@ using Domain.Shared.Enums;
 using Domain.Shared.Exceptions;
 using Domain.Shared.Results;
 
+namespace Application.Commands;
 /// <summary>用户-角色关联的共享业务逻辑（角色存在性校验与全量替换，供多个用户命令处理器复用）。</summary>
 internal static class UserRoleSupport
 {
@@ -70,7 +70,7 @@ public sealed class CreateUserCommandHandler(
         }
 
         await UserRoleSupport.ValidateRolesAsync(roleRepository, request.RoleIds, cancellationToken);
-        if (request.DeptId != null && await deptRepository.CountAsync(d => d.Id == request.DeptId, cancellationToken) == 0)
+        if (request.DeptId is not null && await deptRepository.CountAsync(d => d.Id == request.DeptId, cancellationToken) == 0)
         {
             throw new BusinessException(ErrorCodes.CommonDataNotFound, "所属部门不存在");
         }
@@ -186,7 +186,7 @@ public sealed class UpdateUserCommandHandler(
         var user = await GetOrThrowAsync(command.Id, cancellationToken);
         EnsureNotAdmin(user);
 
-        if (request.DeptId != null && await deptRepository.CountAsync(d => d.Id == request.DeptId, cancellationToken) == 0)
+        if (request.DeptId is not null && await deptRepository.CountAsync(d => d.Id == request.DeptId, cancellationToken) == 0)
         {
             throw new BusinessException(ErrorCodes.CommonDataNotFound, "所属部门不存在");
         }

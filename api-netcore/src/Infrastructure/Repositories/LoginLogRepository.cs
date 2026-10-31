@@ -1,4 +1,3 @@
-namespace Infrastructure.Repositories;
 
 using System.Linq.Expressions;
 using Domain.Entities;
@@ -6,6 +5,7 @@ using Domain.Repositories;
 using Domain.Shared.Paging;
 using SqlSugar;
 
+namespace Infrastructure.Repositories;
 /// <summary>基于 SqlSugar 的登录日志仓储实现（清空与单条删除均为物理删除，支持按登录时间倒序分页）。</summary>
 /// <remarks>构造函数。</remarks>
 /// <param name="client">SqlSugar 客户端。</param>
@@ -31,7 +31,7 @@ public class LoginLogRepository(ISqlSugarClient client) : AggregateRepository<Sy
     {
         var total = new RefAsync<int>();
         var query = Client.Queryable<SysLoginLog>();
-        if (predicate != null)
+        if (predicate is not null)
         {
             query = query.Where(predicate);
         }

@@ -1,4 +1,3 @@
-namespace Infrastructure.Repositories;
 
 using System.Collections.Concurrent;
 using System.Linq.Expressions;
@@ -7,6 +6,7 @@ using Domain.Repositories;
 using Domain.Shared.Paging;
 using SqlSugar;
 
+namespace Infrastructure.Repositories;
 /// <summary>
 /// 基于 SqlSugar 的领域仓储实现（对应 <see cref="DomainBase"/>）：
 /// 实体表 / 关联表公共的查询统计、插入与物理删除。

@@ -1,4 +1,3 @@
-namespace API.Filters;
 
 using API.Authorization;
 using Application.Permissions;
@@ -7,7 +6,9 @@ using Domain.Shared.Results;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
+using Microsoft.Extensions.Logging;
 
+namespace API.Filters;
 /// <summary>
 /// 全局权限过滤器：解析端点上的 <see cref="RequirePermissionAttribute"/>，校验当前用户权限。
 /// <list type="bullet">
@@ -20,7 +21,11 @@ using Microsoft.AspNetCore.Mvc.Filters;
 /// <remarks>构造函数。</remarks>
 /// <param name="permissionChecker">权限校验器。</param>
 /// <param name="currentUser">当前用户上下文。</param>
-public sealed class PermissionAuthorizationFilter(IPermissionChecker permissionChecker, UserContext currentUser) : IAsyncAuthorizationFilter
+/// <param name="logger">日志器（记录权限拒绝事件）。</param>
+public sealed class PermissionAuthorizationFilter(
+    IPermissionChecker permissionChecker,
+    UserContext currentUser,
+    ILogger<PermissionAuthorizationFilter> logger) : IAsyncAuthorizationFilter
 {
     /// <inheritdoc />
     public async Task OnAuthorizationAsync(AuthorizationFilterContext context)
@@ -39,6 +44,8 @@ public sealed class PermissionAuthorizationFilter(IPermissionChecker permissionC
 
         if (!currentUser.IsAuthenticated)
         {
+            logger.LogWarning("权限校验拒绝：未认证请求访问 {Permission}（路径 {Path}）",
+                permission.Permission, context.HttpContext.Request.Path);
             context.Result = new JsonResult(Result.Fail(Domain.Shared.Results.ErrorCodes.AuthUnauthorized, "未登录或令牌无效"))
             {
                 StatusCode = StatusCodes.Status401Unauthorized
@@ -61,5 +68,7 @@ public sealed class PermissionAuthorizationFilter(IPermissionChecker permissionC
         {
             StatusCode = StatusCodes.Status403Forbidden
         };
+        logger.LogWarning("权限校验拒绝：用户 {UserId} 无 {Permission} 权限（路径 {Path}）",
+            userId, permission.Permission, context.HttpContext.Request.Path);
     }
 }
