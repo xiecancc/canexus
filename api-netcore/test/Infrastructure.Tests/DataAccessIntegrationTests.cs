@@ -163,7 +163,7 @@ public class DataAccessIntegrationTests
         {
             Assert.That(reloaded!.Name, Is.EqualTo("审计实体-更新"));
             Assert.That(reloaded.UpdatedAt, Is.Not.Null, "更新时间应自动填充");
-            Assert.That(reloaded.UpdatedBy, Is.EqualTo(Guid.Empty), "无登录用户时更新人应为空 Guid");
+            Assert.That(reloaded.UpdatedBy, Is.Null, "无登录用户时更新人应为 null（可空语义，与按列更新口径一致）");
             Assert.That(reloaded.CreatedAt, Is.EqualTo(inserted.CreatedAt).Within(TimeSpan.FromSeconds(1)), "创建时间不应被更新操作改动");
             Assert.That(reloaded.Version, Is.Not.EqualTo(Guid.Empty).And.Not.EqualTo(versionBeforeUpdate), "显式乐观锁下更新一次后版本令牌应轮换为新 Guid");
             Assert.That(reloaded.Version, Is.EqualTo(inserted.Version), "更新成功后框架应把轮换的新版本令牌写回实体实例");

@@ -115,8 +115,10 @@ internal static class SqlSugarClientFactory
                     break;
 
                 case DataFilterType.UpdateByObject when filterModel.EntityValue is AggregateBase updateEntity:
+                    // 更新人可空语义：无登录上下文（系统任务 / 集成测试）时保持 null 不记录操作人，
+                    // 与按列更新路径（ExecDeleteOrRestore）口径一致；更新时间总是填充
                     updateEntity.UpdatedAt = DateTime.Now;
-                    updateEntity.UpdatedBy = currentUser.UserId ?? Guid.Empty;
+                    updateEntity.UpdatedBy = currentUser.UserId;
                     break;
             }
         };
