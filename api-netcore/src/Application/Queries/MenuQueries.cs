@@ -19,7 +19,7 @@ public sealed class GetMenuDetailQueryHandler(IAggregateTreeRepository<SysMenu> 
     /// <inheritdoc />
     protected override async Task<MenuDetailVO> HandleAsync(GetMenuDetailQuery query, CancellationToken cancellationToken)
     {
-        var menu = await menuRepository.GetAsync(query.Id, cancellationToken)
+        var menu = await menuRepository.GetAsync([it => it.Id == query.Id], cancellationToken)
             ?? throw new BusinessException(ErrorCodes.MenuNotFound, $"菜单 {query.Id} 不存在");
         return mapper.Map<MenuDetailVO>(menu);
     }

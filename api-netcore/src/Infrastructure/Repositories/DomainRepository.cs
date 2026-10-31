@@ -1,5 +1,4 @@
 
-using System.Collections.Concurrent;
 using System.Linq.Expressions;
 using Domain.Entities;
 using Domain.Repositories;
@@ -11,8 +10,9 @@ namespace Infrastructure.Repositories;
 /// 基于 SqlSugar 的领域仓储实现（对应 <see cref="DomainBase"/>）：
 /// 实体表 / 关联表公共的查询统计、插入与物理删除。
 /// <para>查询自动附加租户隔离过滤（全部实体），聚合根体系另有软删除过滤；
-/// 列表查询支持多条件 AND 组合与多重排序（未指定排序时按创建时间倒序）；
-/// 分页支持同样的动态条件与排序，未指定排序时按主键升序兜底，保证分页结果稳定。</para>
+/// 列表查询支持多条件 AND 组合与多重排序（orders 为 null 时默认按创建时间倒序）；
+/// 分页支持同样的动态条件与排序，排序键非唯一时调用方应在 orders 中显式追加唯一列保证分页稳定；
+/// 列表 / 首条 / 分页另有泛型投影重载（Select&lt;TDto&gt; 按属性名自动映射，SQL 层只取 DTO 涉及的列）。</para>
 /// </summary>
 /// <typeparam name="TEntity">实体类型。</typeparam>
 /// <remarks>构造函数。</remarks>
@@ -23,35 +23,57 @@ public class DomainRepository<TEntity>(ISqlSugarClient client) : IDomainReposito
     /// <summary>SqlSugar 客户端（单例 SqlSugarScope，内部按异步上下文隔离）。</summary>
     protected ISqlSugarClient Client => client;
 
-    /// <summary>默认排序列名缓存（键为实体类型；分页排序表达式构建时复用）。</summary>
-    private static readonly ConcurrentDictionary<Type, string> DefaultOrderColumnCache = new();
-
-    /// <inheritdoc />
-    public virtual async Task<TEntity?> GetAsync(Guid id, CancellationToken cancellationToken = default)
-    {
-        return await client.Queryable<TEntity>().InSingleAsync(id);
-    }
-
     /// <inheritdoc />
     public virtual async Task<List<TEntity>> GetListAsync(
         IEnumerable<Expression<Func<TEntity, bool>>>? predicates = null,
         IDictionary<Expression<Func<TEntity, object>>, bool?>? orders = null,
         CancellationToken cancellationToken = default)
     {
-        // 动态条件与排序拼接见 BuildDynamicQuery
-        return await BuildDynamicQuery(predicates, orders).ToListAsync(cancellationToken);
+        // 条件拼接见 ApplyPredicates；排序拼接见 ApplyOrders（orders 为 null 时默认创建时间倒序）
+        return await ApplyOrders(ApplyPredicates(predicates), orders).ToListAsync(cancellationToken);
     }
 
     /// <inheritdoc />
-    public virtual async Task<TEntity?> GetFirstAsync(Expression<Func<TEntity, bool>> predicate, CancellationToken cancellationToken = default)
+    public virtual async Task<TEntity?> GetAsync(
+        IEnumerable<Expression<Func<TEntity, bool>>>? predicates = null,
+        CancellationToken cancellationToken = default)
     {
-        return await client.Queryable<TEntity>().Where(predicate).FirstAsync();
+        // 条件集合 AND 组合；走 ApplyPredicates，不追加排序
+        return await ApplyPredicates(predicates).FirstAsync(cancellationToken);
     }
 
     /// <inheritdoc />
-    public virtual async Task<bool> AnyAsync(Expression<Func<TEntity, bool>> predicate, CancellationToken cancellationToken = default)
+    public virtual async Task<List<TDto>> GetListAsync<TDto>(
+        IEnumerable<Expression<Func<TEntity, bool>>>? predicates = null,
+        IDictionary<Expression<Func<TEntity, object>>, bool?>? orders = null,
+        CancellationToken cancellationToken = default)
+        where TDto : class, new()
     {
-        return await client.Queryable<TEntity>().AnyAsync(predicate);
+        // 条件拼接见 ApplyPredicates；Select<TDto> 按属性名自动映射，SQL 层只取 DTO 涉及的列
+        return await ApplyOrders(ApplyPredicates(predicates), orders)
+            .Select<TDto>()
+            .ToListAsync(cancellationToken);
+    }
+
+    /// <inheritdoc />
+    public virtual async Task<TDto?> GetAsync<TDto>(
+        IEnumerable<Expression<Func<TEntity, bool>>>? predicates = null,
+        CancellationToken cancellationToken = default)
+        where TDto : class, new()
+    {
+        // 条件集合 AND 组合；Select<TDto> 按属性名自动映射，SQL 层只取 DTO 涉及的列
+        return await ApplyPredicates(predicates)
+            .Select<TDto>()
+            .FirstAsync(cancellationToken);
+    }
+
+    /// <inheritdoc />
+    public virtual async Task<bool> AnyAsync(
+        IEnumerable<Expression<Func<TEntity, bool>>>? predicates = null,
+        CancellationToken cancellationToken = default)
+    {
+        // 条件集合 AND 组合，EXISTS 语义；走 ApplyPredicates 不追加排序
+        return await ApplyPredicates(predicates).AnyAsync(cancellationToken);
     }
 
     /// <inheritdoc />
@@ -62,33 +84,42 @@ public class DomainRepository<TEntity>(ISqlSugarClient client) : IDomainReposito
         IDictionary<Expression<Func<TEntity, object>>, bool?>? orders = null,
         CancellationToken cancellationToken = default)
     {
-        // 页参数越界收敛：页索引小于 1 修正为 1；页大小小于 1 回退默认 20，超过上限 500 收敛（防恶意大页查询）
-        if (pageIndex < 1)
-        {
-            pageIndex = 1;
-        }
-
-        const int DefaultPageSize = 20;
-        const int MaxPageSize = 500;
-        pageSize = pageSize < 1 ? DefaultPageSize : pageSize > MaxPageSize ? MaxPageSize : pageSize;
-
-        // 条件与排序规则同 GetListAsync：多条件 AND 组合；多重排序按字典顺序应用；
-        // 未指定排序时不追加创建时间倒序，仅按主键升序排序（沿用原分页行为，保证分页结果稳定）
-        var query = BuildDynamicQuery(predicates, orders, applyDefaultCreatedAtOrder: false);
+        // 页参数越界收敛见 ApplyPages；多条件 AND 组合（ApplyPredicates）；多重排序按字典顺序应用（ApplyOrders），
+        // orders 为 null 时默认创建时间倒序；排序键非唯一时调用方应在 orders 中显式追加唯一列（如 Id）保证分页稳定
+        (pageIndex, pageSize) = ApplyPages(pageIndex, pageSize);
+        var query = ApplyOrders(ApplyPredicates(predicates), orders);
         var total = new RefAsync<int>();
         var items = await query
-            .OrderBy(BuildDefaultOrderSelector())
-            .ToPageListAsync(pageIndex, pageSize, total);
+            .ToPageListAsync(pageIndex, pageSize, total, cancellationToken);
         return PagedResult<TEntity>.Create(items, total.Value, pageIndex, pageSize);
     }
 
     /// <inheritdoc />
-    public virtual async Task<long> CountAsync(Expression<Func<TEntity, bool>>? predicate = null, CancellationToken cancellationToken = default)
+    public virtual async Task<PagedResult<TDto>> GetPagedAsync<TDto>(
+        int pageIndex = 1,
+        int pageSize = 20,
+        IEnumerable<Expression<Func<TEntity, bool>>>? predicates = null,
+        IDictionary<Expression<Func<TEntity, object>>, bool?>? orders = null,
+        CancellationToken cancellationToken = default)
+        where TDto : class, new()
     {
-        // WhereIF：条件为 null 时跳过拼接
-        return await client.Queryable<TEntity>()
-            .WhereIF(predicate is not null, predicate!)
-            .CountAsync();
+        // 页参数越界收敛见 ApplyPages；排序规则同实体版 GetPagedAsync：orders 为 null 时默认创建时间倒序；Select<TDto> 按属性名自动映射
+        (pageIndex, pageSize) = ApplyPages(pageIndex, pageSize);
+        var query = ApplyOrders(ApplyPredicates(predicates), orders);
+        var total = new RefAsync<int>();
+        var items = await query
+            .Select<TDto>()
+            .ToPageListAsync(pageIndex, pageSize, total, cancellationToken);
+        return PagedResult<TDto>.Create(items, total.Value, pageIndex, pageSize);
+    }
+
+    /// <inheritdoc />
+    public virtual async Task<long> CountAsync(
+        IEnumerable<Expression<Func<TEntity, bool>>>? predicates = null,
+        CancellationToken cancellationToken = default)
+    {
+        // 条件集合 AND 组合；null 或空集合表示全量统计；走 ApplyPredicates 不追加排序
+        return await ApplyPredicates(predicates).CountAsync(cancellationToken);
     }
 
     /// <inheritdoc />
@@ -123,45 +154,13 @@ public class DomainRepository<TEntity>(ISqlSugarClient client) : IDomainReposito
     }
 
     /// <summary>
-    /// 构造默认排序表达式（升序）：有 Id 属性的实体（聚合根体系）按 Id 排序；
-    /// 联合主键实体（无 Id 属性）按首个主键列排序，保证分页结果稳定。列名按类型缓存。
-    /// </summary>
-    /// <returns>排序表达式。</returns>
-    protected Expression<Func<TEntity, object>> BuildDefaultOrderSelector()
-    {
-        var propertyName = DefaultOrderColumnCache.GetOrAdd(typeof(TEntity), type =>
-        {
-            if (type.GetProperty(nameof(AggregateBase.Id)) is not null)
-            {
-                return nameof(AggregateBase.Id);
-            }
-
-            // 无 Id 属性的联合主键实体：从实体元数据取首个主键列，兜底首个映射列
-            var columns = client.EntityMaintenance.GetEntityInfo(type).Columns;
-            var column = columns.FirstOrDefault(c => c.IsPrimarykey) ?? columns.FirstOrDefault()
-                ?? throw new InvalidOperationException($"实体 {type.Name} 缺少可用于排序的列");
-            return column.PropertyName;
-        });
-
-        var parameter = Expression.Parameter(typeof(TEntity), "it");
-        var property = Expression.Property(parameter, propertyName);
-        var converted = Expression.Convert(property, typeof(object));
-        return Expression.Lambda<Func<TEntity, object>>(converted, parameter);
-    }
-
-    /// <summary>
-    /// 构造动态查询：条件集合逐个 Where 拼接（SqlSugar 多次 Where 自动以 AND 组合，null 条目跳过）；
-    /// 排序集合按字典顺序依次应用多重排序（value 为 true 升序、false 或 null 降序，null 条目跳过）。
+    /// 拼接查询条件：条件集合逐个 Where 拼接（SqlSugar 多次 Where 自动以 AND 组合，null 条目跳过）。
+    /// 供不关心排序的查询使用（首条 / Any / Count），避免被强加排序开销。
     /// </summary>
     /// <param name="predicates">条件集合；null 或空集合表示不加过滤。</param>
-    /// <param name="orders">排序集合；null 时不追加任何排序（由调用方决定默认排序）。</param>
-    /// <param name="applyDefaultCreatedAtOrder">orders 为 null 时是否追加创建时间倒序默认排序；
-    /// 列表查询传 true，分页查询传 false（由主键升序兜底保证分页稳定）。</param>
-    /// <returns>已拼接条件与排序的查询对象。</returns>
-    protected ISugarQueryable<TEntity> BuildDynamicQuery(
-        IEnumerable<Expression<Func<TEntity, bool>>>? predicates,
-        IDictionary<Expression<Func<TEntity, object>>, bool?>? orders,
-        bool applyDefaultCreatedAtOrder = true)
+    /// <returns>已拼接条件的查询对象。</returns>
+    protected ISugarQueryable<TEntity> ApplyPredicates(
+        IEnumerable<Expression<Func<TEntity, bool>>>? predicates)
     {
         var query = client.Queryable<TEntity>();
 
@@ -176,7 +175,21 @@ public class DomainRepository<TEntity>(ISqlSugarClient client) : IDomainReposito
             }
         }
 
-        if (orders is not null)
+        return query;
+    }
+
+    /// <summary>
+    /// 拼接排序条件：排序集合按字典顺序依次应用多重排序（value 为 true 升序、false 或 null 降序，null 条目跳过）；
+    /// <paramref name="orders"/> 为 null 或空集合时默认按创建时间倒序（最新在前）。
+    /// </summary>
+    /// <param name="query">已拼接条件的查询对象。</param>
+    /// <param name="orders">排序集合；null 或空集合时默认按创建时间倒序。</param>
+    /// <returns>已拼接排序的查询对象。</returns>
+    protected ISugarQueryable<TEntity> ApplyOrders(
+        ISugarQueryable<TEntity> query,
+        IDictionary<Expression<Func<TEntity, object>>, bool?>? orders)
+    {
+        if (orders is not null && orders.Count > 0)
         {
             foreach (var (selector, ascending) in orders)
             {
@@ -187,13 +200,31 @@ public class DomainRepository<TEntity>(ISqlSugarClient client) : IDomainReposito
 
                 query = query.OrderBy(selector, ascending == true ? OrderByType.Asc : OrderByType.Desc);
             }
-        }
-        else if (applyDefaultCreatedAtOrder)
-        {
-            // 未指定排序时默认按创建时间倒序
-            query = query.OrderByDescending(it => it.CreatedAt);
+
+            return query;
         }
 
-        return query;
+        // 未指定排序时默认按创建时间倒序
+        return query.OrderByDescending(it => it.CreatedAt);
+    }
+
+    /// <summary>
+    /// 规范化分页参数：页索引小于 1 修正为 1；页大小小于 1 回退默认 20，超过上限 500 收敛（防恶意大页查询）。
+    /// </summary>
+    /// <param name="pageIndex">页索引（从 1 开始）。</param>
+    /// <param name="pageSize">每页条数。</param>
+    /// <returns>规范化后的 (pageIndex, pageSize) 元组。</returns>
+    protected static (int PageIndex, int PageSize) ApplyPages(int pageIndex, int pageSize)
+    {
+        if (pageIndex < 1)
+        {
+            pageIndex = 1;
+        }
+
+        const int DefaultPageSize = 20;
+        const int MaxPageSize = 500;
+        pageSize = pageSize < 1 ? DefaultPageSize : pageSize > MaxPageSize ? MaxPageSize : pageSize;
+
+        return (pageIndex, pageSize);
     }
 }

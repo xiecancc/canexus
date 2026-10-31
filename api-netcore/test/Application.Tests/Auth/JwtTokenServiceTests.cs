@@ -20,16 +20,12 @@ internal sealed class InMemoryRefreshTokenRepository : ISysRefreshTokenRepositor
     public IReadOnlyList<SysRefreshToken> Store => _store;
 
     /// <inheritdoc />
-    public Task<SysRefreshToken?> GetAsync(Guid id, CancellationToken cancellationToken = default)
-        => Task.FromResult(_store.FirstOrDefault(e => e.Id == id));
-
-    /// <inheritdoc />
     public Task<List<SysRefreshToken>> GetListAsync(
         IEnumerable<Expression<Func<SysRefreshToken, bool>>>? predicates = null,
         IDictionary<Expression<Func<SysRefreshToken, object>>, bool?>? orders = null,
         CancellationToken cancellationToken = default)
     {
-        // 与 SqlSugar 实现语义对齐：多条件 AND 组合；多重排序按字典顺序应用；未指定排序按创建时间倒序
+        // 与 SqlSugar 实现语义对齐：多条件 AND 组合；多重排序按字典顺序应用；orders 为 null 时默认按创建时间倒序
         var query = _store.AsQueryable();
         if (predicates is not null)
         {
@@ -68,12 +64,61 @@ internal sealed class InMemoryRefreshTokenRepository : ISysRefreshTokenRepositor
     }
 
     /// <inheritdoc />
-    public Task<SysRefreshToken?> GetFirstAsync(Expression<Func<SysRefreshToken, bool>> predicate, CancellationToken cancellationToken = default)
-        => Task.FromResult(_store.AsQueryable().FirstOrDefault(predicate));
+    public Task<SysRefreshToken?> GetAsync(
+        IEnumerable<Expression<Func<SysRefreshToken, bool>>>? predicates = null,
+        CancellationToken cancellationToken = default)
+    {
+        // 与 SqlSugar 实现语义对齐：多条件 AND 组合，取首条（不追加默认排序）
+        var query = _store.AsQueryable();
+        if (predicates is not null)
+        {
+            foreach (var predicate in predicates)
+            {
+                if (predicate is not null)
+                {
+                    query = query.Where(predicate);
+                }
+            }
+        }
+
+        return Task.FromResult(query.FirstOrDefault());
+    }
 
     /// <inheritdoc />
-    public Task<bool> AnyAsync(Expression<Func<SysRefreshToken, bool>> predicate, CancellationToken cancellationToken = default)
-        => Task.FromResult(_store.AsQueryable().Any(predicate));
+    public Task<List<TDto>> GetListAsync<TDto>(
+        IEnumerable<Expression<Func<SysRefreshToken, bool>>>? predicates = null,
+        IDictionary<Expression<Func<SysRefreshToken, object>>, bool?>? orders = null,
+        CancellationToken cancellationToken = default)
+        where TDto : class, new()
+        => throw new NotSupportedException("令牌单测不使用投影查询");
+
+    /// <inheritdoc />
+    public Task<TDto?> GetAsync<TDto>(
+        IEnumerable<Expression<Func<SysRefreshToken, bool>>>? predicates = null,
+        CancellationToken cancellationToken = default)
+        where TDto : class, new()
+        => throw new NotSupportedException("令牌单测不使用投影查询");
+
+    /// <inheritdoc />
+    public Task<bool> AnyAsync(
+        IEnumerable<Expression<Func<SysRefreshToken, bool>>>? predicates = null,
+        CancellationToken cancellationToken = default)
+    {
+        // 与 SqlSugar 实现语义对齐：多条件 AND 组合后判断存在
+        var query = _store.AsQueryable();
+        if (predicates is not null)
+        {
+            foreach (var predicate in predicates)
+            {
+                if (predicate is not null)
+                {
+                    query = query.Where(predicate);
+                }
+            }
+        }
+
+        return Task.FromResult(query.Any());
+    }
 
     /// <inheritdoc />
     public Task<PagedResult<SysRefreshToken>> GetPagedAsync(
@@ -82,6 +127,16 @@ internal sealed class InMemoryRefreshTokenRepository : ISysRefreshTokenRepositor
         IEnumerable<Expression<Func<SysRefreshToken, bool>>>? predicates = null,
         IDictionary<Expression<Func<SysRefreshToken, object>>, bool?>? orders = null,
         CancellationToken cancellationToken = default)
+        => throw new NotSupportedException("令牌单测不使用分页");
+
+    /// <inheritdoc />
+    public Task<PagedResult<TDto>> GetPagedAsync<TDto>(
+        int pageIndex = 1,
+        int pageSize = 20,
+        IEnumerable<Expression<Func<SysRefreshToken, bool>>>? predicates = null,
+        IDictionary<Expression<Func<SysRefreshToken, object>>, bool?>? orders = null,
+        CancellationToken cancellationToken = default)
+        where TDto : class, new()
         => throw new NotSupportedException("令牌单测不使用分页");
 
     /// <inheritdoc />
@@ -130,8 +185,25 @@ internal sealed class InMemoryRefreshTokenRepository : ISysRefreshTokenRepositor
         => DeleteAsync(entity.Id, cancellationToken);
 
     /// <inheritdoc />
-    public Task<long> CountAsync(Expression<Func<SysRefreshToken, bool>>? predicate = null, CancellationToken cancellationToken = default)
-        => Task.FromResult(predicate is null ? (long)_store.Count : (long)_store.AsQueryable().Where(predicate).Count());
+    public Task<long> CountAsync(
+        IEnumerable<Expression<Func<SysRefreshToken, bool>>>? predicates = null,
+        CancellationToken cancellationToken = default)
+    {
+        // 与 SqlSugar 实现语义对齐：多条件 AND 组合后统计
+        var query = _store.AsQueryable();
+        if (predicates is not null)
+        {
+            foreach (var predicate in predicates)
+            {
+                if (predicate is not null)
+                {
+                    query = query.Where(predicate);
+                }
+            }
+        }
+
+        return Task.FromResult((long)query.Count());
+    }
 
     /// <inheritdoc />
     public Task<int> DeleteRangeAsync(Expression<Func<SysRefreshToken, bool>> predicate, CancellationToken cancellationToken = default)

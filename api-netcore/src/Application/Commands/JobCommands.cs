@@ -50,7 +50,7 @@ public sealed class DeleteJobCommandHandler(IAggregateRepository<SysJob> jobRepo
     /// <inheritdoc />
     protected override async Task HandleAsync(DeleteJobCommand command, CancellationToken cancellationToken)
     {
-        var entity = await jobRepository.GetAsync(command.Id, cancellationToken)
+        var entity = await jobRepository.GetAsync([it => it.Id == command.Id], cancellationToken)
             ?? throw new BusinessException(ErrorCodes.JobNotFound, $"定时任务 {command.Id} 不存在");
 
         // 变更前捕获任务状态快照（软删除可能回填墓碑字段）
@@ -73,7 +73,7 @@ public sealed class RunJobOnceCommandHandler(IAggregateRepository<SysJob> jobRep
     /// <inheritdoc />
     protected override async Task HandleAsync(RunJobOnceCommand command, CancellationToken cancellationToken)
     {
-        var entity = await jobRepository.GetAsync(command.Id, cancellationToken)
+        var entity = await jobRepository.GetAsync([it => it.Id == command.Id], cancellationToken)
             ?? throw new BusinessException(ErrorCodes.JobNotFound, $"定时任务 {command.Id} 不存在");
 
         // 触发执行不改变任务聚合数据，不发布领域事件
@@ -92,7 +92,7 @@ public sealed class UpdateJobCommandHandler(IAggregateRepository<SysJob> jobRepo
     protected override async Task HandleAsync(UpdateJobCommand command, CancellationToken cancellationToken)
     {
         var request = command.Request;
-        var entity = await jobRepository.GetAsync(command.Id, cancellationToken)
+        var entity = await jobRepository.GetAsync([it => it.Id == command.Id], cancellationToken)
             ?? throw new BusinessException(ErrorCodes.JobNotFound, $"定时任务 {command.Id} 不存在");
 
         var jobName = request.JobName.Trim();
@@ -136,7 +136,7 @@ public sealed class UpdateJobStatusCommandHandler(IAggregateRepository<SysJob> j
     /// <inheritdoc />
     protected override async Task HandleAsync(UpdateJobStatusCommand command, CancellationToken cancellationToken)
     {
-        var entity = await jobRepository.GetAsync(command.Id, cancellationToken)
+        var entity = await jobRepository.GetAsync([it => it.Id == command.Id], cancellationToken)
             ?? throw new BusinessException(ErrorCodes.JobNotFound, $"定时任务 {command.Id} 不存在");
 
         // 变更前捕获任务状态快照（状态字段即将被原位修改）

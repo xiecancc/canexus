@@ -98,7 +98,7 @@ internal static class SqlSugarClientFactory
             {
                 case DataFilterType.InsertByObject when filterModel.EntityValue is DomainBase insertEntity:
                     insertEntity.CreatedAt = DateTime.Now;
-                    insertEntity.CreatedBy = currentUser.UserName ?? "system";
+                    insertEntity.CreatedBy = currentUser.UserId ?? Guid.Empty;
                     // 租户归属自动填充：实体未显式指定时取当前租户上下文（null 表示平台级数据）
                     insertEntity.TenantId ??= tenantContext.TenantId;
                     if (insertEntity is AggregateBase insertAggregate)
@@ -116,7 +116,7 @@ internal static class SqlSugarClientFactory
 
                 case DataFilterType.UpdateByObject when filterModel.EntityValue is AggregateBase updateEntity:
                     updateEntity.UpdatedAt = DateTime.Now;
-                    updateEntity.UpdatedBy = currentUser.UserName ?? "system";
+                    updateEntity.UpdatedBy = currentUser.UserId ?? Guid.Empty;
                     break;
             }
         };

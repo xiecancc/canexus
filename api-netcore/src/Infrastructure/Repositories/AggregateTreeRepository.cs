@@ -23,7 +23,7 @@ public class AggregateTreeRepository<TAggregate>(ISqlSugarClient client) : Aggre
     {
         return await Client.Queryable<TAggregate>()
             .Where(it => it.ParentId == parentId)
-            .OrderBy(BuildDefaultOrderSelector())
+            .OrderBy(it => it.Id)
             .ToListAsync();
     }
 
@@ -39,7 +39,7 @@ public class AggregateTreeRepository<TAggregate>(ISqlSugarClient client) : Aggre
         {
             var children = await Client.Queryable<TAggregate>()
                 .Where(it => currentIds.Contains(it.ParentId))
-                .OrderBy(BuildDefaultOrderSelector())
+                .OrderBy(it => it.Id)
                 .ToListAsync();
 
             descendants.AddRange(children.Where(it => visited.Add(it.Id)));
@@ -54,12 +54,12 @@ public class AggregateTreeRepository<TAggregate>(ISqlSugarClient client) : Aggre
     {
         List<TAggregate> ancestors = [];
         HashSet<Guid> visited = [id];
-        var node = await GetAsync(id, cancellationToken);
+        var node = await GetAsync([it => it.Id == id], cancellationToken);
 
         // 自父节点起逐级向上至根，visited 防御环状脏数据导致死循环
         while (node is not null && node.ParentId != Guid.Empty && visited.Add(node.ParentId))
         {
-            node = await GetAsync(node.ParentId, cancellationToken);
+            node = await GetAsync([it => it.Id == node.ParentId], cancellationToken);
             if (node is not null)
             {
                 ancestors.Add(node);
@@ -79,7 +79,7 @@ public class AggregateTreeRepository<TAggregate>(ISqlSugarClient client) : Aggre
     /// <inheritdoc />
     public virtual Task<bool> HasChildrenAsync(Guid id, CancellationToken cancellationToken = default)
     {
-        return AnyAsync(it => it.ParentId == id, cancellationToken);
+        return AnyAsync([it => it.ParentId == id], cancellationToken);
     }
 
     /// <inheritdoc />
@@ -104,7 +104,7 @@ public class AggregateTreeRepository<TAggregate>(ISqlSugarClient client) : Aggre
             throw new BusinessException(codes.ParentInvalid, $"{codes.EntityName}的父级不能选择自己");
         }
 
-        var node = await GetAsync(id, cancellationToken)
+        var node = await GetAsync([it => it.Id == id], cancellationToken)
             ?? throw new BusinessException(codes.NodeNotFound, $"{codes.EntityName} {id} 不存在");
 
         // 父级未变更时幂等返回
@@ -122,7 +122,7 @@ public class AggregateTreeRepository<TAggregate>(ISqlSugarClient client) : Aggre
                 throw new BusinessException(codes.ParentInvalid, $"{codes.EntityName}的父级不能选择自己的下级");
             }
 
-            parent = await GetAsync(newParentId, cancellationToken)
+            parent = await GetAsync([it => it.Id == newParentId], cancellationToken)
                 ?? throw new BusinessException(codes.ParentNotFound, $"{codes.EntityName}的父级节点 {newParentId} 不存在");
         }
 

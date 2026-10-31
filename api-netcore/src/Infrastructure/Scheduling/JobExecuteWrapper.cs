@@ -34,7 +34,7 @@ public class JobExecuteWrapper(
         var jobId = context.MergedJobDataMap.ContainsKey(JobIdKey)
             ? Guid.TryParse(context.MergedJobDataMap.GetString(JobIdKey), out var parsedJobId) ? parsedJobId : Guid.Empty
             : Guid.Empty;
-        var job = jobId != Guid.Empty ? await jobRepository.GetAsync(jobId) : null;
+        var job = jobId != Guid.Empty ? await jobRepository.GetAsync([it => it.Id == jobId]) : null;
         if (job is null)
         {
             logger.LogWarning("定时任务 {JobId} 不存在或已删除，跳过执行", jobId);

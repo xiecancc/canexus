@@ -22,7 +22,7 @@ public sealed class CreateTenantCommandHandler(IAggregateRepository<SysTenant> t
         var tenantKey = request.TenantKey.Trim();
         var tenantName = request.TenantName.Trim();
 
-        if (await tenantRepository.CountAsync(t => t.TenantKey == tenantKey, cancellationToken) > 0)
+        if (await tenantRepository.CountAsync([t => t.TenantKey == tenantKey], cancellationToken) > 0)
         {
             throw new BusinessException(ErrorCodes.TenantKeyDuplicate, $"租户标识「{tenantKey}」已存在");
         }
@@ -54,11 +54,11 @@ public sealed class DeleteTenantCommandHandler(
     /// <inheritdoc />
     protected override async Task HandleAsync(DeleteTenantCommand command, CancellationToken cancellationToken)
     {
-        var entity = await tenantRepository.GetAsync(command.Id, cancellationToken)
+        var entity = await tenantRepository.GetAsync([it => it.Id == command.Id], cancellationToken)
             ?? throw new BusinessException(ErrorCodes.TenantNotFound, $"租户 {command.Id} 不存在");
 
         // 存在归属用户（未删除数据按租户 Id 归属）时拒绝删除
-        if (await userRepository.CountAsync(u => u.TenantId == entity.Id, cancellationToken) > 0)
+        if (await userRepository.CountAsync([u => u.TenantId == entity.Id], cancellationToken) > 0)
         {
             throw new BusinessException(ErrorCodes.TenantInUse, $"租户「{entity.TenantName}」下存在归属用户，不允许删除");
         }
@@ -81,7 +81,7 @@ public sealed class UpdateTenantCommandHandler(IAggregateRepository<SysTenant> t
     protected override async Task HandleAsync(UpdateTenantCommand command, CancellationToken cancellationToken)
     {
         var request = command.Request;
-        var entity = await tenantRepository.GetAsync(command.Id, cancellationToken)
+        var entity = await tenantRepository.GetAsync([it => it.Id == command.Id], cancellationToken)
             ?? throw new BusinessException(ErrorCodes.TenantNotFound, $"租户 {command.Id} 不存在");
 
         var tenantKey = request.TenantKey.Trim();

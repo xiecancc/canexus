@@ -87,11 +87,11 @@ api-netcore/
 ## 领域模型约定
 
 - **统一标识符**：所有实体主键 / 外键为 GUID（36 位字符串），由数据访问层在插入时自动生成
-- **基类体系**：`DomainBase`（创建审计 CreatedAt / CreatedBy + 租户归属 TenantId；无主键，预留领域事件）→ `AggregateBase`（单主键 Id + 乐观并发 Version + 软删除 + 更新审计）→ `AggregateTreeBase<T>`（树形结构，ParentId / Parent / Children）；关联表直接继承 `DomainBase`
-- **审计字段**：`CreatedAt / CreatedBy / UpdatedAt / UpdatedBy` 由框架自动填充，业务代码无需赋值
-- **乐观并发**：更新基于 `Version` 版本号校验，冲突抛出业务异常（错误码 `40005`）
+- **基类体系**：`DomainBase`（创建审计 CreatedAt / CreatedBy（Guid）+ 租户归属 TenantId；无主键，预留领域事件）→ `AggregateBase`（单主键 Id + 乐观并发 Version（Guid 令牌）+ 软删除 + 更新审计 UpdatedAt / UpdatedBy（Guid））→ `AggregateTreeBase<T>`（树形结构，ParentId / Parent / Children）；关联表直接继承 `DomainBase`
+- **审计字段**：`CreatedAt / CreatedBy / UpdatedAt / UpdatedBy` 由框架自动填充（审计人为用户 Id，无登录上下文时为空 Guid），业务代码无需赋值
+- **乐观并发**：`Version` 为 Guid 版本令牌（`IsEnableUpdateVersionValidation = true`），更新走 SqlSugar `ExecuteCommandWithOptLock` 框架级校验（自动以旧值作更新条件并轮换新 Guid），冲突抛出业务异常（错误码 `40005`）
 - **软删除**：删除默认为墓碑标记，查询自动过滤；`RestoreAsync` 可恢复
-- **仓储三分**：`IDomainRepository`（查询统计 + 插入 + 物理删除，实体表 / 关联表公共；可空条件参数配合 WhereIF 按需拼接）/ `IAggregateRepository`（聚合专属：乐观并发更新、按主键删除、软删除、恢复；重写删除为软删除）/ `IAggregateTreeRepository`（树形查询）。接口只定义契约（无 new 约束），`new()` 仅出现在 SqlSugar 实现类上
+- **仓储三分**：`IDomainRepository`（查询统计 + 投影查询（Select&lt;TDto&gt; 按属性名自动映射返回指定类型）+ 插入 + 物理删除，实体表 / 关联表公共；可空条件参数配合 WhereIF 按需拼接）/ `IAggregateRepository`（聚合专属：乐观并发更新、按主键删除、软删除、恢复；重写删除为软删除）/ `IAggregateTreeRepository`（树形查询）。接口只定义契约（无 new 约束），`new()` 仅出现在 SqlSugar 实现类上
 - **关联表实体**：SysUserRole / SysRoleMenu / SysRoleDept 继承 `DomainBase`（非聚合根）：无独立主键，以业务字段联合主键唯一定位；具备创建审计与租户隔离（全局租户过滤器与聚合根一致），无乐观并发与更新审计语义，删除为物理删除
 - **CQRS**：请求定义（record 实现 IRequest / ICommand / IQuery 接口层次）位于 Application.Contracts；处理器继承 RequestHandler → CommandHandler / QueryHandler 基类（Application/Abstractions，封装 MediatR 适配，子类实现 HandleAsync）；验证器独立于 Validators 目录，横切关注点（验证 / 日志 / 性能）由 Pipeline Behaviors 统一处理
 - **DTO 继承体系**：`Application.Contracts/Common` 提供与领域对齐的基类——请求侧 `StatusRequest` / `StatusDescriptionRequest`（对齐 Status / Description），视图侧 `EntityVO` / `StatusVO`（对齐 Id / CreatedAt / Status）；各模块以 `XxxWriteRequest` / `XxxBaseVO` 抽取 Create-Update 与 List-Detail 共同字段，派生类零重复定义

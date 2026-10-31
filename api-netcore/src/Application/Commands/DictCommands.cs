@@ -39,7 +39,7 @@ public sealed class CreateDictDataCommandHandler(
     /// <summary>校验所属字典类型存在。</summary>
     private async Task EnsureTypeExistsAsync(string dictType, CancellationToken cancellationToken)
     {
-        if (await dictTypeRepository.CountAsync(t => t.DictType == dictType, cancellationToken) == 0)
+        if (await dictTypeRepository.CountAsync([t => t.DictType == dictType], cancellationToken) == 0)
         {
             throw new BusinessException(ErrorCodes.DictTypeNotFound, $"字典类型「{dictType}」不存在");
         }
@@ -51,7 +51,7 @@ public sealed class CreateDictDataCommandHandler(
         System.Linq.Expressions.Expression<Func<SysDictData, bool>> labelPredicate = excludeId is null
             ? d => d.DictType == dictType && d.DictLabel == label
             : d => d.DictType == dictType && d.DictLabel == label && d.Id != excludeId.Value;
-        if (await dictDataRepository.CountAsync(labelPredicate, cancellationToken) > 0)
+        if (await dictDataRepository.CountAsync([labelPredicate], cancellationToken) > 0)
         {
             throw new BusinessException(ErrorCodes.DictDataDuplicate, $"字典类型「{dictType}」下标签「{label}」已存在");
         }
@@ -59,7 +59,7 @@ public sealed class CreateDictDataCommandHandler(
         System.Linq.Expressions.Expression<Func<SysDictData, bool>> valuePredicate = excludeId is null
             ? d => d.DictType == dictType && d.DictValue == value
             : d => d.DictType == dictType && d.DictValue == value && d.Id != excludeId.Value;
-        if (await dictDataRepository.CountAsync(valuePredicate, cancellationToken) > 0)
+        if (await dictDataRepository.CountAsync([valuePredicate], cancellationToken) > 0)
         {
             throw new BusinessException(ErrorCodes.DictDataDuplicate, $"字典类型「{dictType}」下键值「{value}」已存在");
         }
@@ -78,7 +78,7 @@ public sealed class CreateDictTypeCommandHandler(
     {
         var request = command.Request;
         var dictType = request.DictType.Trim();
-        if (await dictTypeRepository.CountAsync(t => t.DictType == dictType, cancellationToken) > 0)
+        if (await dictTypeRepository.CountAsync([t => t.DictType == dictType], cancellationToken) > 0)
         {
             throw new BusinessException(ErrorCodes.DictTypeDuplicate, $"字典类型「{dictType}」已存在");
         }
@@ -101,7 +101,7 @@ public sealed class DeleteDictDataCommandHandler(
     /// <inheritdoc />
     protected override async Task HandleAsync(DeleteDictDataCommand command, CancellationToken cancellationToken)
     {
-        var entity = await dictDataRepository.GetAsync(command.Id, cancellationToken)
+        var entity = await dictDataRepository.GetAsync([it => it.Id == command.Id], cancellationToken)
             ?? throw new BusinessException(ErrorCodes.DictDataNotFound, $"字典数据 {command.Id} 不存在");
 
         // 变更前捕获字典数据状态快照（软删除可能回填墓碑字段）
@@ -124,10 +124,10 @@ public sealed class DeleteDictTypeCommandHandler(
     /// <inheritdoc />
     protected override async Task HandleAsync(DeleteDictTypeCommand command, CancellationToken cancellationToken)
     {
-        var entity = await dictTypeRepository.GetAsync(command.Id, cancellationToken)
+        var entity = await dictTypeRepository.GetAsync([it => it.Id == command.Id], cancellationToken)
             ?? throw new BusinessException(ErrorCodes.DictTypeNotFound, $"字典类型 {command.Id} 不存在");
 
-        if (await dictDataRepository.CountAsync(d => d.DictType == entity.DictType, cancellationToken) > 0)
+        if (await dictDataRepository.CountAsync([d => d.DictType == entity.DictType], cancellationToken) > 0)
         {
             throw new BusinessException(ErrorCodes.DictTypeHasData, "该字典类型下存在字典数据，不允许删除");
         }
@@ -154,13 +154,13 @@ public sealed class UpdateDictDataCommandHandler(
     protected override async Task HandleAsync(UpdateDictDataCommand command, CancellationToken cancellationToken)
     {
         var request = command.Request;
-        var entity = await dictDataRepository.GetAsync(command.Id, cancellationToken)
+        var entity = await dictDataRepository.GetAsync([it => it.Id == command.Id], cancellationToken)
             ?? throw new BusinessException(ErrorCodes.DictDataNotFound, $"字典数据 {command.Id} 不存在");
 
         var dictType = request.DictType.Trim();
         if (!string.Equals(dictType, entity.DictType, StringComparison.Ordinal))
         {
-            if (await dictTypeRepository.CountAsync(t => t.DictType == dictType, cancellationToken) == 0)
+            if (await dictTypeRepository.CountAsync([t => t.DictType == dictType], cancellationToken) == 0)
             {
                 throw new BusinessException(ErrorCodes.DictTypeNotFound, $"字典类型「{dictType}」不存在");
             }
@@ -184,7 +184,7 @@ public sealed class UpdateDictDataCommandHandler(
         System.Linq.Expressions.Expression<Func<SysDictData, bool>> labelPredicate = excludeId is null
             ? d => d.DictType == dictType && d.DictLabel == label
             : d => d.DictType == dictType && d.DictLabel == label && d.Id != excludeId.Value;
-        if (await dictDataRepository.CountAsync(labelPredicate, cancellationToken) > 0)
+        if (await dictDataRepository.CountAsync([labelPredicate], cancellationToken) > 0)
         {
             throw new BusinessException(ErrorCodes.DictDataDuplicate, $"字典类型「{dictType}」下标签「{label}」已存在");
         }
@@ -192,7 +192,7 @@ public sealed class UpdateDictDataCommandHandler(
         System.Linq.Expressions.Expression<Func<SysDictData, bool>> valuePredicate = excludeId is null
             ? d => d.DictType == dictType && d.DictValue == value
             : d => d.DictType == dictType && d.DictValue == value && d.Id != excludeId.Value;
-        if (await dictDataRepository.CountAsync(valuePredicate, cancellationToken) > 0)
+        if (await dictDataRepository.CountAsync([valuePredicate], cancellationToken) > 0)
         {
             throw new BusinessException(ErrorCodes.DictDataDuplicate, $"字典类型「{dictType}」下键值「{value}」已存在");
         }
@@ -210,7 +210,7 @@ public sealed class UpdateDictTypeCommandHandler(
     protected override async Task HandleAsync(UpdateDictTypeCommand command, CancellationToken cancellationToken)
     {
         var request = command.Request;
-        var entity = await dictTypeRepository.GetAsync(command.Id, cancellationToken)
+        var entity = await dictTypeRepository.GetAsync([it => it.Id == command.Id], cancellationToken)
             ?? throw new BusinessException(ErrorCodes.DictTypeNotFound, $"字典类型 {command.Id} 不存在");
 
         var dictType = request.DictType.Trim();

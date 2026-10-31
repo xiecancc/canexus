@@ -10,8 +10,8 @@ namespace Infrastructure.Repositories;
 /// 基于 SqlSugar 的聚合仓储实现（对应 <see cref="AggregateBase"/>）：
 /// 继承领域仓储（查询 / 插入 / 物理删除），重写删除为软删除，并补充乐观并发更新与恢复能力。
 /// <para>审计字段（创建/更新人与时间、软删除标记）与空 Guid 主键由 Aop.DataExecuting 自动填充；
-/// 更新由仓储显式做乐观并发控制（UPDATE ... WHERE Version = 期望值，受影响 0 行即冲突），
-/// 版本冲突时抛出业务异常（错误码 CommonConcurrencyConflict）。</para>
+/// 更新经 SqlSugar ExecuteCommandWithOptLock 做框架级乐观并发控制（UPDATE ... WHERE Version = 传入值，
+/// 受影响 0 行即冲突），版本冲突时抛出业务异常（错误码 CommonConcurrencyConflict）。</para>
 /// </summary>
 /// <typeparam name="TEntity">聚合根实体类型。</typeparam>
 /// <remarks>构造函数。</remarks>
@@ -22,14 +22,13 @@ public class AggregateRepository<TEntity>(ISqlSugarClient client) : DomainReposi
     /// <inheritdoc />
     public virtual async Task UpdateAsync(TEntity entity, CancellationToken cancellationToken = default)
     {
-        // 显式乐观锁：UPDATE ... WHERE Id = @id AND Version = 期望值；
+        // 框架级乐观锁（Version 标记 IsEnableUpdateVersionValidation）：ExecuteCommandWithOptLock 自动生成
+        // UPDATE ... WHERE Id = @id AND Version = 传入值，成功后自动轮换版本令牌，失败时回滚实体上的版本值；
         // 受影响 0 行说明库中版本已被他人推进，抛并发冲突业务异常。
-        // 更新人/更新时间仍由 Aop.DataExecuting 自动填充；版本号在本方法内统一递增。
-        var expected = entity.Version;
-        entity.Version = expected + 1;
+        // 更新人/更新时间仍由 Aop.DataExecuting 自动填充。
+        // 注意：SqlSugar 的 ExecuteCommandWithOptLockAsync 暂无 CancellationToken 重载，取消令牌不向下传递。
         var rows = await Client.Updateable(entity)
-            .Where(it => it.Id == entity.Id && it.Version == expected)
-            .ExecuteCommandAsync(cancellationToken);
+            .ExecuteCommandWithOptLockAsync();
 
         if (rows == 0)
         {
@@ -43,7 +42,7 @@ public class AggregateRepository<TEntity>(ISqlSugarClient client) : DomainReposi
     public virtual async Task DeleteAsync(Guid id, CancellationToken cancellationToken = default)
     {
         // 先取实体再复用对象删除逻辑，保证软删除与审计填充行为一致；不存在时静默忽略（幂等）
-        var entity = await GetAsync(id, cancellationToken);
+        var entity = await GetAsync([it => it.Id == id], cancellationToken);
         if (entity is null)
         {
             return;
@@ -56,7 +55,7 @@ public class AggregateRepository<TEntity>(ISqlSugarClient client) : DomainReposi
     public override async Task DeleteAsync(TEntity entity, CancellationToken cancellationToken = default)
     {
         // 重写领域仓储的物理删除为软删除：仅标记墓碑，默认查询自动过滤；
-        // 走实体更新以填充审计字段并递增版本号
+        // 走实体更新以填充审计字段并轮换版本令牌
         entity.IsDeleted = true;
         await UpdateAsync(entity, cancellationToken);
     }

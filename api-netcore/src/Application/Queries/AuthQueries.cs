@@ -162,7 +162,7 @@ public sealed class GetUserInfoQueryHandler(
         var userId = currentUser.UserId
             ?? throw new BusinessException(ErrorCodes.AuthUnauthorized, "未登录或令牌无效");
 
-        var user = await userRepository.GetAsync(userId, cancellationToken)
+        var user = await userRepository.GetAsync([it => it.Id == userId], cancellationToken)
             ?? throw new BusinessException(ErrorCodes.AuthUnauthorized, "登录状态已失效，请重新登录");
 
         var roles = (await GetUserRolesAsync(userId, cancellationToken)).Select(r => r.RoleKey).ToList();

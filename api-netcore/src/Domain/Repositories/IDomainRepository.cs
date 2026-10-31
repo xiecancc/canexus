@@ -8,23 +8,26 @@ namespace Domain.Repositories;
 /// 领域仓储接口（对应 <see cref="DomainBase"/>）：实体表 / 关联表公共的查询统计、插入与物理删除能力。
 /// <para>所有方法均为异步；查询自动附加租户隔离过滤（关联表与聚合根一致），
 /// 聚合根体系另有软删除过滤；列表与分页查询支持多条件 AND 组合与多重排序
-/// （未指定排序时按创建时间倒序），保证查询语义一致。
+/// （orders 为 null 时默认按创建时间倒序），保证查询语义一致；
+/// 列表 / 首条 / 分页另有泛型投影重载（SqlSugar Select&lt;TDto&gt; 按属性名自动映射返回指定类型）。
 /// 聚合根的更新 / 软删除 / 恢复等完整能力见 <see cref="IAggregateRepository{TEntity}"/>。</para>
 /// </summary>
 /// <typeparam name="TEntity">实体类型。</typeparam>
 public interface IDomainRepository<TEntity>
     where TEntity : DomainBase
 {
-    /// <summary>按主键获取实体（聚合根为 Id 主键；联合主键实体请使用条件查询）。</summary>
-    /// <param name="id">主键。</param>
+    /// <summary>按条件获取第一条实体（无匹配返回 null）。</summary>
+    /// <param name="predicates">条件集合，各条件以 AND 组合后应用；null 或空集合表示不加过滤。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>实体；不存在时返回 null。</returns>
-    public Task<TEntity?> GetAsync(Guid id, CancellationToken cancellationToken = default);
+    public Task<TEntity?> GetAsync(
+        IEnumerable<Expression<Func<TEntity, bool>>>? predicates = null,
+        CancellationToken cancellationToken = default);
 
     /// <summary>动态查询实体列表：支持多条件（AND 组合）与多重排序。</summary>
     /// <param name="predicates">条件集合，各条件以 AND 组合后应用；null 或空集合表示不加过滤。</param>
     /// <param name="orders">排序集合，按字典顺序依次应用多重排序；
-    /// key 为排序字段表达式，value 为 true 升序、false 或 null 降序；null 时默认按创建时间倒序。</param>
+    /// key 为排序字段表达式，value 为 true 升序、false 或 null 降序；null 或空集合时默认按创建时间倒序。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>实体列表。</returns>
     public Task<List<TEntity>> GetListAsync(
@@ -32,24 +35,43 @@ public interface IDomainRepository<TEntity>
         IDictionary<Expression<Func<TEntity, object>>, bool?>? orders = null,
         CancellationToken cancellationToken = default);
 
-    /// <summary>按条件获取第一条实体（无匹配返回 null）。</summary>
-    /// <param name="predicate">查询条件。</param>
+    /// <summary>投影查询实体列表：支持多条件（AND 组合）与多重排序，结果按属性名自动映射到指定 DTO 类型
+    /// （SqlSugar Select&lt;TDto&gt;，SQL 层只取 DTO 涉及的列，避免整实体回传）。</summary>
+    /// <typeparam name="TDto">投影结果类型；属性名与实体匹配的字段自动赋值，未匹配字段为类型默认值。</typeparam>
+    /// <param name="predicates">条件集合，各条件以 AND 组合后应用；null 或空集合表示不加过滤。</param>
+    /// <param name="orders">排序集合，语义同 <see cref="GetListAsync"/>。</param>
     /// <param name="cancellationToken">取消令牌。</param>
-    /// <returns>实体；不存在时返回 null。</returns>
-    public Task<TEntity?> GetFirstAsync(Expression<Func<TEntity, bool>> predicate, CancellationToken cancellationToken = default);
+    /// <returns>投影结果列表。</returns>
+    public Task<List<TDto>> GetListAsync<TDto>(
+        IEnumerable<Expression<Func<TEntity, bool>>>? predicates = null,
+        IDictionary<Expression<Func<TEntity, object>>, bool?>? orders = null,
+        CancellationToken cancellationToken = default)
+        where TDto : class, new();
+
+    /// <summary>投影查询首条记录：支持多条件（AND 组合），结果按属性名自动映射到指定 DTO 类型，无匹配返回 null。</summary>
+    /// <typeparam name="TDto">投影结果类型；属性名与实体匹配的字段自动赋值，未匹配字段为类型默认值。</typeparam>
+    /// <param name="predicates">条件集合，各条件以 AND 组合后应用；null 或空集合表示不加过滤。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>投影结果；不存在时返回 null。</returns>
+    public Task<TDto?> GetAsync<TDto>(
+        IEnumerable<Expression<Func<TEntity, bool>>>? predicates = null,
+        CancellationToken cancellationToken = default)
+        where TDto : class, new();
 
     /// <summary>判断是否存在满足条件的实体。</summary>
-    /// <param name="predicate">查询条件。</param>
+    /// <param name="predicates">条件集合，各条件以 AND 组合后应用；null 或空集合表示不加过滤。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>存在返回 true。</returns>
-    public Task<bool> AnyAsync(Expression<Func<TEntity, bool>> predicate, CancellationToken cancellationToken = default);
+    public Task<bool> AnyAsync(
+        IEnumerable<Expression<Func<TEntity, bool>>>? predicates = null,
+        CancellationToken cancellationToken = default);
 
     /// <summary>分页查询：支持多条件（AND 组合）与多重排序；页索引从 1 开始，页大小越界自动收敛。</summary>
     /// <param name="pageIndex">页索引，从 1 开始；小于 1 时自动修正为 1。</param>
     /// <param name="pageSize">每页条数；小于 1 时回退默认值 20，超过上限 500 时收敛为 500（防止恶意大页查询）。</param>
     /// <param name="predicates">条件集合，各条件以 AND 组合后应用；null 或空集合表示不加过滤。</param>
     /// <param name="orders">排序集合，按字典顺序依次应用多重排序；
-    /// key 为排序字段表达式，value 为 true 升序、false 或 null 降序；null 时按主键升序排序保证分页稳定。</param>
+    /// key 为排序字段表达式，value 为 true 升序、false 或 null 降序；null 或空集合时默认按创建时间倒序，主键升序作平局裁决保证分页稳定。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>分页结果。</returns>
     public Task<PagedResult<TEntity>> GetPagedAsync(
@@ -59,11 +81,31 @@ public interface IDomainRepository<TEntity>
         IDictionary<Expression<Func<TEntity, object>>, bool?>? orders = null,
         CancellationToken cancellationToken = default);
 
-    /// <summary>统计实体数（可选条件过滤，配合 WhereIF 按需拼接）。</summary>
-    /// <param name="predicate">查询条件；null 表示全量统计。</param>
+    /// <summary>投影分页查询：条件与排序语义同 <see cref="GetPagedAsync"/>，结果按属性名自动映射到指定 DTO 类型
+    /// （SqlSugar Select&lt;TDto&gt;，SQL 层只取 DTO 涉及的列）。</summary>
+    /// <typeparam name="TDto">投影结果类型；属性名与实体匹配的字段自动赋值，未匹配字段为类型默认值。</typeparam>
+    /// <param name="pageIndex">页索引，从 1 开始；小于 1 时自动修正为 1。</param>
+    /// <param name="pageSize">每页条数；小于 1 时回退默认值 20，超过上限 500 时收敛为 500（防止恶意大页查询）。</param>
+    /// <param name="predicates">条件集合，各条件以 AND 组合后应用；null 或空集合表示不加过滤。</param>
+    /// <param name="orders">排序集合，按字典顺序依次应用多重排序；
+    /// key 为排序字段表达式，value 为 true 升序、false 或 null 降序；null 或空集合时默认按创建时间倒序，主键升序作平局裁决保证分页稳定。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>分页结果（元素为投影类型）。</returns>
+    public Task<PagedResult<TDto>> GetPagedAsync<TDto>(
+        int pageIndex = 1,
+        int pageSize = 20,
+        IEnumerable<Expression<Func<TEntity, bool>>>? predicates = null,
+        IDictionary<Expression<Func<TEntity, object>>, bool?>? orders = null,
+        CancellationToken cancellationToken = default)
+        where TDto : class, new();
+
+    /// <summary>统计实体数（条件集合 AND 组合过滤）。</summary>
+    /// <param name="predicates">条件集合，各条件以 AND 组合后应用；null 或空集合表示全量统计。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>记录数。</returns>
-    public Task<long> CountAsync(Expression<Func<TEntity, bool>>? predicate = null, CancellationToken cancellationToken = default);
+    public Task<long> CountAsync(
+        IEnumerable<Expression<Func<TEntity, bool>>>? predicates = null,
+        CancellationToken cancellationToken = default);
 
     /// <summary>插入实体；创建审计（创建时间 / 创建人）与租户归属由数据访问层自动填充，
     /// 聚合根的空主键与软删除标记亦由数据访问层自动初始化。</summary>

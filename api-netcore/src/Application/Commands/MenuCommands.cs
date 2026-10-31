@@ -25,7 +25,7 @@ public sealed class CreateMenuCommandHandler(
         var request = command.Request;
         if (request.ParentId != SysMenu.RootParentId)
         {
-            _ = await (menuRepository.GetAsync(request.ParentId, cancellationToken)
+            _ = await (menuRepository.GetAsync([it => it.Id == request.ParentId], cancellationToken)
                 ?? throw new BusinessException(ErrorCodes.MenuNotFound, $"菜单 {request.ParentId} 不存在"));
         }
 
@@ -48,15 +48,15 @@ public sealed class DeleteMenuCommandHandler(
     /// <inheritdoc />
     protected override async Task HandleAsync(DeleteMenuCommand command, CancellationToken cancellationToken)
     {
-        var menu = await menuRepository.GetAsync(command.Id, cancellationToken)
+        var menu = await menuRepository.GetAsync([it => it.Id == command.Id], cancellationToken)
             ?? throw new BusinessException(ErrorCodes.MenuNotFound, $"菜单 {command.Id} 不存在");
 
-        if (await menuRepository.CountAsync(m => m.ParentId == command.Id, cancellationToken) > 0)
+        if (await menuRepository.CountAsync([m => m.ParentId == command.Id], cancellationToken) > 0)
         {
             throw new BusinessException(ErrorCodes.MenuHasChildren, $"菜单「{menu.MenuName}」下存在子菜单，不允许删除");
         }
 
-        if (await roleMenuRepository.CountAsync(rm => rm.MenuId == command.Id, cancellationToken) > 0)
+        if (await roleMenuRepository.CountAsync([rm => rm.MenuId == command.Id], cancellationToken) > 0)
         {
             throw new BusinessException(ErrorCodes.MenuInUse, $"菜单「{menu.MenuName}」已被角色引用，不允许删除");
         }
@@ -83,7 +83,7 @@ public sealed class UpdateMenuCommandHandler(
     protected override async Task HandleAsync(UpdateMenuCommand command, CancellationToken cancellationToken)
     {
         var request = command.Request;
-        var menu = await menuRepository.GetAsync(command.Id, cancellationToken)
+        var menu = await menuRepository.GetAsync([it => it.Id == command.Id], cancellationToken)
             ?? throw new BusinessException(ErrorCodes.MenuNotFound, $"菜单 {command.Id} 不存在");
 
         var parentChanged = menu.ParentId != request.ParentId;

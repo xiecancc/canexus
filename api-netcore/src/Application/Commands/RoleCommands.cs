@@ -24,7 +24,7 @@ internal static class RoleMenuSupport
             return;
         }
 
-        var count = await menuRepository.CountAsync(m => distinct.Contains(m.Id), cancellationToken);
+        var count = await menuRepository.CountAsync([m => distinct.Contains(m.Id)], cancellationToken);
         if (count < distinct.Count)
         {
             throw new BusinessException(ErrorCodes.CommonDataNotFound, "所选菜单不存在或已被删除");
@@ -111,14 +111,14 @@ public sealed class DeleteRoleCommandHandler(
     /// <inheritdoc />
     protected override async Task HandleAsync(DeleteRoleCommand command, CancellationToken cancellationToken)
     {
-        var role = await roleRepository.GetAsync(command.Id, cancellationToken)
+        var role = await roleRepository.GetAsync([it => it.Id == command.Id], cancellationToken)
             ?? throw new BusinessException(ErrorCodes.RoleNotFound, $"角色 {command.Id} 不存在");
         if (role.RoleKey == SuperAdminRoleKey)
         {
             throw new BusinessException(ErrorCodes.RoleProtected, "内置超管角色 super_admin 不允许删除");
         }
 
-        if (await userRoleRepository.CountAsync(ur => ur.RoleId == command.Id, cancellationToken) > 0)
+        if (await userRoleRepository.CountAsync([ur => ur.RoleId == command.Id], cancellationToken) > 0)
         {
             throw new BusinessException(ErrorCodes.RoleInUse, $"角色「{role.RoleName}」已被用户引用，不允许删除");
         }
@@ -158,7 +158,7 @@ public sealed class UpdateRoleCommandHandler(
     protected override async Task HandleAsync(UpdateRoleCommand command, CancellationToken cancellationToken)
     {
         var request = command.Request;
-        var role = await roleRepository.GetAsync(command.Id, cancellationToken)
+        var role = await roleRepository.GetAsync([it => it.Id == command.Id], cancellationToken)
             ?? throw new BusinessException(ErrorCodes.RoleNotFound, $"角色 {command.Id} 不存在");
         if (role.RoleKey == SuperAdminRoleKey)
         {

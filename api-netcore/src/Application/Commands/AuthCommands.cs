@@ -193,7 +193,7 @@ public sealed class RefreshTokenCommandHandler(
         var active = await tokenService.GetActiveRefreshTokenAsync(command.RefreshToken, cancellationToken)
             ?? throw new BusinessException(ErrorCodes.AuthRefreshTokenInvalid, "刷新令牌无效或已过期，请重新登录");
 
-        var user = await userRepository.GetAsync(active.UserId, cancellationToken);
+        var user = await userRepository.GetAsync([it => it.Id == active.UserId], cancellationToken);
         if (user is null || user.Status != CommonStatus.Enabled)
         {
             throw new BusinessException(ErrorCodes.AuthRefreshTokenInvalid, "刷新令牌无效或已过期，请重新登录");

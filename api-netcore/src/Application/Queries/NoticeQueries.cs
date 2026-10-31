@@ -41,7 +41,7 @@ public sealed class GetNoticeByIdQueryHandler(IAggregateRepository<SysNotice> no
     /// <inheritdoc />
     protected override async Task<NoticeListVO> HandleAsync(GetNoticeByIdQuery query, CancellationToken cancellationToken)
     {
-        var entity = await noticeRepository.GetAsync(query.Id, cancellationToken)
+        var entity = await noticeRepository.GetAsync([it => it.Id == query.Id], cancellationToken)
             ?? throw new BusinessException(ErrorCodes.NoticeNotFound, $"通知公告 {query.Id} 不存在");
 
         // 列表映射忽略正文，详情在此显式补充

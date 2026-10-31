@@ -22,7 +22,7 @@ public sealed class CreateConfigCommandHandler(IAggregateRepository<SysConfig> c
     {
         var request = command.Request;
         var configKey = request.ConfigKey.Trim();
-        if (await configRepository.CountAsync(c => c.ConfigKey == configKey, cancellationToken) > 0)
+        if (await configRepository.CountAsync([c => c.ConfigKey == configKey], cancellationToken) > 0)
         {
             throw new BusinessException(ErrorCodes.ConfigKeyDuplicate, $"参数键名「{configKey}」已存在");
         }
@@ -43,7 +43,7 @@ public sealed class DeleteConfigCommandHandler(IAggregateRepository<SysConfig> c
     /// <inheritdoc />
     protected override async Task HandleAsync(DeleteConfigCommand command, CancellationToken cancellationToken)
     {
-        var entity = await configRepository.GetAsync(command.Id, cancellationToken)
+        var entity = await configRepository.GetAsync([it => it.Id == command.Id], cancellationToken)
             ?? throw new BusinessException(ErrorCodes.ConfigNotFound, $"参数配置 {command.Id} 不存在");
 
         if (entity.BuiltIn)
@@ -69,11 +69,11 @@ public sealed class UpdateConfigCommandHandler(IAggregateRepository<SysConfig> c
     protected override async Task HandleAsync(UpdateConfigCommand command, CancellationToken cancellationToken)
     {
         var request = command.Request;
-        var entity = await configRepository.GetAsync(command.Id, cancellationToken)
+        var entity = await configRepository.GetAsync([it => it.Id == command.Id], cancellationToken)
             ?? throw new BusinessException(ErrorCodes.ConfigNotFound, $"参数配置 {command.Id} 不存在");
 
         var configKey = request.ConfigKey.Trim();
-        if (await configRepository.CountAsync(c => c.ConfigKey == configKey && c.Id != command.Id, cancellationToken) > 0)
+        if (await configRepository.CountAsync([c => c.ConfigKey == configKey && c.Id != command.Id], cancellationToken) > 0)
         {
             throw new BusinessException(ErrorCodes.ConfigKeyDuplicate, $"参数键名「{configKey}」已存在");
         }

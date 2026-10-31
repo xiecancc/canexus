@@ -19,7 +19,7 @@ public sealed class GetDeptDetailQueryHandler(IAggregateTreeRepository<SysDept> 
     /// <inheritdoc />
     protected override async Task<DeptDetailVO> HandleAsync(GetDeptDetailQuery query, CancellationToken cancellationToken)
     {
-        var dept = await deptRepository.GetAsync(query.Id, cancellationToken)
+        var dept = await deptRepository.GetAsync([it => it.Id == query.Id], cancellationToken)
             ?? throw new BusinessException(ErrorCodes.DeptNotFound, $"部门 {query.Id} 不存在");
         return mapper.Map<DeptDetailVO>(dept);
     }

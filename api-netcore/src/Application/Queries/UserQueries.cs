@@ -26,7 +26,7 @@ public sealed class GetUserDetailQueryHandler(
     /// <inheritdoc />
     protected override async Task<UserDetailVO> HandleAsync(GetUserDetailQuery query, CancellationToken cancellationToken)
     {
-        var user = await userRepository.GetAsync(query.Id, cancellationToken)
+        var user = await userRepository.GetAsync([it => it.Id == query.Id], cancellationToken)
             ?? throw new BusinessException(ErrorCodes.UserNotFound, $"用户 {query.Id} 不存在");
         var detail = mapper.Map<UserDetailVO>(user);
         detail.RoleIds = [.. (await userRoleRepository.GetListAsync([ur => ur.UserId == query.Id], cancellationToken: cancellationToken))
@@ -113,7 +113,6 @@ public sealed class GetUserPageQueryHandler(
         var scopeType = scope.Scope;
         var scopeDeptIds = scope.DeptIds?.ToList();
         var currentUserId = currentUser.UserId ?? Guid.Empty;
-        var currentUserName = currentUser.UserName ?? string.Empty;
         var currentUserDeptId = currentUser.DeptId;
 
         return u =>
@@ -127,6 +126,6 @@ public sealed class GetUserPageQueryHandler(
                 || (scopeType == DataScope.DeptAndBelow && u.DeptId != null && scopeDeptIds!.Contains(u.DeptId.Value))
                 || (scopeType == DataScope.Dept && u.DeptId == currentUserDeptId)
                 || (scopeType == DataScope.Custom && u.DeptId != null && scopeDeptIds!.Contains(u.DeptId.Value))
-                || (scopeType == DataScope.Self && (u.Id == currentUserId || u.CreatedBy == currentUserName)));
+                || (scopeType == DataScope.Self && (u.Id == currentUserId || u.CreatedBy == currentUserId)));
     }
 }

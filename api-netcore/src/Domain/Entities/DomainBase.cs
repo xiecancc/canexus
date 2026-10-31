@@ -18,8 +18,8 @@ public abstract class DomainBase
     /// <summary>创建时间，由数据访问层自动填充。</summary>
     public virtual DateTime CreatedAt { get; set; }
 
-    /// <summary>创建人（用户名），无登录上下文时由数据访问层填充为 system。</summary>
-    public virtual string? CreatedBy { get; set; }
+    /// <summary>创建人（用户 Id），无登录上下文时由数据访问层填充为 <see cref="Guid.Empty"/>。</summary>
+    public virtual Guid CreatedBy { get; set; }
 
     /// <summary>
     /// 创建实体浅拷贝快照：供修改类领域事件在变更前捕获状态（成员级浅拷贝，

@@ -116,17 +116,17 @@ public class AggregateBaseTests
     [Test]
     public void AuditFields_DefaultValues_AreSensible()
     {
-        // 审计字段默认值：乐观锁版本 0、未删除、审计人/时间为空
+        // 审计字段默认值：乐观锁版本令牌默认生成新 Guid、未删除、审计人/时间为空
         var entity = new TestAggregate();
 
         Assert.Multiple(() =>
         {
-            Assert.That(entity.Version, Is.EqualTo(0L));
+            Assert.That(entity.Version, Is.Not.EqualTo(Guid.Empty));
             Assert.That(entity.IsDeleted, Is.False);
             Assert.That(entity.TenantId, Is.Null);
-            Assert.That(entity.CreatedBy, Is.Null);
+            Assert.That(entity.CreatedBy, Is.EqualTo(Guid.Empty));
             Assert.That(entity.UpdatedAt, Is.Null);
-            Assert.That(entity.UpdatedBy, Is.Null);
+            Assert.That(entity.UpdatedBy, Is.EqualTo(Guid.Empty));
             Assert.That(entity.Description, Is.Null);
         });
     }

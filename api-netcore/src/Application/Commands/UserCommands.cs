@@ -25,7 +25,7 @@ internal static class UserRoleSupport
             return;
         }
 
-        var count = await roleRepository.CountAsync(r => distinct.Contains(r.Id), cancellationToken);
+        var count = await roleRepository.CountAsync([r => distinct.Contains(r.Id)], cancellationToken);
         if (count < distinct.Count)
         {
             throw new BusinessException(ErrorCodes.CommonDataNotFound, "所选角色不存在或已被删除");
@@ -64,13 +64,13 @@ public sealed class CreateUserCommandHandler(
     {
         var request = command.Request;
         var userName = request.UserName.Trim();
-        if (await userRepository.CountAsync(u => u.UserName == userName, cancellationToken) > 0)
+        if (await userRepository.CountAsync([u => u.UserName == userName], cancellationToken) > 0)
         {
             throw new BusinessException(ErrorCodes.UserNameDuplicate, $"用户名「{userName}」已存在");
         }
 
         await UserRoleSupport.ValidateRolesAsync(roleRepository, request.RoleIds, cancellationToken);
-        if (request.DeptId is not null && await deptRepository.CountAsync(d => d.Id == request.DeptId, cancellationToken) == 0)
+        if (request.DeptId is not null && await deptRepository.CountAsync([d => d.Id == request.DeptId], cancellationToken) == 0)
         {
             throw new BusinessException(ErrorCodes.CommonDataNotFound, "所属部门不存在");
         }
@@ -116,7 +116,7 @@ public sealed class DeleteUserCommandHandler(
     /// <inheritdoc />
     protected override async Task HandleAsync(DeleteUserCommand command, CancellationToken cancellationToken)
     {
-        var user = await userRepository.GetAsync(command.Id, cancellationToken)
+        var user = await userRepository.GetAsync([it => it.Id == command.Id], cancellationToken)
             ?? throw new BusinessException(ErrorCodes.UserNotFound, $"用户 {command.Id} 不存在");
         if (user.UserName == AdminUserName)
         {
@@ -157,7 +157,7 @@ public sealed class ResetUserPasswordCommandHandler(
     /// <inheritdoc />
     protected override async Task HandleAsync(ResetUserPasswordCommand command, CancellationToken cancellationToken)
     {
-        var user = await userRepository.GetAsync(command.Id, cancellationToken)
+        var user = await userRepository.GetAsync([it => it.Id == command.Id], cancellationToken)
             ?? throw new BusinessException(ErrorCodes.UserNotFound, $"用户 {command.Id} 不存在");
         user.PasswordHash = passwordHasher.Hash(command.Request.Password);
         await userRepository.UpdateAsync(user, cancellationToken);
@@ -186,7 +186,7 @@ public sealed class UpdateUserCommandHandler(
         var user = await GetOrThrowAsync(command.Id, cancellationToken);
         EnsureNotAdmin(user);
 
-        if (request.DeptId is not null && await deptRepository.CountAsync(d => d.Id == request.DeptId, cancellationToken) == 0)
+        if (request.DeptId is not null && await deptRepository.CountAsync([d => d.Id == request.DeptId], cancellationToken) == 0)
         {
             throw new BusinessException(ErrorCodes.CommonDataNotFound, "所属部门不存在");
         }
@@ -213,7 +213,7 @@ public sealed class UpdateUserCommandHandler(
     /// <summary>按 Id 获取用户，不存在时抛出业务异常。</summary>
     private async Task<SysUser> GetOrThrowAsync(Guid id, CancellationToken cancellationToken)
     {
-        return await userRepository.GetAsync(id, cancellationToken)
+        return await userRepository.GetAsync([it => it.Id == id], cancellationToken)
             ?? throw new BusinessException(ErrorCodes.UserNotFound, $"用户 {id} 不存在");
     }
 
@@ -239,7 +239,7 @@ public sealed class UpdateUserRolesCommandHandler(
     /// <inheritdoc />
     protected override async Task HandleAsync(UpdateUserRolesCommand command, CancellationToken cancellationToken)
     {
-        var user = await userRepository.GetAsync(command.Id, cancellationToken)
+        var user = await userRepository.GetAsync([it => it.Id == command.Id], cancellationToken)
             ?? throw new BusinessException(ErrorCodes.UserNotFound, $"用户 {command.Id} 不存在");
         await UserRoleSupport.ValidateRolesAsync(roleRepository, command.Request.RoleIds, cancellationToken);
 
@@ -271,7 +271,7 @@ public sealed class UpdateUserStatusCommandHandler(
     /// <inheritdoc />
     protected override async Task HandleAsync(UpdateUserStatusCommand command, CancellationToken cancellationToken)
     {
-        var user = await userRepository.GetAsync(command.Id, cancellationToken)
+        var user = await userRepository.GetAsync([it => it.Id == command.Id], cancellationToken)
             ?? throw new BusinessException(ErrorCodes.UserNotFound, $"用户 {command.Id} 不存在");
         if (user.UserName == AdminUserName)
         {

@@ -37,7 +37,7 @@ public sealed class GetRoleDetailQueryHandler(
     /// <inheritdoc />
     protected override async Task<RoleDetailVO> HandleAsync(GetRoleDetailQuery query, CancellationToken cancellationToken)
     {
-        var role = await roleRepository.GetAsync(query.Id, cancellationToken)
+        var role = await roleRepository.GetAsync([it => it.Id == query.Id], cancellationToken)
             ?? throw new BusinessException(ErrorCodes.RoleNotFound, $"角色 {query.Id} 不存在");
         var detail = mapper.Map<RoleDetailVO>(role);
         detail.MenuIds = [.. (await roleMenuRepository.GetListAsync([rm => rm.RoleId == query.Id], cancellationToken: cancellationToken))

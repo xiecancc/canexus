@@ -22,7 +22,7 @@ public sealed class CreateDeptCommandHandler(IAggregateTreeRepository<SysDept> d
 
         // 父部门存在性校验（根部门 parentId=Guid.Empty 跳过）
         if (request.ParentId != SysDept.RootParentId
-            && await deptRepository.GetAsync(request.ParentId, cancellationToken) is null)
+            && await deptRepository.GetAsync([it => it.Id == request.ParentId], cancellationToken) is null)
         {
             throw new BusinessException(ErrorCodes.DeptNotFound, $"部门 {request.ParentId} 不存在");
         }
@@ -55,15 +55,15 @@ public sealed class DeleteDeptCommandHandler(
     /// <inheritdoc />
     protected override async Task HandleAsync(DeleteDeptCommand command, CancellationToken cancellationToken)
     {
-        var dept = await deptRepository.GetAsync(command.Id, cancellationToken)
+        var dept = await deptRepository.GetAsync([it => it.Id == command.Id], cancellationToken)
             ?? throw new BusinessException(ErrorCodes.DeptNotFound, $"部门 {command.Id} 不存在");
 
-        if (await deptRepository.CountAsync(d => d.ParentId == command.Id, cancellationToken) > 0)
+        if (await deptRepository.CountAsync([d => d.ParentId == command.Id], cancellationToken) > 0)
         {
             throw new BusinessException(ErrorCodes.DeptHasChildren, $"部门「{dept.DeptName}」下存在子部门，不允许删除");
         }
 
-        if (await userRepository.CountAsync(u => u.DeptId == command.Id, cancellationToken) > 0)
+        if (await userRepository.CountAsync([u => u.DeptId == command.Id], cancellationToken) > 0)
         {
             throw new BusinessException(ErrorCodes.DeptHasUsers, $"部门「{dept.DeptName}」下存在用户，不允许删除");
         }
@@ -89,7 +89,7 @@ public sealed class UpdateDeptCommandHandler(
     protected override async Task HandleAsync(UpdateDeptCommand command, CancellationToken cancellationToken)
     {
         var request = command.Request;
-        var dept = await deptRepository.GetAsync(command.Id, cancellationToken)
+        var dept = await deptRepository.GetAsync([it => it.Id == command.Id], cancellationToken)
             ?? throw new BusinessException(ErrorCodes.DeptNotFound, $"部门 {command.Id} 不存在");
 
         var parentChanged = dept.ParentId != request.ParentId;

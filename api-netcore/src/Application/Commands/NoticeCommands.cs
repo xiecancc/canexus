@@ -36,7 +36,7 @@ public sealed class DeleteNoticeCommandHandler(IAggregateRepository<SysNotice> n
     /// <inheritdoc />
     protected override async Task HandleAsync(DeleteNoticeCommand command, CancellationToken cancellationToken)
     {
-        var entity = await noticeRepository.GetAsync(command.Id, cancellationToken)
+        var entity = await noticeRepository.GetAsync([it => it.Id == command.Id], cancellationToken)
             ?? throw new BusinessException(ErrorCodes.NoticeNotFound, $"通知公告 {command.Id} 不存在");
 
         // 变更前捕获公告状态快照（软删除可能回填墓碑字段）
@@ -57,7 +57,7 @@ public sealed class UpdateNoticeCommandHandler(IAggregateRepository<SysNotice> n
     protected override async Task HandleAsync(UpdateNoticeCommand command, CancellationToken cancellationToken)
     {
         var request = command.Request;
-        var entity = await noticeRepository.GetAsync(command.Id, cancellationToken)
+        var entity = await noticeRepository.GetAsync([it => it.Id == command.Id], cancellationToken)
             ?? throw new BusinessException(ErrorCodes.NoticeNotFound, $"通知公告 {command.Id} 不存在");
 
         // 变更前捕获公告状态快照（实体即将被原位修改）
