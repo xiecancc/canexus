@@ -1,7 +1,9 @@
 
 using Application.Behaviors;
+using Application.Events;
 using Application.Permissions;
 using Application.Scopes;
+using Domain.Services.Events;
 using FluentValidation;
 using MediatR;
 using Microsoft.Extensions.DependencyInjection;
@@ -10,7 +12,7 @@ namespace Application;
 /// <summary>应用层依赖注册扩展。</summary>
 public static class DependencyExtensions
 {
-    /// <summary>注册应用层能力：MediatR（CQRS 分发）、Pipeline Behaviors（验证 / 日志 / 性能）、FluentValidation 验证器、AutoMapper 映射、权限校验与数据范围过滤。</summary>
+    /// <summary>注册应用层能力：MediatR（CQRS 分发 + 领域事件通知）、Pipeline Behaviors（验证 / 日志 / 性能）、FluentValidation 验证器、AutoMapper 映射、领域事件发布器、权限校验与数据范围过滤。</summary>
     /// <param name="services">服务集合。</param>
     /// <returns>服务集合。</returns>
     public static IServiceCollection AddApplicationServices(this IServiceCollection services)
@@ -31,6 +33,9 @@ public static class DependencyExtensions
 
         // AutoMapper：扫描本程序集 Profile 映射配置（Mappings 目录）
         services.AddAutoMapper(expression => expression.AddMaps(typeof(DependencyExtensions).Assembly));
+
+        // 领域事件发布器：业务关键节点经此发布事件（监听器由上方 MediatR 扫描自动注册，见 Events 目录）
+        services.AddScoped<IDomainEventPublisher, MediatRDomainEventPublisher>();
 
         services.AddScoped<IPermissionChecker, PermissionChecker>();
 

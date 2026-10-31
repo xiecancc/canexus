@@ -56,13 +56,15 @@ api-netcore/
 │   │   ├── Behaviors/              # Pipeline Behaviors：验证 / 日志 / 性能监控
 │   │   ├── Mappings/               # AutoMapper Profile（实体 → 视图对象）
 │   │   ├── Permissions/            # 权限缓存校验（IPermissionChecker）
-│   │   └── Scopes/                 # 数据范围过滤（DataScopeFilter）
+│   │   ├── Scopes/                 # 数据范围过滤（DataScopeFilter）
+│   │   └── Events/                 # 领域事件：MediatR 发布器 + 通知信封 + 权限缓存失效监听器
 │   ├── Application.Contracts/      # 契约层：CQRS 请求定义 + 请求/响应 DTO、Result 统一响应
 │   │   ├── Abstractions/           # IRequest / ICommand / IQuery 请求标记接口层次（契约与实现分离）
 │   │   ├── Commands/               # 写操作请求定义：{Entity}Commands.cs（仅命令 record，不含实现）
 │   │   └── Queries/                # 读操作请求定义：{Entity}Queries.cs（仅查询 record，不含实现）
 │   ├── Domain/                     # 领域层：实体、仓储接口、领域服务端口
 │   │   ├── Entities/               # DomainBase（创建审计 + 租户归属，无主键）/ AggregateBase / AggregateTreeBase 基类 + 17 个 Sys* 实体（关联表继承 DomainBase，业务字段联合主键）
+│   │   ├── Events/                 # 领域事件：DomainEvent 通用事件模型（名称 / 类型 / 时间 / 聚合根 / 载荷）+ 用户 / 角色 / 菜单变更事件
 │   │   ├── Repositories/           # IDomainRepository（查询 + 插入 + 物理删除）/ IAggregateRepository（聚合专属：乐观并发更新、软删除、恢复）/ IAggregateTreeRepository
 │   │   ├── Services/               # 跨层端口接口：IJobScheduleManager（调度）、ICaptchaService（验证码）、ITokenService、IPasswordHasher、IUnitOfWork、UserContext
 │   │   │   └── Rules/              # 纯逻辑领域校验规则：MenuRules / DictRules / ConfigRules / JobRules / NoticeRules / LogQueryBounds
@@ -99,6 +101,7 @@ api-netcore/
 - **仓储分层**：`IDomainRepository`（查询 + 插入 + 物理删除 + **批量 DeleteRangeAsync / InsertRangeAsync**）→ `IAggregateRepository`（软删除 + 乐观并发）→ `IAggregateTreeRepository`（树查询）→ `IAncestorsTreeRepository`（**后代 Ancestors 批量刷新**，仅限实现 IAncestorsTree 的树形聚合如部门）；专属仓储：三张日志表 + `ISysRefreshTokenRepository`（GetActiveByTokenAsync / RevokeAllForUserAsync / RemoveExpiredAsync）
 - **工作单元**：`IUnitOfWork` 仅暴露 `RunInTransactionAsync`（委托成功自动提交、异常自动回滚并原样透出），实现基于 SqlSugar `Ado.UseTranAsync`，无需显式 Begin / Commit / Rollback
 - **端口归位**：领域技术端口（ITokenService / IPasswordHasher / IUnitOfWork / UserContext / ICaptchaService 等）定义于 Domain/Services，实现在 Infrastructure(.Shared)；缓存端口 `IAppCache` 与 TTL 档位定义于 Infrastructure.Shared/Caching（支持层共享设施），应用层经 DI 消费，不感知缓存技术细节
+- **领域事件**：通用事件模型 `DomainEvent`（事件名称 EventName / 事件类型 EventType / 发生时间 OccurredAt / 聚合根标识 AggregateId / 载荷 Payload）定义于 Domain/Events，发布端口 `IDomainEventPublisher` 定义于 Domain/Services/Events；用户 / 角色 / 菜单命令处理器在业务变更成功后的关键节点发布对应事件（UserChangedEvent / RoleChangedEvent / MenuChangedEvent，载荷含变更类型）。应用层经 MediatR 通知信封（DomainEventNotification\<TEvent\>）进程内发布；监听器（如权限缓存失效监听器 PermissionCacheInvalidationHandler）以 INotificationHandler 按事件类型订阅并响应——**业务逻辑与清理逻辑解耦**，新增监听需求（消息推送、通知服务等）只需追加新的 INotificationHandler 实现，由 MediatR 扫描自动注册，核心业务代码零改动。失效口径：用户事件失效单用户权限缓存，角色 / 菜单事件全量失效
 - **领域规则归位**：纯逻辑校验规则（MenuRules / DictRules / ConfigRules / JobRules / NoticeRules / LogQueryBounds）位于 Domain/Services/Rules，供处理器与 Domain.Tests 复用；树形装配统一由 `AggregateTreeBase<T>.BuildTree` 承接（同级按 OrderNum 升序再按 Id、孤儿节点挂根级），树查询处理器过滤后建树并经 AutoMapper 递归映射为契约 VO
 - **双层缓存**：基于 HybridCache 的 L1 进程内存（短过期）+ L2 Redis（长过期，`HybridCache:RedisEnabled` 开启后生效）缓存，按 TTL 档位（Hot / Medium / Cold，可配置）自动调整两级过期策略；应用层统一经 `IAppCache` 端口读写与失效，不感知缓存技术
 

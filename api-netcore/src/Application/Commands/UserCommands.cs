@@ -3,10 +3,11 @@ namespace Application.Commands;
 using Application.Abstractions;
 using Application.Contracts.Commands;
 using Application.Contracts.Users;
-using Application.Permissions;
 using Domain.Entities;
+using Domain.Events;
 using Domain.Repositories;
 using Domain.Services.Auth;
+using Domain.Services.Events;
 using Domain.Services.Users;
 using Domain.Shared.Enums;
 using Domain.Shared.Exceptions;
@@ -49,6 +50,7 @@ public sealed class CreateUserCommandHandler(
     IAggregateTreeRepository<SysDept> deptRepository,
     IDomainRepository<SysUserRole> userRoleRepository,
     IPasswordHasher passwordHasher,
+    IDomainEventPublisher domainEventPublisher,
     IUnitOfWork unitOfWork) : CommandHandler<CreateUserCommand, Guid>
 {
     /// <summary>内置超管账号用户名。</summary>
@@ -73,7 +75,7 @@ public sealed class CreateUserCommandHandler(
             throw new BusinessException(ErrorCodes.CommonDataNotFound, "所属部门不存在");
         }
 
-        return await unitOfWork.RunInTransactionAsync(async () =>
+        var userId = await unitOfWork.RunInTransactionAsync(async () =>
         {
             var user = new SysUser
             {
@@ -92,6 +94,10 @@ public sealed class CreateUserCommandHandler(
             await UserRoleSupport.ReplaceUserRolesAsync(userRoleRepository, inserted.Id, request.RoleIds, cancellationToken);
             return inserted.Id;
         }, cancellationToken);
+
+        // 关键节点发布用户创建领域事件（清理等响应动作由监听器处理）
+        await domainEventPublisher.PublishAsync(new UserChangedEvent(userId, AggregateChangeType.Created), cancellationToken);
+        return userId;
     }
 }
 
@@ -100,7 +106,7 @@ public sealed class CreateUserCommandHandler(
 public sealed class DeleteUserCommandHandler(
     IAggregateRepository<SysUser> userRepository,
     IDomainRepository<SysUserRole> userRoleRepository,
-    IPermissionChecker permissionChecker,
+    IDomainEventPublisher domainEventPublisher,
     UserContext currentUser,
     IUnitOfWork unitOfWork) : CommandHandler<DeleteUserCommand>
 {
@@ -133,7 +139,8 @@ public sealed class DeleteUserCommandHandler(
             }
         }, cancellationToken);
 
-        await permissionChecker.InvalidateAsync(command.Id);
+        // 关键节点发布用户删除领域事件（清理等响应动作由监听器处理）
+        await domainEventPublisher.PublishAsync(new UserChangedEvent(command.Id, AggregateChangeType.Deleted), cancellationToken);
     }
 }
 
@@ -159,7 +166,7 @@ public sealed class UpdateUserCommandHandler(
     IAggregateRepository<SysUser> userRepository,
     IAggregateTreeRepository<SysDept> deptRepository,
     IDomainRepository<SysUserRole> userRoleRepository,
-    IPermissionChecker permissionChecker,
+    IDomainEventPublisher domainEventPublisher,
     IUnitOfWork unitOfWork) : CommandHandler<UpdateUserCommand>
 {
     /// <summary>内置超管账号用户名。</summary>
@@ -189,8 +196,8 @@ public sealed class UpdateUserCommandHandler(
             await UserRoleSupport.ReplaceUserRolesAsync(userRoleRepository, command.Id, request.RoleIds, cancellationToken);
         }, cancellationToken);
 
-        // 用户角色已变化：失效该用户权限缓存
-        await permissionChecker.InvalidateAsync(command.Id);
+        // 关键节点发布用户更新领域事件（角色已变化，清理等响应动作由监听器处理）
+        await domainEventPublisher.PublishAsync(new UserChangedEvent(command.Id, AggregateChangeType.Updated), cancellationToken);
     }
 
     /// <summary>按 Id 获取用户，不存在时抛出业务异常。</summary>
@@ -216,7 +223,7 @@ public sealed class UpdateUserRolesCommandHandler(
     IAggregateRepository<SysUser> userRepository,
     IAggregateRepository<SysRole> roleRepository,
     IDomainRepository<SysUserRole> userRoleRepository,
-    IPermissionChecker permissionChecker,
+    IDomainEventPublisher domainEventPublisher,
     IUnitOfWork unitOfWork) : CommandHandler<UpdateUserRolesCommand>
 {
     /// <inheritdoc />
@@ -231,7 +238,8 @@ public sealed class UpdateUserRolesCommandHandler(
             await UserRoleSupport.ReplaceUserRolesAsync(userRoleRepository, command.Id, command.Request.RoleIds, cancellationToken);
         }, cancellationToken);
 
-        await permissionChecker.InvalidateAsync(command.Id);
+        // 关键节点发布用户更新领域事件（角色已重分配，清理等响应动作由监听器处理）
+        await domainEventPublisher.PublishAsync(new UserChangedEvent(command.Id, AggregateChangeType.Updated), cancellationToken);
     }
 }
 
@@ -239,7 +247,7 @@ public sealed class UpdateUserRolesCommandHandler(
 /// <remarks>构造函数。</remarks>
 public sealed class UpdateUserStatusCommandHandler(
     IAggregateRepository<SysUser> userRepository,
-    IPermissionChecker permissionChecker) : CommandHandler<UpdateUserStatusCommand>
+    IDomainEventPublisher domainEventPublisher) : CommandHandler<UpdateUserStatusCommand>
 {
     /// <summary>内置超管账号用户名。</summary>
     private const string AdminUserName = "admin";
@@ -261,6 +269,8 @@ public sealed class UpdateUserStatusCommandHandler(
 
         user.Status = command.Request.Status;
         await userRepository.UpdateAsync(user, cancellationToken);
-        await permissionChecker.InvalidateAsync(command.Id);
+
+        // 关键节点发布用户更新领域事件（清理等响应动作由监听器处理）
+        await domainEventPublisher.PublishAsync(new UserChangedEvent(command.Id, AggregateChangeType.Updated), cancellationToken);
     }
 }

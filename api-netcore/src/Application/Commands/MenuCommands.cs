@@ -3,10 +3,12 @@ namespace Application.Commands;
 using Application.Abstractions;
 using Application.Contracts.Commands;
 using Application.Contracts.Menus;
-using Application.Permissions;
 using AutoMapper;
 using Domain.Entities;
+using Domain.Events;
 using Domain.Repositories;
+using Domain.Services.Events;
+using Domain.Shared.Enums;
 using Domain.Shared.Exceptions;
 using Domain.Shared.Results;
 
@@ -14,7 +16,7 @@ using Domain.Shared.Results;
 /// <remarks>构造函数。</remarks>
 public sealed class CreateMenuCommandHandler(
     IAggregateTreeRepository<SysMenu> menuRepository,
-    IPermissionChecker permissionChecker,
+    IDomainEventPublisher domainEventPublisher,
     IMapper mapper) : CommandHandler<CreateMenuCommand, Guid>
 {
     /// <inheritdoc />
@@ -30,8 +32,8 @@ public sealed class CreateMenuCommandHandler(
         var menu = mapper.Map<SysMenu>(request);
         var inserted = await menuRepository.InsertAsync(menu, cancellationToken);
 
-        // 新增菜单可能携带 perms 并被分配角色：全量失效权限缓存保持简单正确
-        await permissionChecker.InvalidateAllAsync();
+        // 关键节点发布菜单创建领域事件（新菜单可能携带 perms 并被分配角色，清理等响应动作由监听器处理）
+        await domainEventPublisher.PublishAsync(new MenuChangedEvent(inserted.Id, AggregateChangeType.Created), cancellationToken);
         return inserted.Id;
     }
 }
@@ -41,7 +43,7 @@ public sealed class CreateMenuCommandHandler(
 public sealed class DeleteMenuCommandHandler(
     IAggregateTreeRepository<SysMenu> menuRepository,
     IDomainRepository<SysRoleMenu> roleMenuRepository,
-    IPermissionChecker permissionChecker) : CommandHandler<DeleteMenuCommand>
+    IDomainEventPublisher domainEventPublisher) : CommandHandler<DeleteMenuCommand>
 {
     /// <inheritdoc />
     protected override async Task HandleAsync(DeleteMenuCommand command, CancellationToken cancellationToken)
@@ -60,7 +62,9 @@ public sealed class DeleteMenuCommandHandler(
         }
 
         await menuRepository.DeleteAsync(menu, cancellationToken);
-        await permissionChecker.InvalidateAllAsync();
+
+        // 关键节点发布菜单删除领域事件（清理等响应动作由监听器处理）
+        await domainEventPublisher.PublishAsync(new MenuChangedEvent(command.Id, AggregateChangeType.Deleted), cancellationToken);
     }
 }
 
@@ -69,7 +73,7 @@ public sealed class DeleteMenuCommandHandler(
 public sealed class UpdateMenuCommandHandler(
     IAggregateTreeRepository<SysMenu> menuRepository,
     IUnitOfWork unitOfWork,
-    IPermissionChecker permissionChecker,
+    IDomainEventPublisher domainEventPublisher,
     IMapper mapper) : CommandHandler<UpdateMenuCommand>
 {
     /// <inheritdoc />
@@ -100,7 +104,7 @@ public sealed class UpdateMenuCommandHandler(
             }
         }, cancellationToken);
 
-        // 菜单变更（含挂载点变化）可能影响权限：全量失效权限缓存保持简单正确
-        await permissionChecker.InvalidateAllAsync();
+        // 关键节点发布菜单更新领域事件：菜单变更（含挂载点变化）可能影响权限（清理等响应动作由监听器处理）
+        await domainEventPublisher.PublishAsync(new MenuChangedEvent(command.Id, AggregateChangeType.Updated), cancellationToken);
     }
 }
