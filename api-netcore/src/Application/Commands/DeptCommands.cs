@@ -39,8 +39,8 @@ public sealed class CreateDeptCommandHandler(IAggregateTreeRepository<SysDept> d
         };
         var inserted = await deptRepository.InsertAsync(dept, cancellationToken);
 
-        // 关键节点发布部门创建领域事件（清理等响应动作由监听器处理）
-        await domainEventPublisher.PublishAsync(new DeptChangedEvent(inserted.Id, AggregateChangeType.Created), cancellationToken);
+        // 关键节点发布部门创建领域事件（携带创建后的部门状态）
+        await domainEventPublisher.PublishAsync(new DeptCreatedEvent(inserted), cancellationToken);
         return inserted.Id;
     }
 }
@@ -68,10 +68,13 @@ public sealed class DeleteDeptCommandHandler(
             throw new BusinessException(ErrorCodes.DeptHasUsers, $"部门「{dept.DeptName}」下存在用户，不允许删除");
         }
 
+        // 变更前捕获部门状态快照（软删除可能回填墓碑字段）
+        var snapshot = dept.Snapshot<SysDept>();
+
         await deptRepository.DeleteAsync(dept, cancellationToken);
 
-        // 关键节点发布部门删除领域事件（清理等响应动作由监听器处理）
-        await domainEventPublisher.PublishAsync(new DeptChangedEvent(command.Id, AggregateChangeType.Deleted), cancellationToken);
+        // 关键节点发布部门删除领域事件（携带删除前的部门状态）
+        await domainEventPublisher.PublishAsync(new DeptDeletedEvent(snapshot), cancellationToken);
     }
 }
 
@@ -90,6 +93,9 @@ public sealed class UpdateDeptCommandHandler(
             ?? throw new BusinessException(ErrorCodes.DeptNotFound, $"部门 {command.Id} 不存在");
 
         var parentChanged = dept.ParentId != request.ParentId;
+
+        // 变更前捕获部门状态快照（实体在事务内被原位修改，挂载点变化亦可由监听器比对）
+        var before = dept.Snapshot<SysDept>();
 
         await unitOfWork.RunInTransactionAsync(async () =>
         {
@@ -113,7 +119,7 @@ public sealed class UpdateDeptCommandHandler(
             }
         }, cancellationToken);
 
-        // 关键节点发布部门更新领域事件（含挂载点变化，清理等响应动作由监听器处理）
-        await domainEventPublisher.PublishAsync(new DeptChangedEvent(command.Id, AggregateChangeType.Updated), cancellationToken);
+        // 关键节点发布部门修改领域事件（携带变更前后部门状态）
+        await domainEventPublisher.PublishAsync(new DeptUpdatedEvent(before, dept), cancellationToken);
     }
 }

@@ -31,7 +31,7 @@ public sealed class CreateConfigCommandHandler(IAggregateRepository<SysConfig> c
         var inserted = await configRepository.InsertAsync(entity, cancellationToken);
 
         // 关键节点发布参数配置创建领域事件（缓存清理等响应动作由监听器处理）
-        await domainEventPublisher.PublishAsync(new ConfigChangedEvent(inserted.Id, configKey, AggregateChangeType.Created), cancellationToken);
+        await domainEventPublisher.PublishAsync(new ConfigCreatedEvent(inserted), cancellationToken);
         return inserted.Id;
     }
 }
@@ -51,10 +51,13 @@ public sealed class DeleteConfigCommandHandler(IAggregateRepository<SysConfig> c
             throw new BusinessException(ErrorCodes.ConfigBuiltInProtected, "内置参数不允许删除");
         }
 
+        // 变更前捕获配置状态快照（软删除可能回填墓碑字段）
+        var snapshot = entity.Snapshot<SysConfig>();
+
         await configRepository.DeleteAsync(entity, cancellationToken);
 
-        // 关键节点发布参数配置删除领域事件（缓存清理等响应动作由监听器处理）
-        await domainEventPublisher.PublishAsync(new ConfigChangedEvent(command.Id, entity.ConfigKey, AggregateChangeType.Deleted), cancellationToken);
+        // 关键节点发布参数配置删除领域事件（携带删除前的配置状态）
+        await domainEventPublisher.PublishAsync(new ConfigDeletedEvent(snapshot), cancellationToken);
     }
 }
 
@@ -75,12 +78,13 @@ public sealed class UpdateConfigCommandHandler(IAggregateRepository<SysConfig> c
             throw new BusinessException(ErrorCodes.ConfigKeyDuplicate, $"参数键名「{configKey}」已存在");
         }
 
-        var originalKey = entity.ConfigKey;
+        // 变更前捕获配置状态快照（键名变更时旧键名由 Before.ConfigKey 表达）
+        var before = entity.Snapshot<SysConfig>();
+
         mapper.Map(request, entity);
         await configRepository.UpdateAsync(entity, cancellationToken);
 
-        // 关键节点发布参数配置更新领域事件（键名变更时新旧键缓存均由监听器失效）
-        await domainEventPublisher.PublishAsync(
-            new ConfigChangedEvent(command.Id, configKey, AggregateChangeType.Updated, originalKey), cancellationToken);
+        // 关键节点发布参数配置修改领域事件（携带变更前后状态，新旧键缓存均由监听器失效）
+        await domainEventPublisher.PublishAsync(new ConfigUpdatedEvent(before, entity), cancellationToken);
     }
 }

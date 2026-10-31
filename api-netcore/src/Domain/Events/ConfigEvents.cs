@@ -1,25 +1,16 @@
 namespace Domain.Events;
 
-using Domain.Shared.Enums;
+using Domain.Entities;
 
-/// <summary>参数配置变更领域事件：配置创建 / 更新（含键名变更）/ 删除成功后发布。</summary>
-/// <param name="ConfigId">变更的参数配置 Id。</param>
-/// <param name="ConfigKey">参数键名（变更后）。</param>
-/// <param name="ChangeType">变更类型。</param>
-/// <param name="OriginalConfigKey">键名变更前的旧键名；未变更为 null。</param>
-public sealed class ConfigChangedEvent(Guid configId, string configKey, AggregateChangeType changeType, string? originalConfigKey = null)
-    : AggregateChangedEvent("config.changed", configId, changeType, new Dictionary<string, object?>
-    {
-        ["configKey"] = configKey,
-        ["originalConfigKey"] = originalConfigKey
-    })
-{
-    /// <summary>变更的参数配置 Id。</summary>
-    public Guid ConfigId { get; } = configId;
+/// <summary>参数配置创建领域事件：配置创建成功后发布，携带创建后的状态。</summary>
+/// <param name="Entity">创建后的参数配置。</param>
+public sealed class ConfigCreatedEvent(SysConfig entity) : CreatedEvent<SysConfig>("config.created", entity);
 
-    /// <summary>参数键名（变更后）。</summary>
-    public string ConfigKey { get; } = configKey;
+/// <summary>参数配置修改领域事件：配置更新成功后发布，携带变更前后状态——键名变更时旧键名由 Before.ConfigKey 表达，监听器可据此双失效缓存。</summary>
+/// <param name="Before">变更前的配置快照。</param>
+/// <param name="After">变更后的配置。</param>
+public sealed class ConfigUpdatedEvent(SysConfig before, SysConfig after) : UpdatedEvent<SysConfig>("config.updated", before, after);
 
-    /// <summary>键名变更前的旧键名；未变更为 null。</summary>
-    public string? OriginalConfigKey { get; } = originalConfigKey;
-}
+/// <summary>参数配置删除领域事件：配置删除成功后发布，携带删除前的状态（内置参数受保护不可删除）。</summary>
+/// <param name="Entity">删除前的参数配置。</param>
+public sealed class ConfigDeletedEvent(SysConfig entity) : DeletedEvent<SysConfig>("config.deleted", entity);

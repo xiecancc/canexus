@@ -5,16 +5,15 @@ namespace Domain.Events;
 /// <para>事件不可变——仅在业务变更成功后由应用层经 <c>IDomainEventPublisher</c> 发布，
 /// 监听器按事件类型订阅并各自决定响应动作（缓存清理、消息推送、通知服务等），
 /// 实现业务逻辑与横切逻辑解耦。</para>
+/// <para>属性设计原则：只保留全部事件共有的元数据；业务数据一律以派生事件的强类型属性承载
+/// （如修改类事件的 Before / After 状态），不再提供弱类型载荷字典，避免与类型化属性重复。</para>
 /// </summary>
 public abstract class DomainEvent
 {
-    /// <summary>空载荷（只读共享实例，事件不可变，无并发写风险）。</summary>
-    private static readonly IReadOnlyDictionary<string, object?> EmptyPayload = new Dictionary<string, object?>();
-
-    /// <summary>事件名称：事件类型的短类名（如 UserChangedEvent），供监听器路由与日志排查。</summary>
+    /// <summary>事件名称：事件类型的短类名（如 UserUpdatedEvent），供监听器路由与日志排查。</summary>
     public string EventName => GetType().Name;
 
-    /// <summary>事件类型：业务级命名（{模块}.{变更}，如 user.changed），与类名解耦，便于跨端消费与检索。</summary>
+    /// <summary>事件类型：业务级命名（{模块}.{变更}，如 user.updated），与类名解耦，便于跨端消费与检索。</summary>
     public string EventType { get; }
 
     /// <summary>事件发生时间（服务器本地时间，与审计字段 CreatedAt 口径一致）。</summary>
@@ -23,17 +22,12 @@ public abstract class DomainEvent
     /// <summary>聚合根标识：事件所属聚合根主键；非聚合级事件为 null。</summary>
     public Guid? AggregateId { get; }
 
-    /// <summary>事件载荷：携带监听器所需的最小业务数据（键为 camelCase 命名）。</summary>
-    public IReadOnlyDictionary<string, object?> Payload { get; }
-
-    /// <summary>构造函数：由子类传入事件类型、聚合根标识与载荷。</summary>
-    /// <param name="eventType">事件类型（业务级命名，如 user.changed）。</param>
+    /// <summary>构造函数：由派生事件传入事件类型与聚合根标识。</summary>
+    /// <param name="eventType">事件类型（业务级命名，如 user.updated）。</param>
     /// <param name="aggregateId">聚合根标识；非聚合级事件传 null。</param>
-    /// <param name="payload">事件载荷；缺省为空载荷。</param>
-    protected DomainEvent(string eventType, Guid? aggregateId = null, IReadOnlyDictionary<string, object?>? payload = null)
+    protected DomainEvent(string eventType, Guid? aggregateId = null)
     {
         EventType = eventType;
         AggregateId = aggregateId;
-        Payload = payload ?? EmptyPayload;
     }
 }

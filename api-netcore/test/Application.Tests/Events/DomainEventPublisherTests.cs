@@ -2,9 +2,9 @@ namespace Application.Tests.Events;
 
 using Application.Events;
 using Application.Permissions;
+using Domain.Entities;
 using Domain.Events;
 using Domain.Services.Rules;
-using Domain.Shared.Enums;
 using Infrastructure.Shared.Caching;
 using MediatR;
 using Microsoft.Extensions.Logging;
@@ -118,7 +118,7 @@ public class MediatRDomainEventPublisherTests
         // 领域事件被包装为非泛型通知信封后经 MediatR 发布
         var publisher = new RecordingPublisher();
         var domainEventPublisher = new MediatRDomainEventPublisher(publisher);
-        var domainEvent = new UserChangedEvent(UserId, AggregateChangeType.Updated);
+        var domainEvent = new UserPasswordResetEvent(UserId);
 
         await domainEventPublisher.PublishAsync(domainEvent);
 
@@ -141,67 +141,49 @@ public class PermissionCacheInvalidationHandlerTests
     private static readonly Guid MenuId = Guid.Parse("00000000-0000-0000-0000-000000000003");
     private static readonly Guid JobId = Guid.Parse("00000000-0000-0000-0000-000000000004");
 
+    private static SysUser CreateUser() => new() { Id = UserId, UserName = "user" };
+
     [Test]
-    public async Task Handle_UserChangedEvent_InvalidatesSingleUser()
+    public async Task Handle_UserEvents_InvalidatesSingleUser()
     {
-        // 用户变更：仅失效该用户的权限缓存
+        // 用户各类事件（创建 / 修改 / 角色重分配 / 重置密码 / 删除）：仅失效该用户的权限缓存
         var permissionChecker = new RecordingPermissionChecker();
         var handler = new PermissionCacheInvalidationHandler(permissionChecker);
 
-        await handler.Handle(new DomainEventNotification(
-            new UserChangedEvent(UserId, AggregateChangeType.Updated)), CancellationToken.None);
+        await handler.Handle(new DomainEventNotification(new UserCreatedEvent(CreateUser())), CancellationToken.None);
+        await handler.Handle(new DomainEventNotification(new UserUpdatedEvent(CreateUser(), CreateUser())), CancellationToken.None);
+        await handler.Handle(new DomainEventNotification(new UserRolesUpdatedEvent(UserId, [], [])), CancellationToken.None);
+        await handler.Handle(new DomainEventNotification(new UserPasswordResetEvent(UserId)), CancellationToken.None);
+        await handler.Handle(new DomainEventNotification(new UserDeletedEvent(CreateUser())), CancellationToken.None);
 
         Assert.Multiple(() =>
         {
-            Assert.That(permissionChecker.InvalidatedUserIds, Is.EqualTo([UserId]));
+            Assert.That(permissionChecker.InvalidatedUserIds, Has.Count.EqualTo(5));
+            Assert.That(permissionChecker.InvalidatedUserIds, Has.All.EqualTo(UserId));
             Assert.That(permissionChecker.InvalidateAllCallCount, Is.EqualTo(0));
         });
     }
 
     [Test]
-    public async Task Handle_UserPasswordResetEvent_InvalidatesSingleUser()
+    public async Task Handle_RoleAndMenuEvents_InvalidatesAllPermissions()
     {
-        // 重置密码：同样失效该用户的权限缓存
+        // 角色 / 菜单各类事件：影响任意持有（已授权）用户的权限，全量失效
         var permissionChecker = new RecordingPermissionChecker();
         var handler = new PermissionCacheInvalidationHandler(permissionChecker);
+        var role = new SysRole { Id = RoleId };
+        var menu = new SysMenu { Id = MenuId };
 
-        await handler.Handle(new DomainEventNotification(
-            new UserChangedEvent(UserId, AggregateChangeType.PasswordReset)), CancellationToken.None);
-
-        Assert.That(permissionChecker.InvalidatedUserIds, Is.EqualTo([UserId]));
-    }
-
-    [Test]
-    public async Task Handle_RoleChangedEvent_InvalidatesAllPermissions()
-    {
-        // 角色变更：影响任意持有该角色的用户，全量失效
-        var permissionChecker = new RecordingPermissionChecker();
-        var handler = new PermissionCacheInvalidationHandler(permissionChecker);
-
-        await handler.Handle(new DomainEventNotification(
-            new RoleChangedEvent(RoleId, AggregateChangeType.Deleted)), CancellationToken.None);
+        await handler.Handle(new DomainEventNotification(new RoleCreatedEvent(role)), CancellationToken.None);
+        await handler.Handle(new DomainEventNotification(new RoleUpdatedEvent(role, role)), CancellationToken.None);
+        await handler.Handle(new DomainEventNotification(new RoleDeletedEvent(role)), CancellationToken.None);
+        await handler.Handle(new DomainEventNotification(new MenuCreatedEvent(menu)), CancellationToken.None);
+        await handler.Handle(new DomainEventNotification(new MenuUpdatedEvent(menu, menu)), CancellationToken.None);
+        await handler.Handle(new DomainEventNotification(new MenuDeletedEvent(menu)), CancellationToken.None);
 
         Assert.Multiple(() =>
         {
             Assert.That(permissionChecker.InvalidatedUserIds, Is.Empty);
-            Assert.That(permissionChecker.InvalidateAllCallCount, Is.EqualTo(1));
-        });
-    }
-
-    [Test]
-    public async Task Handle_MenuChangedEvent_InvalidatesAllPermissions()
-    {
-        // 菜单变更：影响任意已授权角色的用户，全量失效
-        var permissionChecker = new RecordingPermissionChecker();
-        var handler = new PermissionCacheInvalidationHandler(permissionChecker);
-
-        await handler.Handle(new DomainEventNotification(
-            new MenuChangedEvent(MenuId, AggregateChangeType.Created)), CancellationToken.None);
-
-        Assert.Multiple(() =>
-        {
-            Assert.That(permissionChecker.InvalidatedUserIds, Is.Empty);
-            Assert.That(permissionChecker.InvalidateAllCallCount, Is.EqualTo(1));
+            Assert.That(permissionChecker.InvalidateAllCallCount, Is.EqualTo(6));
         });
     }
 
@@ -213,7 +195,7 @@ public class PermissionCacheInvalidationHandlerTests
         var handler = new PermissionCacheInvalidationHandler(permissionChecker);
 
         await handler.Handle(new DomainEventNotification(
-            new JobChangedEvent(JobId, AggregateChangeType.Updated)), CancellationToken.None);
+            new JobUpdatedEvent(new SysJob { Id = JobId }, new SysJob { Id = JobId })), CancellationToken.None);
 
         Assert.Multiple(() =>
         {
@@ -230,14 +212,16 @@ public class DictCacheInvalidationHandlerTests
     private const string DictType = "sys_normal_disable";
     private static readonly Guid DictDataId = Guid.Parse("00000000-0000-0000-0000-000000000001");
 
+    private static SysDictData CreateDictData(string dictType) => new() { Id = DictDataId, DictType = dictType };
+
     [Test]
-    public async Task Handle_DictDataChangedEvent_InvalidatesTypeCache()
+    public async Task Handle_DictDataCreatedEvent_InvalidatesTypeCache()
     {
         var cache = new RecordingCache();
         var handler = new DictCacheInvalidationHandler(cache);
 
         await handler.Handle(new DomainEventNotification(
-            new DictDataChangedEvent(DictDataId, DictType, AggregateChangeType.Created)), CancellationToken.None);
+            new DictDataCreatedEvent(CreateDictData(DictType))), CancellationToken.None);
 
         Assert.That(cache.RemovedKeys, Is.EqualTo([DictRules.DataTypeCacheKey(DictType)]));
     }
@@ -245,14 +229,26 @@ public class DictCacheInvalidationHandlerTests
     [Test]
     public async Task Handle_DictTypeMigrated_InvalidatesBothCaches()
     {
-        // 类型迁移：新旧类型缓存均失效
+        // 类型迁移：旧类型由 Before.DictType 表达，新旧类型缓存均失效
         var cache = new RecordingCache();
         var handler = new DictCacheInvalidationHandler(cache);
 
         await handler.Handle(new DomainEventNotification(
-            new DictDataChangedEvent(DictDataId, DictType, AggregateChangeType.Updated, "old_type")), CancellationToken.None);
+            new DictDataUpdatedEvent(CreateDictData("old_type"), CreateDictData(DictType))), CancellationToken.None);
 
         Assert.That(cache.RemovedKeys, Is.EqualTo([DictRules.DataTypeCacheKey(DictType), DictRules.DataTypeCacheKey("old_type")]));
+    }
+
+    [Test]
+    public async Task Handle_DictDataDeletedEvent_InvalidatesTypeCache()
+    {
+        var cache = new RecordingCache();
+        var handler = new DictCacheInvalidationHandler(cache);
+
+        await handler.Handle(new DomainEventNotification(
+            new DictDataDeletedEvent(CreateDictData(DictType))), CancellationToken.None);
+
+        Assert.That(cache.RemovedKeys, Is.EqualTo([DictRules.DataTypeCacheKey(DictType)]));
     }
 
     [Test]
@@ -263,7 +259,7 @@ public class DictCacheInvalidationHandlerTests
         var handler = new DictCacheInvalidationHandler(cache);
 
         await handler.Handle(new DomainEventNotification(
-            new UserChangedEvent(DictDataId, AggregateChangeType.Updated)), CancellationToken.None);
+            new UserPasswordResetEvent(DictDataId)), CancellationToken.None);
 
         Assert.That(cache.RemovedKeys, Is.Empty);
     }
@@ -276,14 +272,16 @@ public class ConfigCacheInvalidationHandlerTests
     private const string ConfigKey = "sys.account.captchaEnabled";
     private static readonly Guid ConfigId = Guid.Parse("00000000-0000-0000-0000-000000000001");
 
+    private static SysConfig CreateConfig(string configKey) => new() { Id = ConfigId, ConfigKey = configKey };
+
     [Test]
-    public async Task Handle_ConfigChangedEvent_InvalidatesKeyCache()
+    public async Task Handle_ConfigCreatedEvent_InvalidatesKeyCache()
     {
         var cache = new RecordingCache();
         var handler = new ConfigCacheInvalidationHandler(cache);
 
         await handler.Handle(new DomainEventNotification(
-            new ConfigChangedEvent(ConfigId, ConfigKey, AggregateChangeType.Deleted)), CancellationToken.None);
+            new ConfigCreatedEvent(CreateConfig(ConfigKey))), CancellationToken.None);
 
         Assert.That(cache.RemovedKeys, Is.EqualTo([ConfigRules.ValueCacheKey(ConfigKey)]));
     }
@@ -291,14 +289,26 @@ public class ConfigCacheInvalidationHandlerTests
     [Test]
     public async Task Handle_ConfigKeyRenamed_InvalidatesBothCaches()
     {
-        // 键名变更：新旧键缓存均失效
+        // 键名变更：旧键名由 Before.ConfigKey 表达，新旧键缓存均失效
         var cache = new RecordingCache();
         var handler = new ConfigCacheInvalidationHandler(cache);
 
         await handler.Handle(new DomainEventNotification(
-            new ConfigChangedEvent(ConfigId, ConfigKey, AggregateChangeType.Updated, "old_key")), CancellationToken.None);
+            new ConfigUpdatedEvent(CreateConfig("old_key"), CreateConfig(ConfigKey))), CancellationToken.None);
 
         Assert.That(cache.RemovedKeys, Is.EqualTo([ConfigRules.ValueCacheKey(ConfigKey), ConfigRules.ValueCacheKey("old_key")]));
+    }
+
+    [Test]
+    public async Task Handle_ConfigDeletedEvent_InvalidatesKeyCache()
+    {
+        var cache = new RecordingCache();
+        var handler = new ConfigCacheInvalidationHandler(cache);
+
+        await handler.Handle(new DomainEventNotification(
+            new ConfigDeletedEvent(CreateConfig(ConfigKey))), CancellationToken.None);
+
+        Assert.That(cache.RemovedKeys, Is.EqualTo([ConfigRules.ValueCacheKey(ConfigKey)]));
     }
 
     [Test]
@@ -309,7 +319,7 @@ public class ConfigCacheInvalidationHandlerTests
         var handler = new ConfigCacheInvalidationHandler(cache);
 
         await handler.Handle(new DomainEventNotification(
-            new UserChangedEvent(ConfigId, AggregateChangeType.Updated)), CancellationToken.None);
+            new UserPasswordResetEvent(ConfigId)), CancellationToken.None);
 
         Assert.That(cache.RemovedKeys, Is.Empty);
     }
@@ -322,11 +332,11 @@ public class DomainEventLoggingHandlerTests
     [Test]
     public async Task Handle_AnyEvent_CompletesWithoutError()
     {
-        // 通用监听器：任意领域事件均可安全记录
+        // 通用监听器（TEvent = DomainEvent 全量订阅）：任意领域事件均可安全记录
         var handler = new DomainEventLoggingHandler(NullLogger<DomainEventLoggingHandler>.Instance);
 
         Assert.DoesNotThrowAsync(async () => await handler.Handle(
-            new DomainEventNotification(new UserChangedEvent(Guid.NewGuid(), AggregateChangeType.Created)),
+            new DomainEventNotification(new UserPasswordResetEvent(Guid.NewGuid())),
             CancellationToken.None));
     }
 }

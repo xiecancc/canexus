@@ -17,8 +17,8 @@ public sealed class DomainEventLoggingHandler(ILogger<DomainEventLoggingHandler>
     /// <inheritdoc />
     protected override Task HandleAsync(DomainEvent domainEvent, CancellationToken cancellationToken)
     {
-        logger.LogInformation("领域事件已发布：{EventName}（{EventType}），聚合根 {AggregateId}，载荷 {@Payload}",
-            domainEvent.EventName, domainEvent.EventType, domainEvent.AggregateId, domainEvent.Payload);
+        logger.LogInformation("领域事件已发布：{EventName}（{EventType}），聚合根 {AggregateId}，发生时间 {OccurredAt}",
+            domainEvent.EventName, domainEvent.EventType, domainEvent.AggregateId, domainEvent.OccurredAt);
         return Task.CompletedTask;
     }
 }

@@ -24,7 +24,7 @@ public sealed class CreateNoticeCommandHandler(IAggregateRepository<SysNotice> n
         var inserted = await noticeRepository.InsertAsync(entity, cancellationToken);
 
         // 关键节点发布通知公告创建领域事件（消息推送等响应动作可由监听器扩展处理）
-        await domainEventPublisher.PublishAsync(new NoticeChangedEvent(inserted.Id, AggregateChangeType.Created), cancellationToken);
+        await domainEventPublisher.PublishAsync(new NoticeCreatedEvent(inserted), cancellationToken);
         return inserted.Id;
     }
 }
@@ -39,10 +39,13 @@ public sealed class DeleteNoticeCommandHandler(IAggregateRepository<SysNotice> n
         var entity = await noticeRepository.GetAsync(command.Id, cancellationToken)
             ?? throw new BusinessException(ErrorCodes.NoticeNotFound, $"通知公告 {command.Id} 不存在");
 
+        // 变更前捕获公告状态快照（软删除可能回填墓碑字段）
+        var snapshot = entity.Snapshot<SysNotice>();
+
         await noticeRepository.DeleteAsync(entity, cancellationToken);
 
         // 关键节点发布通知公告删除领域事件（响应动作由监听器处理）
-        await domainEventPublisher.PublishAsync(new NoticeChangedEvent(command.Id, AggregateChangeType.Deleted), cancellationToken);
+        await domainEventPublisher.PublishAsync(new NoticeDeletedEvent(snapshot), cancellationToken);
     }
 }
 
@@ -57,10 +60,13 @@ public sealed class UpdateNoticeCommandHandler(IAggregateRepository<SysNotice> n
         var entity = await noticeRepository.GetAsync(command.Id, cancellationToken)
             ?? throw new BusinessException(ErrorCodes.NoticeNotFound, $"通知公告 {command.Id} 不存在");
 
+        // 变更前捕获公告状态快照（实体即将被原位修改）
+        var before = entity.Snapshot<SysNotice>();
+
         mapper.Map(request, entity);
         await noticeRepository.UpdateAsync(entity, cancellationToken);
 
-        // 关键节点发布通知公告更新领域事件（响应动作由监听器处理）
-        await domainEventPublisher.PublishAsync(new NoticeChangedEvent(command.Id, AggregateChangeType.Updated), cancellationToken);
+        // 关键节点发布通知公告修改领域事件（携带变更前后状态）
+        await domainEventPublisher.PublishAsync(new NoticeUpdatedEvent(before, entity), cancellationToken);
     }
 }

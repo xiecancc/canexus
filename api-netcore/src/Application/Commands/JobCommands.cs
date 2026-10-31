@@ -34,8 +34,8 @@ public sealed class CreateJobCommandHandler(IAggregateRepository<SysJob> jobRepo
             await scheduleManager.ScheduleAsync(inserted, cancellationToken);
         }
 
-        // 关键节点发布定时任务创建领域事件（响应动作由监听器处理）
-        await domainEventPublisher.PublishAsync(new JobChangedEvent(inserted.Id, AggregateChangeType.Created), cancellationToken);
+        // 关键节点发布定时任务创建领域事件（携带创建后的任务状态）
+        await domainEventPublisher.PublishAsync(new JobCreatedEvent(inserted), cancellationToken);
         return inserted.Id;
     }
 }
@@ -53,11 +53,14 @@ public sealed class DeleteJobCommandHandler(IAggregateRepository<SysJob> jobRepo
         var entity = await jobRepository.GetAsync(command.Id, cancellationToken)
             ?? throw new BusinessException(ErrorCodes.JobNotFound, $"定时任务 {command.Id} 不存在");
 
+        // 变更前捕获任务状态快照（软删除可能回填墓碑字段）
+        var snapshot = entity.Snapshot<SysJob>();
+
         await scheduleManager.RemoveAsync(entity.Id, entity.JobGroup, cancellationToken);
         await jobRepository.DeleteAsync(entity, cancellationToken);
 
-        // 关键节点发布定时任务删除领域事件（响应动作由监听器处理）
-        await domainEventPublisher.PublishAsync(new JobChangedEvent(command.Id, AggregateChangeType.Deleted), cancellationToken);
+        // 关键节点发布定时任务删除领域事件（携带删除前的任务状态）
+        await domainEventPublisher.PublishAsync(new JobDeletedEvent(snapshot), cancellationToken);
     }
 }
 
@@ -96,6 +99,10 @@ public sealed class UpdateJobCommandHandler(IAggregateRepository<SysJob> jobRepo
         var jobGroup = request.JobGroup.Trim();
 
         var oldGroup = entity.JobGroup;
+
+        // 变更前捕获任务状态快照（实体即将被原位修改）
+        var before = entity.Snapshot<SysJob>();
+
         mapper.Map(request, entity);
         await jobRepository.UpdateAsync(entity, cancellationToken);
 
@@ -114,8 +121,8 @@ public sealed class UpdateJobCommandHandler(IAggregateRepository<SysJob> jobRepo
             await scheduleManager.RemoveAsync(command.Id, jobGroup, cancellationToken);
         }
 
-        // 关键节点发布定时任务更新领域事件（响应动作由监听器处理）
-        await domainEventPublisher.PublishAsync(new JobChangedEvent(command.Id, AggregateChangeType.Updated), cancellationToken);
+        // 关键节点发布定时任务修改领域事件（携带变更前后任务状态）
+        await domainEventPublisher.PublishAsync(new JobUpdatedEvent(before, entity), cancellationToken);
     }
 }
 
@@ -132,6 +139,9 @@ public sealed class UpdateJobStatusCommandHandler(IAggregateRepository<SysJob> j
         var entity = await jobRepository.GetAsync(command.Id, cancellationToken)
             ?? throw new BusinessException(ErrorCodes.JobNotFound, $"定时任务 {command.Id} 不存在");
 
+        // 变更前捕获任务状态快照（状态字段即将被原位修改）
+        var before = entity.Snapshot<SysJob>();
+
         entity.Status = command.Request.Status;
         await jobRepository.UpdateAsync(entity, cancellationToken);
 
@@ -144,7 +154,7 @@ public sealed class UpdateJobStatusCommandHandler(IAggregateRepository<SysJob> j
             await scheduleManager.RemoveAsync(entity.Id, entity.JobGroup, cancellationToken);
         }
 
-        // 关键节点发布定时任务更新领域事件（响应动作由监听器处理）
-        await domainEventPublisher.PublishAsync(new JobChangedEvent(command.Id, AggregateChangeType.Updated), cancellationToken);
+        // 关键节点发布定时任务修改领域事件（携带变更前后任务状态，启停变化可由监听器比对）
+        await domainEventPublisher.PublishAsync(new JobUpdatedEvent(before, entity), cancellationToken);
     }
 }

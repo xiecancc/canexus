@@ -39,7 +39,7 @@ public sealed class CreateTenantCommandHandler(IAggregateRepository<SysTenant> t
         var inserted = await tenantRepository.InsertAsync(entity, cancellationToken);
 
         // 关键节点发布租户创建领域事件（租户初始化等响应动作可由监听器扩展处理）
-        await domainEventPublisher.PublishAsync(new TenantChangedEvent(inserted.Id, AggregateChangeType.Created), cancellationToken);
+        await domainEventPublisher.PublishAsync(new TenantCreatedEvent(inserted), cancellationToken);
         return inserted.Id;
     }
 }
@@ -63,10 +63,13 @@ public sealed class DeleteTenantCommandHandler(
             throw new BusinessException(ErrorCodes.TenantInUse, $"租户「{entity.TenantName}」下存在归属用户，不允许删除");
         }
 
+        // 变更前捕获租户状态快照（软删除可能回填墓碑字段）
+        var snapshot = entity.Snapshot<SysTenant>();
+
         await tenantRepository.DeleteAsync(entity, cancellationToken);
 
         // 关键节点发布租户删除领域事件（响应动作由监听器处理）
-        await domainEventPublisher.PublishAsync(new TenantChangedEvent(command.Id, AggregateChangeType.Deleted), cancellationToken);
+        await domainEventPublisher.PublishAsync(new TenantDeletedEvent(snapshot), cancellationToken);
     }
 }
 
@@ -90,14 +93,18 @@ public sealed class UpdateTenantCommandHandler(IAggregateRepository<SysTenant> t
             throw new BusinessException(ErrorCodes.TenantKeyImmutable, "租户标识（tenantKey）不可变更");
         }
 
+        // 变更前捕获租户状态快照（实体字段即将被原位修改）
+        var before = entity.Snapshot<SysTenant>();
+
         entity.TenantName = tenantName;
         entity.ContactPhone = request.ContactPhone;
         entity.Status = request.Status;
         entity.Description = request.Description;
         entity.ExpireTime = request.ExpireTime;
+
         await tenantRepository.UpdateAsync(entity, cancellationToken);
 
-        // 关键节点发布租户更新领域事件（响应动作由监听器处理）
-        await domainEventPublisher.PublishAsync(new TenantChangedEvent(command.Id, AggregateChangeType.Updated), cancellationToken);
+        // 关键节点发布租户修改领域事件（携带变更前后状态）
+        await domainEventPublisher.PublishAsync(new TenantUpdatedEvent(before, entity), cancellationToken);
     }
 }

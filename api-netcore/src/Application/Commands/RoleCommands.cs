@@ -65,17 +65,17 @@ public sealed class CreateRoleCommandHandler(
         await EnsureRoleKeyAvailableAsync(roleKey, excludeId: null, cancellationToken);
         await RoleMenuSupport.ValidateMenusAsync(menuRepository, request.MenuIds, cancellationToken);
 
-        var roleId = await unitOfWork.RunInTransactionAsync(async () =>
+        var inserted = await unitOfWork.RunInTransactionAsync(async () =>
         {
             var role = mapper.Map<SysRole>(request);
-            var inserted = await roleRepository.InsertAsync(role, cancellationToken);
-            await RoleMenuSupport.ReplaceRoleMenusAsync(roleMenuRepository, inserted.Id, request.MenuIds, cancellationToken);
-            return inserted.Id;
+            var insertedRole = await roleRepository.InsertAsync(role, cancellationToken);
+            await RoleMenuSupport.ReplaceRoleMenusAsync(roleMenuRepository, insertedRole.Id, request.MenuIds, cancellationToken);
+            return insertedRole;
         }, cancellationToken);
 
-        // 关键节点发布角色创建领域事件（清理等响应动作由监听器处理）
-        await domainEventPublisher.PublishAsync(new RoleChangedEvent(roleId, AggregateChangeType.Created), cancellationToken);
-        return roleId;
+        // 关键节点发布角色创建领域事件（携带创建后的角色状态）
+        await domainEventPublisher.PublishAsync(new RoleCreatedEvent(inserted), cancellationToken);
+        return inserted.Id;
     }
 
     /// <summary>校验 roleKey 可用：不可使用保留值 super_admin，且不与其他角色重复。</summary>
@@ -123,6 +123,9 @@ public sealed class DeleteRoleCommandHandler(
             throw new BusinessException(ErrorCodes.RoleInUse, $"角色「{role.RoleName}」已被用户引用，不允许删除");
         }
 
+        // 变更前捕获角色状态快照（软删除可能回填墓碑字段）
+        var snapshot = role.Snapshot<SysRole>();
+
         await unitOfWork.RunInTransactionAsync(async () =>
         {
             await roleRepository.DeleteAsync(role, cancellationToken);
@@ -133,8 +136,8 @@ public sealed class DeleteRoleCommandHandler(
             }
         }, cancellationToken);
 
-        // 关键节点发布角色删除领域事件（清理等响应动作由监听器处理）
-        await domainEventPublisher.PublishAsync(new RoleChangedEvent(command.Id, AggregateChangeType.Deleted), cancellationToken);
+        // 关键节点发布角色删除领域事件（携带删除前的角色状态）
+        await domainEventPublisher.PublishAsync(new RoleDeletedEvent(snapshot), cancellationToken);
     }
 }
 
@@ -166,6 +169,9 @@ public sealed class UpdateRoleCommandHandler(
         await EnsureRoleKeyAvailableAsync(roleKey, excludeId: command.Id, cancellationToken);
         await RoleMenuSupport.ValidateMenusAsync(menuRepository, request.MenuIds, cancellationToken);
 
+        // 变更前捕获角色状态快照（实体在事务内被原位修改）
+        var before = role.Snapshot<SysRole>();
+
         await unitOfWork.RunInTransactionAsync(async () =>
         {
             mapper.Map(request, role);
@@ -173,8 +179,8 @@ public sealed class UpdateRoleCommandHandler(
             await RoleMenuSupport.ReplaceRoleMenusAsync(roleMenuRepository, command.Id, request.MenuIds, cancellationToken);
         }, cancellationToken);
 
-        // 关键节点发布角色更新领域事件：角色 key / 状态 / 数据范围 / 授权菜单均可能影响已持有该角色用户的权限（清理等响应动作由监听器处理）
-        await domainEventPublisher.PublishAsync(new RoleChangedEvent(command.Id, AggregateChangeType.Updated), cancellationToken);
+        // 关键节点发布角色修改领域事件（携带变更前后角色状态：key / 状态 / 数据范围 / 授权菜单变化可由监听器比对）
+        await domainEventPublisher.PublishAsync(new RoleUpdatedEvent(before, role), cancellationToken);
     }
 
     /// <summary>校验 roleKey 可用：不可使用保留值 super_admin，且不与其他角色重复。</summary>

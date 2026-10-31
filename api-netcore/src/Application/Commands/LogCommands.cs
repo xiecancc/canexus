@@ -18,8 +18,8 @@ public sealed class CleanLoginLogCommandHandler(ILoginLogRepository loginLogRepo
     {
         await loginLogRepository.ClearAsync(cancellationToken);
 
-        // 关键节点发布登录日志清空领域事件（聚合根标识为 null：无单条定位）
-        await domainEventPublisher.PublishAsync(new LogChangedEvent(LogChangedEvent.LoginLogType, AggregateChangeType.Deleted), cancellationToken);
+        // 关键节点发布登录日志删除领域事件（清空全部：聚合根标识为 null，无单条定位）
+        await domainEventPublisher.PublishAsync(new LogDeletedEvent(LogDeletedEvent.LoginLogType), cancellationToken);
     }
 }
 
@@ -34,8 +34,8 @@ public sealed class CleanOperLogCommandHandler(IOperLogRepository operLogReposit
     {
         await operLogRepository.ClearAsync(cancellationToken);
 
-        // 关键节点发布操作日志清空领域事件（聚合根标识为 null：无单条定位）
-        await domainEventPublisher.PublishAsync(new LogChangedEvent(LogChangedEvent.OperLogType, AggregateChangeType.Deleted), cancellationToken);
+        // 关键节点发布操作日志删除领域事件（清空全部：聚合根标识为 null，无单条定位）
+        await domainEventPublisher.PublishAsync(new LogDeletedEvent(LogDeletedEvent.OperLogType), cancellationToken);
     }
 }
 
@@ -51,8 +51,8 @@ public sealed class DeleteLoginLogCommandHandler(ILoginLogRepository loginLogRep
         // 日志不走软删除墓碑：与清空策略一致，按 Id 物理删除
         await loginLogRepository.HardDeleteAsync(command.Id, cancellationToken);
 
-        // 关键节点发布登录日志删除领域事件（响应动作由监听器处理）
-        await domainEventPublisher.PublishAsync(new LogChangedEvent(LogChangedEvent.LoginLogType, AggregateChangeType.Deleted, command.Id), cancellationToken);
+        // 关键节点发布登录日志删除领域事件（携带被删除的日志 Id）
+        await domainEventPublisher.PublishAsync(new LogDeletedEvent(LogDeletedEvent.LoginLogType, command.Id), cancellationToken);
     }
 }
 
@@ -68,7 +68,7 @@ public sealed class DeleteOperLogCommandHandler(IOperLogRepository operLogReposi
         // 日志不走软删除墓碑：与清空策略一致，按 Id 物理删除
         await operLogRepository.HardDeleteAsync(command.Id, cancellationToken);
 
-        // 关键节点发布操作日志删除领域事件（响应动作由监听器处理）
-        await domainEventPublisher.PublishAsync(new LogChangedEvent(LogChangedEvent.OperLogType, AggregateChangeType.Deleted, command.Id), cancellationToken);
+        // 关键节点发布操作日志删除领域事件（携带被删除的日志 Id）
+        await domainEventPublisher.PublishAsync(new LogDeletedEvent(LogDeletedEvent.OperLogType, command.Id), cancellationToken);
     }
 }

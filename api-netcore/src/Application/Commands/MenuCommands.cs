@@ -32,8 +32,8 @@ public sealed class CreateMenuCommandHandler(
         var menu = mapper.Map<SysMenu>(request);
         var inserted = await menuRepository.InsertAsync(menu, cancellationToken);
 
-        // 关键节点发布菜单创建领域事件（新菜单可能携带 perms 并被分配角色，清理等响应动作由监听器处理）
-        await domainEventPublisher.PublishAsync(new MenuChangedEvent(inserted.Id, AggregateChangeType.Created), cancellationToken);
+        // 关键节点发布菜单创建领域事件（携带创建后的菜单状态，新菜单可能携带 perms 并被分配角色）
+        await domainEventPublisher.PublishAsync(new MenuCreatedEvent(inserted), cancellationToken);
         return inserted.Id;
     }
 }
@@ -61,10 +61,13 @@ public sealed class DeleteMenuCommandHandler(
             throw new BusinessException(ErrorCodes.MenuInUse, $"菜单「{menu.MenuName}」已被角色引用，不允许删除");
         }
 
+        // 变更前捕获菜单状态快照（软删除可能回填墓碑字段）
+        var snapshot = menu.Snapshot<SysMenu>();
+
         await menuRepository.DeleteAsync(menu, cancellationToken);
 
-        // 关键节点发布菜单删除领域事件（清理等响应动作由监听器处理）
-        await domainEventPublisher.PublishAsync(new MenuChangedEvent(command.Id, AggregateChangeType.Deleted), cancellationToken);
+        // 关键节点发布菜单删除领域事件（携带删除前的菜单状态）
+        await domainEventPublisher.PublishAsync(new MenuDeletedEvent(snapshot), cancellationToken);
     }
 }
 
@@ -86,6 +89,9 @@ public sealed class UpdateMenuCommandHandler(
         var parentChanged = menu.ParentId != request.ParentId;
         var oldParentId = menu.ParentId;
 
+        // 变更前捕获菜单状态快照（实体在事务内被原位修改，挂载点变化亦可由监听器比对）
+        var before = menu.Snapshot<SysMenu>();
+
         await unitOfWork.RunInTransactionAsync(async () =>
         {
             // 仅更新业务字段（ParentId 还原为旧值）；父级变更统一交由树形仓储 MoveAsync 处理（环检测 / 改父）
@@ -104,7 +110,7 @@ public sealed class UpdateMenuCommandHandler(
             }
         }, cancellationToken);
 
-        // 关键节点发布菜单更新领域事件：菜单变更（含挂载点变化）可能影响权限（清理等响应动作由监听器处理）
-        await domainEventPublisher.PublishAsync(new MenuChangedEvent(command.Id, AggregateChangeType.Updated), cancellationToken);
+        // 关键节点发布菜单修改领域事件（携带变更前后菜单状态）
+        await domainEventPublisher.PublishAsync(new MenuUpdatedEvent(before, menu), cancellationToken);
     }
 }

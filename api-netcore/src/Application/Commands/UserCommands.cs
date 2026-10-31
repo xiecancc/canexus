@@ -75,7 +75,7 @@ public sealed class CreateUserCommandHandler(
             throw new BusinessException(ErrorCodes.CommonDataNotFound, "所属部门不存在");
         }
 
-        var userId = await unitOfWork.RunInTransactionAsync(async () =>
+        var inserted = await unitOfWork.RunInTransactionAsync(async () =>
         {
             var user = new SysUser
             {
@@ -90,14 +90,14 @@ public sealed class CreateUserCommandHandler(
                 Status = request.Status,
                 Description = request.Description
             };
-            var inserted = await userRepository.InsertAsync(user, cancellationToken);
-            await UserRoleSupport.ReplaceUserRolesAsync(userRoleRepository, inserted.Id, request.RoleIds, cancellationToken);
-            return inserted.Id;
+            var insertedUser = await userRepository.InsertAsync(user, cancellationToken);
+            await UserRoleSupport.ReplaceUserRolesAsync(userRoleRepository, insertedUser.Id, request.RoleIds, cancellationToken);
+            return insertedUser;
         }, cancellationToken);
 
-        // 关键节点发布用户创建领域事件（清理等响应动作由监听器处理）
-        await domainEventPublisher.PublishAsync(new UserChangedEvent(userId, AggregateChangeType.Created), cancellationToken);
-        return userId;
+        // 关键节点发布用户创建领域事件（携带创建后的用户状态）
+        await domainEventPublisher.PublishAsync(new UserCreatedEvent(inserted), cancellationToken);
+        return inserted.Id;
     }
 }
 
@@ -128,6 +128,9 @@ public sealed class DeleteUserCommandHandler(
             throw new BusinessException(ErrorCodes.UserDeleteSelfForbidden, "不能删除当前登录账号自己");
         }
 
+        // 变更前捕获用户状态快照（软删除可能回填墓碑字段）
+        var snapshot = user.Snapshot<SysUser>();
+
         await unitOfWork.RunInTransactionAsync(async () =>
         {
             // 软删除用户与其角色关联（保持可追溯）
@@ -139,8 +142,8 @@ public sealed class DeleteUserCommandHandler(
             }
         }, cancellationToken);
 
-        // 关键节点发布用户删除领域事件（清理等响应动作由监听器处理）
-        await domainEventPublisher.PublishAsync(new UserChangedEvent(command.Id, AggregateChangeType.Deleted), cancellationToken);
+        // 关键节点发布用户删除领域事件（携带删除前的用户状态）
+        await domainEventPublisher.PublishAsync(new UserDeletedEvent(snapshot), cancellationToken);
     }
 }
 
@@ -159,8 +162,8 @@ public sealed class ResetUserPasswordCommandHandler(
         user.PasswordHash = passwordHasher.Hash(command.Request.Password);
         await userRepository.UpdateAsync(user, cancellationToken);
 
-        // 关键节点发布用户重置密码领域事件（强制下线等响应动作可由监听器扩展处理）
-        await domainEventPublisher.PublishAsync(new UserChangedEvent(command.Id, AggregateChangeType.PasswordReset), cancellationToken);
+        // 关键节点发布用户重置密码领域事件（不携带状态：密码哈希属敏感数据，强制下线等监听器按用户 Id 响应）
+        await domainEventPublisher.PublishAsync(new UserPasswordResetEvent(command.Id), cancellationToken);
     }
 }
 
@@ -188,6 +191,9 @@ public sealed class UpdateUserCommandHandler(
             throw new BusinessException(ErrorCodes.CommonDataNotFound, "所属部门不存在");
         }
 
+        // 变更前捕获用户状态快照（实体在事务内被原位修改）
+        var before = user.Snapshot<SysUser>();
+
         await unitOfWork.RunInTransactionAsync(async () =>
         {
             user.NickName = request.NickName.Trim();
@@ -200,8 +206,8 @@ public sealed class UpdateUserCommandHandler(
             await UserRoleSupport.ReplaceUserRolesAsync(userRoleRepository, command.Id, request.RoleIds, cancellationToken);
         }, cancellationToken);
 
-        // 关键节点发布用户更新领域事件（角色已变化，清理等响应动作由监听器处理）
-        await domainEventPublisher.PublishAsync(new UserChangedEvent(command.Id, AggregateChangeType.Updated), cancellationToken);
+        // 关键节点发布用户修改领域事件（携带变更前后用户状态）
+        await domainEventPublisher.PublishAsync(new UserUpdatedEvent(before, user), cancellationToken);
     }
 
     /// <summary>按 Id 获取用户，不存在时抛出业务异常。</summary>
@@ -237,13 +243,19 @@ public sealed class UpdateUserRolesCommandHandler(
             ?? throw new BusinessException(ErrorCodes.UserNotFound, $"用户 {command.Id} 不存在"));
         await UserRoleSupport.ValidateRolesAsync(roleRepository, command.Request.RoleIds, cancellationToken);
 
+        // 变更前查询既有角色 Id 集合（全量替换在事务内执行）
+        var beforeRoleIds = (await userRoleRepository.GetListAsync([ur => ur.UserId == command.Id], cancellationToken: cancellationToken))
+            .Select(ur => ur.RoleId)
+            .ToList();
+
         await unitOfWork.RunInTransactionAsync(async () =>
         {
             await UserRoleSupport.ReplaceUserRolesAsync(userRoleRepository, command.Id, command.Request.RoleIds, cancellationToken);
         }, cancellationToken);
 
-        // 关键节点发布用户更新领域事件（角色已重分配，清理等响应动作由监听器处理）
-        await domainEventPublisher.PublishAsync(new UserChangedEvent(command.Id, AggregateChangeType.Updated), cancellationToken);
+        // 关键节点发布用户角色重分配领域事件（携带变更前后角色 Id 集合）
+        await domainEventPublisher.PublishAsync(
+            new UserRolesUpdatedEvent(command.Id, beforeRoleIds, command.Request.RoleIds), cancellationToken);
     }
 }
 
@@ -271,10 +283,13 @@ public sealed class UpdateUserStatusCommandHandler(
             throw new BusinessException(ErrorCodes.CommonInvalidRequest, "状态取值不合法：仅支持 1 启用 / 0 停用");
         }
 
+        // 变更前捕获用户状态快照（状态字段即将被原位修改）
+        var before = user.Snapshot<SysUser>();
+
         user.Status = command.Request.Status;
         await userRepository.UpdateAsync(user, cancellationToken);
 
-        // 关键节点发布用户更新领域事件（清理等响应动作由监听器处理）
-        await domainEventPublisher.PublishAsync(new UserChangedEvent(command.Id, AggregateChangeType.Updated), cancellationToken);
+        // 关键节点发布用户修改领域事件（携带变更前后用户状态，状态变化可由监听器比对 Before/After）
+        await domainEventPublisher.PublishAsync(new UserUpdatedEvent(before, user), cancellationToken);
     }
 }
