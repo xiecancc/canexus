@@ -20,13 +20,13 @@ public sealed class ConfigCacheInvalidationHandler(ICache cache) : INotification
         switch (notification.DomainEvent)
         {
             case ConfigCreatedEvent created:
-                await cache.RemoveAsync(ConfigRules.ValueCacheKey(created.Entity.ConfigKey), cancellationToken);
+                await cache.RemoveAsync(ConfigRules.ValueCacheKey(created.Domain.ConfigKey), cancellationToken);
                 break;
 
             // 键名变更时旧键缓存一并失效，保证两个维度都立即读到最新值
             case ConfigUpdatedEvent updated:
-                await cache.RemoveAsync(ConfigRules.ValueCacheKey(updated.After.ConfigKey), cancellationToken);
-                if (!string.Equals(updated.Before.ConfigKey, updated.After.ConfigKey, StringComparison.Ordinal))
+                await cache.RemoveAsync(ConfigRules.ValueCacheKey(updated.Domain.ConfigKey), cancellationToken);
+                if (!string.Equals(updated.Before.ConfigKey, updated.Domain.ConfigKey, StringComparison.Ordinal))
                 {
                     await cache.RemoveAsync(ConfigRules.ValueCacheKey(updated.Before.ConfigKey), cancellationToken);
                 }
@@ -34,7 +34,7 @@ public sealed class ConfigCacheInvalidationHandler(ICache cache) : INotification
                 break;
 
             case ConfigDeletedEvent deleted:
-                await cache.RemoveAsync(ConfigRules.ValueCacheKey(deleted.Entity.ConfigKey), cancellationToken);
+                await cache.RemoveAsync(ConfigRules.ValueCacheKey(deleted.Domain.ConfigKey), cancellationToken);
                 break;
         }
     }

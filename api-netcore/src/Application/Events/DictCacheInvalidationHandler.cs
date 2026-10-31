@@ -21,13 +21,13 @@ public sealed class DictCacheInvalidationHandler(ICache cache) : INotificationHa
         switch (notification.DomainEvent)
         {
             case DictDataCreatedEvent created:
-                await cache.RemoveAsync(DictRules.DataTypeCacheKey(created.Entity.DictType), cancellationToken);
+                await cache.RemoveAsync(DictRules.DataTypeCacheKey(created.Domain.DictType), cancellationToken);
                 break;
 
             // 类型迁移时旧类型缓存一并失效，保证两个维度都立即读到最新数据
             case DictDataUpdatedEvent updated:
-                await cache.RemoveAsync(DictRules.DataTypeCacheKey(updated.After.DictType), cancellationToken);
-                if (!string.Equals(updated.Before.DictType, updated.After.DictType, StringComparison.Ordinal))
+                await cache.RemoveAsync(DictRules.DataTypeCacheKey(updated.Domain.DictType), cancellationToken);
+                if (!string.Equals(updated.Before.DictType, updated.Domain.DictType, StringComparison.Ordinal))
                 {
                     await cache.RemoveAsync(DictRules.DataTypeCacheKey(updated.Before.DictType), cancellationToken);
                 }
@@ -35,7 +35,7 @@ public sealed class DictCacheInvalidationHandler(ICache cache) : INotificationHa
                 break;
 
             case DictDataDeletedEvent deleted:
-                await cache.RemoveAsync(DictRules.DataTypeCacheKey(deleted.Entity.DictType), cancellationToken);
+                await cache.RemoveAsync(DictRules.DataTypeCacheKey(deleted.Domain.DictType), cancellationToken);
                 break;
         }
     }

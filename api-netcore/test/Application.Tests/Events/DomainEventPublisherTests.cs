@@ -152,7 +152,7 @@ public class PermissionCacheInvalidationHandlerTests
 
         await handler.Handle(new DomainEventNotification(new UserCreatedEvent(CreateUser())), CancellationToken.None);
         await handler.Handle(new DomainEventNotification(new UserUpdatedEvent(CreateUser(), CreateUser())), CancellationToken.None);
-        await handler.Handle(new DomainEventNotification(new UserRolesUpdatedEvent(UserId, [], [])), CancellationToken.None);
+        await handler.Handle(new DomainEventNotification(new UserRolesUpdatedEvent(CreateUser(), [], [])), CancellationToken.None);
         await handler.Handle(new DomainEventNotification(new UserPasswordResetEvent(UserId)), CancellationToken.None);
         await handler.Handle(new DomainEventNotification(new UserDeletedEvent(CreateUser())), CancellationToken.None);
 

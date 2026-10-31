@@ -239,8 +239,8 @@ public sealed class UpdateUserRolesCommandHandler(
     /// <inheritdoc />
     protected override async Task HandleAsync(UpdateUserRolesCommand command, CancellationToken cancellationToken)
     {
-        _ = await (userRepository.GetAsync(command.Id, cancellationToken)
-            ?? throw new BusinessException(ErrorCodes.UserNotFound, $"用户 {command.Id} 不存在"));
+        var user = await userRepository.GetAsync(command.Id, cancellationToken)
+            ?? throw new BusinessException(ErrorCodes.UserNotFound, $"用户 {command.Id} 不存在");
         await UserRoleSupport.ValidateRolesAsync(roleRepository, command.Request.RoleIds, cancellationToken);
 
         // 变更前查询既有角色 Id 集合（全量替换在事务内执行）
@@ -253,9 +253,9 @@ public sealed class UpdateUserRolesCommandHandler(
             await UserRoleSupport.ReplaceUserRolesAsync(userRoleRepository, command.Id, command.Request.RoleIds, cancellationToken);
         }, cancellationToken);
 
-        // 关键节点发布用户角色重分配领域事件（携带变更前后角色 Id 集合）
+        // 关键节点发布用户角色重分配领域事件（Domain 为用户，携带变更前后角色 Id 集合）
         await domainEventPublisher.PublishAsync(
-            new UserRolesUpdatedEvent(command.Id, beforeRoleIds, command.Request.RoleIds), cancellationToken);
+            new UserRolesUpdatedEvent(user, beforeRoleIds, command.Request.RoleIds), cancellationToken);
     }
 }
 

@@ -1,33 +1,40 @@
+using Domain.Entities;
+
 namespace Domain.Events;
 
 /// <summary>
-/// 领域事件基类：核心业务流程关键节点的通用事件模型（最小契约）。
-/// <para>事件不可变——仅在业务变更成功后由应用层经 <c>IDomainEventPublisher</c> 发布，
-/// 监听器按事件类型订阅并各自决定响应动作（缓存清理、消息推送、通知服务等），
+/// 领域事件根基类（非泛型）：仅承载全部事件共有的最小元数据。
+/// <para>事件类型由事件类本身表达——<see cref="EventName"/>（短类名）即事件类型的唯一标识，
+/// 不再维护独立的业务类型字符串（进程内路由靠 CLR 类型模式匹配，字符串仅用于日志展示；
+/// 若未来事件跨进程经消息队列分发，再引入显式命名契约）。事件不可变——仅在业务变更成功后
+/// 由应用层经 <c>IDomainEventPublisher</c> 发布，监听器订阅并各自决定响应动作，
 /// 实现业务逻辑与横切逻辑解耦。</para>
-/// <para>属性设计原则：只保留全部事件共有的元数据；业务数据一律以派生事件的强类型属性承载
-/// （如修改类事件的 Before / After 状态），不再提供弱类型载荷字典，避免与类型化属性重复。</para>
 /// </summary>
 public abstract class DomainEvent
 {
     /// <summary>事件名称：事件类型的短类名（如 UserUpdatedEvent），供监听器路由与日志排查。</summary>
     public string EventName => GetType().Name;
 
-    /// <summary>事件类型：业务级命名（{模块}.{变更}，如 user.updated），与类名解耦，便于跨端消费与检索。</summary>
-    public string EventType { get; }
-
     /// <summary>事件发生时间（服务器本地时间，与审计字段 CreatedAt 口径一致）。</summary>
     public DateTime OccurredAt { get; } = DateTime.Now;
+}
 
-    /// <summary>聚合根标识：事件所属聚合根主键；非聚合级事件为 null。</summary>
-    public Guid? AggregateId { get; }
-
-    /// <summary>构造函数：由派生事件传入事件类型与聚合根标识。</summary>
-    /// <param name="eventType">事件类型（业务级命名，如 user.updated）。</param>
-    /// <param name="aggregateId">聚合根标识；非聚合级事件传 null。</param>
-    protected DomainEvent(string eventType, Guid? aggregateId = null)
+/// <summary>
+/// 领域事件泛型基类：携带事件关联的领域实体（聚合根或关联实体），
+/// 监听器经 <see cref="Domain"/> 直接读取实体状态，无需裸 Id 或弱类型载荷。
+/// </summary>
+/// <typeparam name="TDomain">领域实体类型。</typeparam>
+/// <param name="Domain">事件关联的领域实体。</param>
+public abstract class DomainEvent<TDomain> : DomainEvent
+    where TDomain : DomainBase
+{
+    /// <summary>构造函数：由派生事件传入关联的领域实体。</summary>
+    /// <param name="domain">事件关联的领域实体。</param>
+    protected DomainEvent(TDomain domain)
     {
-        EventType = eventType;
-        AggregateId = aggregateId;
+        Domain = domain;
     }
+
+    /// <summary>事件关联的领域实体（按事件语义为创建后 / 变更后 / 删除前等状态，见具体基类说明）。</summary>
+    public TDomain Domain { get; }
 }
