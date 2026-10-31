@@ -11,6 +11,8 @@ using MediatR;
 /// （角色 key / 状态 / 授权菜单、菜单 perms / 挂载点均可能影响任意已授权用户）。</para>
 /// <para>扩展约定：新增监听需求（消息推送、通知服务等）只需追加新的 INotificationHandler 实现，
 /// 由 MediatR 自动扫描注册，核心业务代码零改动。</para>
+/// <para>实现说明：本监听器响应三种事件类型且清理口径不同，受 C# 类单继承限制无法继承多个
+/// DomainEventHandler&lt;TEvent&gt; 泛型实例，故直接实现 INotificationHandler 并以模式匹配分发。</para>
 /// </summary>
 /// <remarks>构造函数。</remarks>
 /// <param name="permissionChecker">权限校验器（承载权限缓存清理）。</param>

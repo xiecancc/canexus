@@ -81,7 +81,7 @@ public class DomainEventTests
             Assert.That(domainEvent.UserId, Is.EqualTo(AggregateId));
             Assert.That(domainEvent.ChangeType, Is.EqualTo(AggregateChangeType.Updated));
             Assert.That(domainEvent.AggregateId, Is.EqualTo(AggregateId));
-            Assert.That(domainEvent.Payload["userId"], Is.EqualTo(AggregateId));
+            Assert.That(domainEvent.Payload["aggregateId"], Is.EqualTo(AggregateId));
             Assert.That(domainEvent.Payload["changeType"], Is.EqualTo("Updated"));
         });
     }
@@ -96,7 +96,7 @@ public class DomainEventTests
             Assert.That(domainEvent.EventType, Is.EqualTo("role.changed"));
             Assert.That(domainEvent.RoleId, Is.EqualTo(AggregateId));
             Assert.That(domainEvent.ChangeType, Is.EqualTo(AggregateChangeType.Deleted));
-            Assert.That(domainEvent.Payload["roleId"], Is.EqualTo(AggregateId));
+            Assert.That(domainEvent.Payload["aggregateId"], Is.EqualTo(AggregateId));
             Assert.That(domainEvent.Payload["changeType"], Is.EqualTo("Deleted"));
         });
     }
@@ -111,7 +111,7 @@ public class DomainEventTests
             Assert.That(domainEvent.EventType, Is.EqualTo("menu.changed"));
             Assert.That(domainEvent.MenuId, Is.EqualTo(AggregateId));
             Assert.That(domainEvent.ChangeType, Is.EqualTo(AggregateChangeType.Created));
-            Assert.That(domainEvent.Payload["menuId"], Is.EqualTo(AggregateId));
+            Assert.That(domainEvent.Payload["aggregateId"], Is.EqualTo(AggregateId));
             Assert.That(domainEvent.Payload["changeType"], Is.EqualTo("Created"));
         });
     }
@@ -275,6 +275,21 @@ public class AdditionalDomainEventTests
         {
             Assert.That(domainEvent.ChangeType, Is.EqualTo(AggregateChangeType.PasswordReset));
             Assert.That(domainEvent.Payload["changeType"], Is.EqualTo("PasswordReset"));
+        });
+    }
+
+    [Test]
+    public void AggregateChangedEvent_MergesStandardAndExtraPayload()
+    {
+        // 聚合级基类：标准载荷（aggregateId / changeType）与领域追加载荷合并
+        var domainEvent = new DictDataChangedEvent(AggregateId, "some_type", AggregateChangeType.Updated, "old_type");
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(domainEvent.Payload["aggregateId"], Is.EqualTo(AggregateId));
+            Assert.That(domainEvent.Payload["changeType"], Is.EqualTo("Updated"));
+            Assert.That(domainEvent.Payload["dictType"], Is.EqualTo("some_type"));
+            Assert.That(domainEvent.Payload["originalDictType"], Is.EqualTo("old_type"));
         });
     }
 }

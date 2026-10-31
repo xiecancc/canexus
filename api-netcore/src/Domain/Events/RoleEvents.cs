@@ -6,15 +6,8 @@ using Domain.Shared.Enums;
 /// <param name="RoleId">变更的角色 Id。</param>
 /// <param name="ChangeType">变更类型。</param>
 public sealed class RoleChangedEvent(Guid roleId, AggregateChangeType changeType)
-    : DomainEvent("role.changed", roleId, new Dictionary<string, object?>
-    {
-        ["roleId"] = roleId,
-        ["changeType"] = changeType.ToString()
-    })
+    : AggregateChangedEvent("role.changed", roleId, changeType)
 {
     /// <summary>变更的角色 Id。</summary>
     public Guid RoleId { get; } = roleId;
-
-    /// <summary>变更类型。</summary>
-    public AggregateChangeType ChangeType { get; } = changeType;
 }

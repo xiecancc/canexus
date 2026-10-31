@@ -6,17 +6,10 @@ using Domain.Shared.Enums;
 /// <param name="DictTypeId">变更的字典类型 Id。</param>
 /// <param name="ChangeType">变更类型。</param>
 public sealed class DictTypeChangedEvent(Guid dictTypeId, AggregateChangeType changeType)
-    : DomainEvent("dict.type.changed", dictTypeId, new Dictionary<string, object?>
-    {
-        ["dictTypeId"] = dictTypeId,
-        ["changeType"] = changeType.ToString()
-    })
+    : AggregateChangedEvent("dict.type.changed", dictTypeId, changeType)
 {
     /// <summary>变更的字典类型 Id。</summary>
     public Guid DictTypeId { get; } = dictTypeId;
-
-    /// <summary>变更类型。</summary>
-    public AggregateChangeType ChangeType { get; } = changeType;
 }
 
 /// <summary>字典数据变更领域事件：字典数据创建 / 更新（含类型迁移）/ 删除成功后发布。</summary>
@@ -25,11 +18,9 @@ public sealed class DictTypeChangedEvent(Guid dictTypeId, AggregateChangeType ch
 /// <param name="ChangeType">变更类型。</param>
 /// <param name="OriginalDictType">类型迁移前的旧类型；未迁移为 null。</param>
 public sealed class DictDataChangedEvent(Guid dictDataId, string dictType, AggregateChangeType changeType, string? originalDictType = null)
-    : DomainEvent("dict.data.changed", dictDataId, new Dictionary<string, object?>
+    : AggregateChangedEvent("dict.data.changed", dictDataId, changeType, new Dictionary<string, object?>
     {
-        ["dictDataId"] = dictDataId,
         ["dictType"] = dictType,
-        ["changeType"] = changeType.ToString(),
         ["originalDictType"] = originalDictType
     })
 {
@@ -38,9 +29,6 @@ public sealed class DictDataChangedEvent(Guid dictDataId, string dictType, Aggre
 
     /// <summary>所属字典类型（迁移后）。</summary>
     public string DictType { get; } = dictType;
-
-    /// <summary>变更类型。</summary>
-    public AggregateChangeType ChangeType { get; } = changeType;
 
     /// <summary>类型迁移前的旧类型；未迁移为 null。</summary>
     public string? OriginalDictType { get; } = originalDictType;

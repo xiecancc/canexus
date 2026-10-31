@@ -3,7 +3,6 @@ namespace Application.Events;
 using Domain.Events;
 using Domain.Services.Rules;
 using Infrastructure.Shared.Caching;
-using MediatR;
 
 /// <summary>
 /// 参数配置缓存失效监听器（配置领域监听器）：订阅参数配置变更事件并触发配置值缓存清理，
@@ -12,16 +11,11 @@ using MediatR;
 /// </summary>
 /// <remarks>构造函数。</remarks>
 /// <param name="cache">应用缓存端口（承载配置值缓存清理）。</param>
-public sealed class ConfigCacheInvalidationHandler(ICache cache) : INotificationHandler<DomainEventNotification>
+public sealed class ConfigCacheInvalidationHandler(ICache cache) : DomainEventHandler<ConfigChangedEvent>
 {
     /// <inheritdoc />
-    public async Task Handle(DomainEventNotification notification, CancellationToken cancellationToken)
+    protected override async Task HandleAsync(ConfigChangedEvent domainEvent, CancellationToken cancellationToken)
     {
-        if (notification.DomainEvent is not ConfigChangedEvent domainEvent)
-        {
-            return;
-        }
-
         await cache.RemoveAsync(ConfigRules.ValueCacheKey(domainEvent.ConfigKey), cancellationToken);
 
         // 键名变更时旧键缓存一并失效，保证两个维度都立即读到最新值
