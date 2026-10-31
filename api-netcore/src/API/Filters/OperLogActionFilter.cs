@@ -1,10 +1,10 @@
 
 using System.Diagnostics;
-using System.Text.Json;
 using API.Logging;
 using Domain.Entities;
 using Domain.Repositories;
 using Domain.Services.Users;
+using Domain.Shared.Json;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Controllers;
 using Microsoft.AspNetCore.Mvc.Filters;
@@ -25,8 +25,6 @@ namespace API.Filters;
 /// <param name="logger">日志。</param>
 public sealed class OperLogActionFilter(IOperLogRepository operLogRepository, UserContext currentUser, ILogger<OperLogActionFilter> logger) : IAsyncActionFilter
 {
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
-
     /// <inheritdoc />
     public async Task OnActionExecutionAsync(ActionExecutingContext context, ActionExecutionDelegate next)
     {
@@ -37,12 +35,12 @@ public sealed class OperLogActionFilter(IOperLogRepository operLogRepository, Us
             return;
         }
 
-        var stopwatch = Stopwatch.StartNew();
-        var executedContext = await next();
-        stopwatch.Stop();
-
         try
         {
+            var stopwatch = Stopwatch.StartNew();
+            var executedContext = await next();
+            stopwatch.Stop();
+
             var request = context.HttpContext.Request;
             var exception = executedContext.Exception;
             var actionName = (context.ActionDescriptor as ControllerActionDescriptor)?.ActionName
@@ -50,7 +48,7 @@ public sealed class OperLogActionFilter(IOperLogRepository operLogRepository, Us
                              ?? string.Empty;
             // 参数序列化 + 脱敏 + 截断统一在 try 内：任一环节失败仅放弃本条操作日志，不影响业务响应
             var operParam = OperLogSanitizer.Truncate(
-                OperLogSanitizer.MaskSensitiveFields(JsonSerializer.Serialize(context.ActionArguments, JsonOptions)));
+                OperLogSanitizer.MaskSensitiveFields(JsonHelper.Serialize(context.ActionArguments)));
             await operLogRepository.InsertAsync(new SysOperLog
             {
                 Title = attribute.Module,

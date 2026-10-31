@@ -1,6 +1,6 @@
 
-using System.Text.Json;
 using Domain.Shared.Exceptions;
+using Domain.Shared.Json;
 using Domain.Shared.Results;
 
 namespace API.Middlewares;
@@ -18,8 +18,6 @@ namespace API.Middlewares;
 /// <param name="logger">日志记录器。</param>
 public sealed class GlobalExceptionHandlingMiddleware(RequestDelegate next, ILogger<GlobalExceptionHandlingMiddleware> logger)
 {
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
-
     /// <summary>中间件入口：捕获下游管道的未处理异常并转换为统一响应。</summary>
     /// <param name="context">HTTP 上下文。</param>
     public async Task InvokeAsync(HttpContext context)
@@ -80,6 +78,6 @@ public sealed class GlobalExceptionHandlingMiddleware(RequestDelegate next, ILog
         context.Response.StatusCode = statusCode;
         context.Response.ContentType = "application/json;charset=utf-8";
         context.Response.Headers["X-Trace-Id"] = context.TraceIdentifier;
-        await context.Response.WriteAsync(JsonSerializer.Serialize(result, JsonOptions));
+        await context.Response.WriteAsync(JsonHelper.Serialize(result));
     }
 }

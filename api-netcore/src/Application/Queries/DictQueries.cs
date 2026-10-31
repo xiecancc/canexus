@@ -54,7 +54,7 @@ public sealed class GetDictDataPageQueryHandler(IDomainRepository<SysDictData> d
             (dictType == null || d.DictType == dictType)
             && (keyword == null || d.DictLabel.Contains(keyword) || d.DictValue.Contains(keyword));
 
-        var page = await dictDataRepository.GetPagedAsync(request.PageIndex, request.PageSize, [predicate], cancellationToken: cancellationToken);
+        var page = await dictDataRepository.GetPagedAsync(request, [predicate], cancellationToken: cancellationToken);
         var items = page.Items.Select(d => mapper.Map<DictDataListVO>(d)).ToList();
         return PagedResult<DictDataListVO>.Create(items, page.Total, request);
     }
@@ -74,7 +74,7 @@ public sealed class GetDictTypePageQueryHandler(IDomainRepository<SysDictType> d
         Expression<Func<SysDictType, bool>> predicate = t =>
             keyword == null || t.DictName.Contains(keyword) || t.DictType.Contains(keyword);
 
-        var page = await dictTypeRepository.GetPagedAsync(request.PageIndex, request.PageSize, [predicate], cancellationToken: cancellationToken);
+        var page = await dictTypeRepository.GetPagedAsync(request, [predicate], cancellationToken: cancellationToken);
         var items = page.Items.Select(t => mapper.Map<DictTypeListVO>(t)).ToList();
         return PagedResult<DictTypeListVO>.Create(items, page.Total, request);
     }

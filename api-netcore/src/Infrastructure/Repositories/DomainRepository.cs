@@ -78,39 +78,36 @@ public class DomainRepository<TEntity>(ISqlSugarClient client) : IDomainReposito
 
     /// <inheritdoc />
     public virtual async Task<PagedResult<TEntity>> GetPagedAsync(
-        int pageIndex = 1,
-        int pageSize = 20,
+        PagedRequest request,
         IEnumerable<Expression<Func<TEntity, bool>>>? predicates = null,
         IDictionary<Expression<Func<TEntity, object>>, bool?>? orders = null,
         CancellationToken cancellationToken = default)
     {
-        // 页参数越界收敛见 ApplyPages；多条件 AND 组合（ApplyPredicates）；多重排序按字典顺序应用（ApplyOrders），
-        // orders 为 null 时默认创建时间倒序；排序键非唯一时调用方应在 orders 中显式追加唯一列（如 Id）保证分页稳定
-        (pageIndex, pageSize) = ApplyPages(pageIndex, pageSize);
+        // 页参数已由 PagedRequest 在 setter 中越界收敛；多条件 AND 组合（ApplyPredicates）；
+        // 多重排序按字典顺序应用（ApplyOrders），orders 为 null 时默认创建时间倒序；
+        // 排序键非唯一时调用方应在 orders 中显式追加唯一列（如 Id）保证分页稳定
         var query = ApplyOrders(ApplyPredicates(predicates), orders);
         var total = new RefAsync<int>();
         var items = await query
-            .ToPageListAsync(pageIndex, pageSize, total, cancellationToken);
-        return PagedResult<TEntity>.Create(items, total.Value, pageIndex, pageSize);
+            .ToPageListAsync(request.PageIndex, request.PageSize, total, cancellationToken);
+        return PagedResult<TEntity>.Create(items, total.Value, request);
     }
 
     /// <inheritdoc />
     public virtual async Task<PagedResult<TDto>> GetPagedAsync<TDto>(
-        int pageIndex = 1,
-        int pageSize = 20,
+        PagedRequest request,
         IEnumerable<Expression<Func<TEntity, bool>>>? predicates = null,
         IDictionary<Expression<Func<TEntity, object>>, bool?>? orders = null,
         CancellationToken cancellationToken = default)
         where TDto : class, new()
     {
-        // 页参数越界收敛见 ApplyPages；排序规则同实体版 GetPagedAsync：orders 为 null 时默认创建时间倒序；Select<TDto> 按属性名自动映射
-        (pageIndex, pageSize) = ApplyPages(pageIndex, pageSize);
+        // 页参数已由 PagedRequest 收敛；排序规则同实体版 GetPagedAsync：orders 为 null 时默认创建时间倒序；Select<TDto> 按属性名自动映射，SQL 层只取 DTO 涉及的列
         var query = ApplyOrders(ApplyPredicates(predicates), orders);
         var total = new RefAsync<int>();
         var items = await query
             .Select<TDto>()
-            .ToPageListAsync(pageIndex, pageSize, total, cancellationToken);
-        return PagedResult<TDto>.Create(items, total.Value, pageIndex, pageSize);
+            .ToPageListAsync(request.PageIndex, request.PageSize, total, cancellationToken);
+        return PagedResult<TDto>.Create(items, total.Value, request);
     }
 
     /// <inheritdoc />
@@ -206,25 +203,5 @@ public class DomainRepository<TEntity>(ISqlSugarClient client) : IDomainReposito
 
         // 未指定排序时默认按创建时间倒序
         return query.OrderByDescending(it => it.CreatedAt);
-    }
-
-    /// <summary>
-    /// 规范化分页参数：页索引小于 1 修正为 1；页大小小于 1 回退默认 20，超过上限 500 收敛（防恶意大页查询）。
-    /// </summary>
-    /// <param name="pageIndex">页索引（从 1 开始）。</param>
-    /// <param name="pageSize">每页条数。</param>
-    /// <returns>规范化后的 (pageIndex, pageSize) 元组。</returns>
-    protected static (int PageIndex, int PageSize) ApplyPages(int pageIndex, int pageSize)
-    {
-        if (pageIndex < 1)
-        {
-            pageIndex = 1;
-        }
-
-        const int DefaultPageSize = 20;
-        const int MaxPageSize = 500;
-        pageSize = pageSize < 1 ? DefaultPageSize : pageSize > MaxPageSize ? MaxPageSize : pageSize;
-
-        return (pageIndex, pageSize);
     }
 }

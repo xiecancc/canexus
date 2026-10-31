@@ -66,7 +66,7 @@ public sealed class GetOperLogPageQueryHandler(IOperLogRepository operLogReposit
             && (beginTime == null || (l.OperTime != null && l.OperTime >= beginTime.Value))
             && (endTime == null || (l.OperTime != null && l.OperTime < endTime.Value));
 
-        var page = await operLogRepository.GetPagedAsync(request.PageIndex, request.PageSize, [predicate], cancellationToken: cancellationToken);
+        var page = await operLogRepository.GetPagedAsync(request, [predicate], cancellationToken: cancellationToken);
         var items = page.Items.Select(l => mapper.Map<OperLogListVO>(l)).ToList();
         return PagedResult<OperLogListVO>.Create(items, page.Total, request);
     }

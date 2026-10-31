@@ -1,7 +1,7 @@
 
-using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Domain.Shared.Json;
 
 namespace API.Logging;
 /// <summary>
@@ -29,12 +29,6 @@ public static class OperLogSanitizer
         "captchaCode"
     };
 
-    // 不转义非 ASCII 字符：日志中的中文参数保持可读
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
-    {
-        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
-    };
-
     /// <summary>对 JSON 文本中的敏感字段脱敏（递归处理嵌套对象与数组；解析失败原样返回）。</summary>
     /// <param name="json">原始 JSON 文本。</param>
     /// <returns>脱敏后的 JSON 文本。</returns>
@@ -54,7 +48,7 @@ public static class OperLogSanitizer
             }
 
             MaskNode(node);
-            return node.ToJsonString(JsonOptions);
+            return node.ToJsonString(JsonHelper.WebOptions);
         }
         catch (JsonException)
         {

@@ -78,7 +78,8 @@ public class SystemManagementApiTests
     [Test]
     public async Task UserPage_AsSuperAdmin_ReturnsPagedItemsWithDeptAndRoles()
     {
-        var body = await GetJsonAsync("/api/system/user/page?pageIndex=1&pageSize=5");
+        // keyword 过滤锁定 admin：默认按创建时间倒序，其他用例动态创建的用户会更新，admin 未必落在第一页
+        var body = await GetJsonAsync("/api/system/user/page?pageIndex=1&pageSize=5&keyword=admin");
 
         Assert.Multiple(() =>
         {

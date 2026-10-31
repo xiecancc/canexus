@@ -151,6 +151,9 @@ public class DataAccessIntegrationTests
         });
 
         // 更新：更新人/时间自动填充且版本令牌轮换，创建字段不被改动（MySQL datetime 为秒级精度，时间断言放宽到 1 秒内）
+        // 先记录更新前版本令牌：SqlSugar OptLock 更新成功后会把轮换后的新版本写回实体实例，
+        // 断言「库中版本 != 旧令牌」必须用更新前捕获的值，不能用更新后的实体属性
+        var versionBeforeUpdate = inserted.Version;
         inserted.Name = "审计实体-更新";
         await _softDeleteRepository.UpdateAsync(inserted);
 
@@ -162,7 +165,8 @@ public class DataAccessIntegrationTests
             Assert.That(reloaded.UpdatedAt, Is.Not.Null, "更新时间应自动填充");
             Assert.That(reloaded.UpdatedBy, Is.EqualTo(Guid.Empty), "无登录用户时更新人应为空 Guid");
             Assert.That(reloaded.CreatedAt, Is.EqualTo(inserted.CreatedAt).Within(TimeSpan.FromSeconds(1)), "创建时间不应被更新操作改动");
-            Assert.That(reloaded.Version, Is.Not.EqualTo(Guid.Empty).And.Not.EqualTo(inserted.Version), "显式乐观锁下更新一次后版本令牌应轮换为新 Guid");
+            Assert.That(reloaded.Version, Is.Not.EqualTo(Guid.Empty).And.Not.EqualTo(versionBeforeUpdate), "显式乐观锁下更新一次后版本令牌应轮换为新 Guid");
+            Assert.That(reloaded.Version, Is.EqualTo(inserted.Version), "更新成功后框架应把轮换的新版本令牌写回实体实例");
         });
     }
 
@@ -276,7 +280,7 @@ public class DataAccessIntegrationTests
             await _softDeleteRepository.InsertAsync(new SoftDeleteTestEntity { Name = $"分页-{i:00}" });
         }
 
-        var result = await _softDeleteRepository.GetPagedAsync(pageIndex: 2, pageSize: 10);
+        var result = await _softDeleteRepository.GetPagedAsync(new PagedRequest { PageIndex = 2, PageSize = 10 });
 
         Assert.Multiple(() =>
         {

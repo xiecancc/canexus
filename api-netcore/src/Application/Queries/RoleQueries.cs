@@ -61,7 +61,7 @@ public sealed class GetRolePageQueryHandler(IAggregateRepository<SysRole> roleRe
             (keyword == null || r.RoleName.Contains(keyword) || r.RoleKey.Contains(keyword))
             && (status == null || r.Status == status.Value);
 
-        var page = await roleRepository.GetPagedAsync(request.PageIndex, request.PageSize, [predicate], cancellationToken: cancellationToken);
+        var page = await roleRepository.GetPagedAsync(request, [predicate], cancellationToken: cancellationToken);
         var items = page.Items.Select(role => mapper.Map<RoleListVO>(role)).ToList();
         return PagedResult<RoleListVO>.Create(items, page.Total, request);
     }

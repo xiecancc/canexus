@@ -66,17 +66,15 @@ public interface IDomainRepository<TEntity>
         IEnumerable<Expression<Func<TEntity, bool>>>? predicates = null,
         CancellationToken cancellationToken = default);
 
-    /// <summary>分页查询：支持多条件（AND 组合）与多重排序；页索引从 1 开始，页大小越界自动收敛。</summary>
-    /// <param name="pageIndex">页索引，从 1 开始；小于 1 时自动修正为 1。</param>
-    /// <param name="pageSize">每页条数；小于 1 时回退默认值 20，超过上限 500 时收敛为 500（防止恶意大页查询）。</param>
+    /// <summary>分页查询：支持多条件（AND 组合）与多重排序；页参数由 <see cref="PagedRequest"/> 在 setter 中越界收敛。</summary>
+    /// <param name="request">分页请求（PageIndex / PageSize 已收敛：页码从 1 起，页大小 1~500）。</param>
     /// <param name="predicates">条件集合，各条件以 AND 组合后应用；null 或空集合表示不加过滤。</param>
     /// <param name="orders">排序集合，按字典顺序依次应用多重排序；
     /// key 为排序字段表达式，value 为 true 升序、false 或 null 降序；null 或空集合时默认按创建时间倒序，主键升序作平局裁决保证分页稳定。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>分页结果。</returns>
     public Task<PagedResult<TEntity>> GetPagedAsync(
-        int pageIndex = 1,
-        int pageSize = 20,
+        PagedRequest request,
         IEnumerable<Expression<Func<TEntity, bool>>>? predicates = null,
         IDictionary<Expression<Func<TEntity, object>>, bool?>? orders = null,
         CancellationToken cancellationToken = default);
@@ -84,16 +82,14 @@ public interface IDomainRepository<TEntity>
     /// <summary>投影分页查询：条件与排序语义同 <see cref="GetPagedAsync"/>，结果按属性名自动映射到指定 DTO 类型
     /// （SqlSugar Select&lt;TDto&gt;，SQL 层只取 DTO 涉及的列）。</summary>
     /// <typeparam name="TDto">投影结果类型；属性名与实体匹配的字段自动赋值，未匹配字段为类型默认值。</typeparam>
-    /// <param name="pageIndex">页索引，从 1 开始；小于 1 时自动修正为 1。</param>
-    /// <param name="pageSize">每页条数；小于 1 时回退默认值 20，超过上限 500 时收敛为 500（防止恶意大页查询）。</param>
+    /// <param name="request">分页请求（PageIndex / PageSize 已收敛：页码从 1 起，页大小 1~500）。</param>
     /// <param name="predicates">条件集合，各条件以 AND 组合后应用；null 或空集合表示不加过滤。</param>
     /// <param name="orders">排序集合，按字典顺序依次应用多重排序；
     /// key 为排序字段表达式，value 为 true 升序、false 或 null 降序；null 或空集合时默认按创建时间倒序，主键升序作平局裁决保证分页稳定。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>分页结果（元素为投影类型）。</returns>
     public Task<PagedResult<TDto>> GetPagedAsync<TDto>(
-        int pageIndex = 1,
-        int pageSize = 20,
+        PagedRequest request,
         IEnumerable<Expression<Func<TEntity, bool>>>? predicates = null,
         IDictionary<Expression<Func<TEntity, object>>, bool?>? orders = null,
         CancellationToken cancellationToken = default)

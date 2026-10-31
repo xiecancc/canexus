@@ -122,8 +122,7 @@ internal sealed class InMemoryRefreshTokenRepository : ISysRefreshTokenRepositor
 
     /// <inheritdoc />
     public Task<PagedResult<SysRefreshToken>> GetPagedAsync(
-        int pageIndex = 1,
-        int pageSize = 20,
+        PagedRequest request,
         IEnumerable<Expression<Func<SysRefreshToken, bool>>>? predicates = null,
         IDictionary<Expression<Func<SysRefreshToken, object>>, bool?>? orders = null,
         CancellationToken cancellationToken = default)
@@ -131,8 +130,7 @@ internal sealed class InMemoryRefreshTokenRepository : ISysRefreshTokenRepositor
 
     /// <inheritdoc />
     public Task<PagedResult<TDto>> GetPagedAsync<TDto>(
-        int pageIndex = 1,
-        int pageSize = 20,
+        PagedRequest request,
         IEnumerable<Expression<Func<SysRefreshToken, bool>>>? predicates = null,
         IDictionary<Expression<Func<SysRefreshToken, object>>, bool?>? orders = null,
         CancellationToken cancellationToken = default)

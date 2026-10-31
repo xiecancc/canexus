@@ -1,5 +1,5 @@
 
-using System.Text.Json;
+using Domain.Shared.Json;
 using Domain.Shared.Results;
 using Infrastructure.Auth;
 using Infrastructure.Shared.Options;
@@ -13,8 +13,6 @@ namespace API.Extensions;
 /// <summary>认证授权与 OpenAPI 鉴权方案的依赖注册扩展。</summary>
 public static class AuthDependencyExtensions
 {
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
-
     /// <summary>
     /// 注册 JWT Bearer 认证与授权：
     /// <list type="bullet">
@@ -48,7 +46,7 @@ public static class AuthDependencyExtensions
 
                         context.Response.StatusCode = StatusCodes.Status401Unauthorized;
                         context.Response.ContentType = "application/json;charset=utf-8";
-                        await context.Response.WriteAsync(JsonSerializer.Serialize(result, JsonOptions));
+                        await context.Response.WriteAsync(JsonHelper.Serialize(result));
                     }
                 };
             });

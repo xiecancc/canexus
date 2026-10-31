@@ -42,8 +42,9 @@ public sealed class GetTenantPageQueryHandler(IDomainRepository<SysTenant> tenan
             (keyword == null || t.TenantName.Contains(keyword) || t.TenantKey.Contains(keyword))
             && (request.Status == null || t.Status == request.Status.Value);
 
-        var page = await tenantRepository.GetPagedAsync(request.PageIndex, request.PageSize, [predicate], cancellationToken: cancellationToken);
-        var items = page.Items.Select(t => mapper.Map<TenantListVO>(t)).ToList();
-        return PagedResult<TenantListVO>.Create(items, page.Total, request);
+        var page = await tenantRepository.GetPagedAsync(request, [predicate], cancellationToken: cancellationToken);
+
+        // 开放泛型映射（CommonProfile）：PagedResult<实体> → PagedResult<VO>，元数据自动复制、Items 按元素映射转换
+        return mapper.Map<PagedResult<TenantListVO>>(page);
     }
 }

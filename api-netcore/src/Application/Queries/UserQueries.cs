@@ -64,7 +64,7 @@ public sealed class GetUserPageQueryHandler(
         }
 
         var predicate = BuildPredicate(request, scope, deptFilterIds);
-        var page = await userRepository.GetPagedAsync(request.PageIndex, request.PageSize, [predicate], cancellationToken: cancellationToken);
+        var page = await userRepository.GetPagedAsync(request, [predicate], cancellationToken: cancellationToken);
         if (page.Items.Count == 0)
         {
             return PagedResult<UserListVO>.Create([], page.Total, request);

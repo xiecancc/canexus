@@ -1,10 +1,11 @@
 
 using Application.Contracts.Jobs;
+using AutoMapper;
 using Domain.Entities;
 
 namespace Application.Mappings;
 /// <summary>定时任务模块映射：任务 / 执行日志实体 → 列表；创建 / 更新请求 → 实体。</summary>
-public sealed class SysJobProfile : MappingProfileBase
+public sealed class SysJobProfile : Profile
 {
     /// <summary>构造函数。</summary>
     public SysJobProfile()

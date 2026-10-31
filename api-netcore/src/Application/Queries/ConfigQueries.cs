@@ -50,7 +50,7 @@ public sealed class GetConfigPageQueryHandler(IDomainRepository<SysConfig> confi
         Expression<Func<SysConfig, bool>> predicate = c =>
             keyword == null || c.ConfigName.Contains(keyword) || c.ConfigKey.Contains(keyword) || c.ConfigValue.Contains(keyword);
 
-        var page = await configRepository.GetPagedAsync(request.PageIndex, request.PageSize, [predicate], cancellationToken: cancellationToken);
+        var page = await configRepository.GetPagedAsync(request, [predicate], cancellationToken: cancellationToken);
         var items = page.Items.Select(c => mapper.Map<ConfigListVO>(c)).ToList();
         return PagedResult<ConfigListVO>.Create(items, page.Total, request);
     }

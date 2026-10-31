@@ -45,7 +45,7 @@ public sealed class GetJobPageQueryHandler(IDomainRepository<SysJob> jobReposito
             (keyword == null || j.JobName.Contains(keyword) || j.JobGroup.Contains(keyword))
             && (request.Status == null || j.Status == request.Status.Value);
 
-        var page = await jobRepository.GetPagedAsync(request.PageIndex, request.PageSize, [predicate], cancellationToken: cancellationToken);
+        var page = await jobRepository.GetPagedAsync(request, [predicate], cancellationToken: cancellationToken);
         var items = page.Items.Select(j => mapper.Map<JobListVO>(j)).ToList();
         return PagedResult<JobListVO>.Create(items, page.Total, request);
     }
