@@ -25,7 +25,7 @@ public abstract class CommandHandler<TCommand> : RequestHandler<TCommand>
 /// 命令处理器基类（带返回值）：继承 <see cref="RequestHandler{TRequest, TResponse}"/>，
 /// 仅接受带返回值的写命令请求；命令特有的公共逻辑在此层扩展。
 /// <para>约束到 <c>MediatR.IRequest&lt;TResponse&gt;</c> 而非专用命令基类：C# 单继承下，
-/// 「标记基类 + 挂接响应接口」的命令形态（如 <c>DomainCreateCommand : Command&lt;TRequest&gt;, IRequest&lt;Guid&gt;</c>、
+/// 「标记基类 + 挂接响应接口」的命令形态（如 <c>AggregateCreateCommand : Command&lt;TRequest&gt;, IRequest&lt;Guid&gt;</c>、
 /// <c>AuthLoginCommand : Request&lt;TokenPairDto&gt;</c>）无法同时继承响应 record 基类，故以接口约束受理。</para>
 /// </summary>
 /// <typeparam name="TCommand">命令类型。</typeparam>
@@ -50,21 +50,21 @@ public abstract class CommandHandler<TCommand, TResponse> : RequestHandler<TComm
 }
 
 /// <summary>
-/// 领域创建命令处理器基类（对应 <see cref="DomainCreateCommand{TRequest}"/>）：封装
-/// 「业务校验 → 请求映射 → 插入 → 发布创建事件 → 返回 bool」的标准创建流程（新聚合 Id 由数据访问层生成，不对外返回）。
-/// 适用于单聚合、无事务与关联表编排的简单创建场景；复杂创建（工作单元事务、关联全删全插、密码哈希等旁路逻辑）
-/// 应直接继承 <see cref="CommandHandler{TCommand, TResponse}"/> 显式实现。
+/// 聚合创建命令处理器基类（对应 <see cref="AggregateCreateCommand{TRequest}"/>）：封装
+/// 「业务校验 → 请求映射 → 插入（主键 / 版本号 / 审计字段由数据访问层生成，不对外返回）→ 发布创建事件 → 返回 bool」
+/// 的标准创建流程。适用于单聚合、无事务与关联表编排的简单创建场景；复杂创建（工作单元事务、关联全删全插、
+/// 密码哈希等旁路逻辑）应直接继承 <see cref="CommandHandler{TCommand, TResponse}"/> 显式实现。
 /// </summary>
 /// <typeparam name="TCommand">创建命令类型。</typeparam>
 /// <typeparam name="TRequest">创建请求类型。</typeparam>
 /// <typeparam name="TEntity">目标聚合类型。</typeparam>
 /// <param name="repository">目标聚合仓储。</param>
 /// <param name="eventPublisher">领域事件发布器。</param>
-public abstract class DomainCreateCommandHandler<TCommand, TRequest, TEntity>(
+public abstract class AggregateCreateCommandHandler<TCommand, TRequest, TEntity>(
     IAggregateRepository<TEntity> repository,
     IDomainEventPublisher eventPublisher) : CommandHandler<TCommand, bool>
-    where TCommand : DomainCreateCommand<TRequest>
-    where TRequest : DomainChangeRequest
+    where TCommand : AggregateCreateCommand<TRequest>
+    where TRequest : AggregateChangeRequest
     where TEntity : AggregateBase
 {
     /// <summary>目标聚合仓储。</summary>
@@ -101,24 +101,6 @@ public abstract class DomainCreateCommandHandler<TCommand, TRequest, TEntity>(
         await EventPublisher.PublishAsync(CreateEvent(entity), cancellationToken);
         return true;
     }
-}
-
-/// <summary>
-/// 聚合创建命令处理器基类（对应 <see cref="AggregateCreateCommand{TRequest}"/>）：
-/// 继承领域创建处理器，实体与载荷约束收紧到聚合基类（主键 / 版本号 / 审计字段由数据访问层初始化）。
-/// </summary>
-/// <typeparam name="TCommand">创建命令类型。</typeparam>
-/// <typeparam name="TRequest">创建请求类型。</typeparam>
-/// <typeparam name="TEntity">目标聚合类型。</typeparam>
-/// <param name="repository">目标聚合仓储。</param>
-/// <param name="eventPublisher">领域事件发布器。</param>
-public abstract class AggregateCreateCommandHandler<TCommand, TRequest, TEntity>(
-    IAggregateRepository<TEntity> repository,
-    IDomainEventPublisher eventPublisher) : DomainCreateCommandHandler<TCommand, TRequest, TEntity>(repository, eventPublisher)
-    where TCommand : AggregateCreateCommand<TRequest>
-    where TRequest : AggregateChangeRequest
-    where TEntity : AggregateBase
-{
 }
 
 /// <summary>

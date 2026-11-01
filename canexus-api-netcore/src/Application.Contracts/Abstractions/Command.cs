@@ -32,23 +32,14 @@ public abstract record Command<TRequest>(TRequest request) : Request<bool>
 }
 
 /// <summary>
-/// 标准创建命令抽象基类（Domain 级）：携带创建请求载荷，响应为 bool（写操作成功与否，不返回新聚合 Id）。
+/// 标准创建命令抽象基类（Aggregate 级）：携带创建请求载荷，响应为 bool（写操作成功与否，不返回新聚合 Id）；
+/// 载荷约束收紧到聚合请求基类（聚合 Id、乐观锁版本号与审计字段由数据访问层生成，不随载荷提交）。
 /// <para>由 <c>CreateCommandHandler&lt;TCommand, TRequest, TEntity&gt;</c> 消费；
 /// 创建命令 record 继承本基类并转发构造（<c>base(request)</c>）。</para>
 /// </summary>
-/// <typeparam name="TRequest">创建请求类型。</typeparam>
+/// <typeparam name="TRequest">创建请求类型（须继承 <see cref="AggregateChangeRequest"/>）。</typeparam>
 /// <param name="request">创建请求载荷。</param>
-public abstract record DomainCreateCommand<TRequest>(TRequest request) : Command<TRequest>(request)
-    where TRequest : DomainChangeRequest;
-
-/// <summary>
-/// 标准创建命令抽象基类（Aggregate 级）：继承领域创建命令，载荷约束收紧到聚合请求基类
-/// （聚合 Id、乐观锁版本号与审计字段由数据访问层生成，不随载荷提交）。
-/// <para>创建命令 record 继承本基类并转发构造（<c>base(request)</c>）。</para>
-/// </summary>
-/// <typeparam name="TRequest">创建请求类型。</typeparam>
-/// <param name="request">创建请求载荷。</param>
-public abstract record AggregateCreateCommand<TRequest>(TRequest request) : DomainCreateCommand<TRequest>(request)
+public abstract record AggregateCreateCommand<TRequest>(TRequest request) : Command<TRequest>(request)
     where TRequest : AggregateChangeRequest;
 
 /// <summary>

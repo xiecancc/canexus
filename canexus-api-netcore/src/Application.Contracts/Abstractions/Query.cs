@@ -27,44 +27,25 @@ public abstract record Query<TRequest, TResponse>(TRequest Request) : Query<TRes
 }
 
 /// <summary>
-/// 领域分页查询抽象基类（Domain 级）：载荷与响应分别约束到领域分页请求 / 响应基类。
+/// 聚合分页查询抽象基类（Aggregate 级）：载荷与响应约束到聚合分页请求 / 响应基类，
+/// 响应统一为 <see cref="PagedResponse{T}"/> 包装（与列表查询的「项类型 + 包装响应」约定一致）。
 /// </summary>
-/// <typeparam name="TRequest">分页请求类型（须继承 <see cref="DomainPagedRequest"/>，页参数由 setter 越界收敛）。</typeparam>
-/// <typeparam name="TResponse">分页数据项 Response 类型（须继承 <see cref="DomainPagedResponse"/>）。</typeparam>
-/// <param name="Request">分页与筛选请求。</param>
-public abstract record DomainQueryPaged<TRequest, TResponse>(TRequest Request) : Query<TRequest, PagedResponse<TResponse>>(Request)
-    where TResponse : DomainPagedResponse
-    where TRequest : DomainPagedRequest;
-
-/// <summary>
-/// 领域列表查询抽象基类（Domain 级）：载荷约束到领域列表请求基类，
-/// <typeparamref name="TResponse"/> 为列表数据项类型，响应统一为 <c>List&lt;TResponse&gt;</c>
-/// （与 <see cref="DomainQueryPaged{TRequest, TResponse}"/> 的「项类型 + 包装响应」约定一致）。
-/// </summary>
-/// <typeparam name="TRequest">列表请求类型（须继承 <see cref="DomainListRequest"/>）。</typeparam>
-/// <typeparam name="TResponse">列表数据项 Response 类型（须继承 <see cref="DomainListResponse"/>）。</typeparam>
-/// <param name="Request">列表查询载荷。</param>
-public abstract record DomainQueryList<TRequest, TResponse>(TRequest Request) : Query<TRequest, List<TResponse>>(Request)
-    where TResponse : DomainListResponse
-    where TRequest : DomainListRequest;
-
-/// <summary>
-/// 聚合分页查询抽象基类（Aggregate 级）：继承领域分页查询，载荷与响应约束收紧到聚合基类。
-/// </summary>
-/// <typeparam name="TRequest">分页请求类型（须继承 <see cref="AggregatePagedRequest"/>）。</typeparam>
+/// <typeparam name="TRequest">分页请求类型（须继承 <see cref="AggregatePagedRequest"/>，页参数由 setter 越界收敛）。</typeparam>
 /// <typeparam name="TResponse">分页数据项 Response 类型（须继承 <see cref="AggregatePagedResponse"/>）。</typeparam>
 /// <param name="Request">分页与筛选请求。</param>
-public abstract record AggregateQueryPaged<TRequest, TResponse>(TRequest Request) : DomainQueryPaged<TRequest, TResponse>(Request)
+public abstract record AggregateQueryPaged<TRequest, TResponse>(TRequest Request) : Query<TRequest, PagedResponse<TResponse>>(Request)
     where TResponse : AggregatePagedResponse
     where TRequest : AggregatePagedRequest;
 
 /// <summary>
-/// 聚合列表查询抽象基类（Aggregate 级）：继承领域列表查询，载荷与响应约束收紧到聚合基类。
+/// 聚合列表查询抽象基类（Aggregate 级）：载荷约束到聚合列表请求基类，
+/// <typeparamref name="TResponse"/> 为列表数据项类型，响应统一为 <c>List&lt;TResponse&gt;</c>
+/// （与 <see cref="AggregateQueryPaged{TRequest, TResponse}"/> 的「项类型 + 包装响应」约定一致）。
 /// </summary>
 /// <typeparam name="TRequest">列表请求类型（须继承 <see cref="AggregateListRequest"/>）。</typeparam>
 /// <typeparam name="TResponse">列表数据项 Response 类型（须继承 <see cref="AggregateListResponse"/>）。</typeparam>
 /// <param name="Request">列表查询载荷。</param>
-public abstract record AggregateQueryList<TRequest, TResponse>(TRequest Request) : DomainQueryList<TRequest, TResponse>(Request)
+public abstract record AggregateQueryList<TRequest, TResponse>(TRequest Request) : Query<TRequest, List<TResponse>>(Request)
     where TResponse : AggregateListResponse
     where TRequest : AggregateListRequest;
 

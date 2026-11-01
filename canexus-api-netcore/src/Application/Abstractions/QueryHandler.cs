@@ -41,27 +41,27 @@ public abstract class QueryHandler<TQuery, TRequest, TResponse> : QueryHandler<T
 }
 
 /// <summary>
-/// 领域分页查询处理器基类（对应 <see cref="DomainQueryPaged{TRequest, TResponse}"/>）：封装
-/// 「构造过滤条件 → 通用仓储分页 → 开放泛型映射闭合响应」的标准分页查询流程（排序走通用仓储默认语义）。
-/// 需要自定义排序、数据范围过滤或关联数据批量组装的分页查询应直接继承
+/// 聚合分页查询处理器基类（对应 <see cref="AggregateQueryPaged{TRequest, TResponse}"/>）：封装
+/// 「构造过滤条件 → 通用仓储分页（自动附加租户隔离与软删除过滤）→ 开放泛型映射闭合响应」的标准分页查询流程
+/// （排序走通用仓储默认语义）。需要自定义排序、数据范围过滤或关联数据批量组装的分页查询应直接继承
 /// <see cref="QueryHandler{TQuery, TResponse}"/> 显式实现。
 /// </summary>
 /// <typeparam name="TQuery">分页查询类型。</typeparam>
-/// <typeparam name="TRequest">分页请求类型（须继承 <see cref="DomainPagedRequest"/>）。</typeparam>
-/// <typeparam name="TEntity">实体类型。</typeparam>
-/// <typeparam name="TResponse">分页数据项响应类型（须继承 <see cref="DomainPagedResponse"/>）。</typeparam>
-/// <param name="repository">实体仓储（只读）。</param>
+/// <typeparam name="TRequest">分页请求类型（须继承 <see cref="AggregatePagedRequest"/>）。</typeparam>
+/// <typeparam name="TEntity">聚合实体类型。</typeparam>
+/// <typeparam name="TResponse">分页数据项响应类型（须继承 <see cref="AggregatePagedResponse"/>）。</typeparam>
+/// <param name="repository">聚合仓储（只读）。</param>
 /// <param name="mapper">AutoMapper 映射器。</param>
-public abstract class DomainQueryPagedHandler<TQuery, TRequest, TEntity, TResponse>(
-    IDomainRepository<TEntity> repository,
+public abstract class AggregateQueryPagedHandler<TQuery, TRequest, TEntity, TResponse>(
+    IAggregateRepository<TEntity> repository,
     IMapper mapper) : QueryHandler<TQuery, PagedResponse<TResponse>>
-    where TQuery : DomainQueryPaged<TRequest, TResponse>
-    where TRequest : DomainPagedRequest
-    where TResponse : DomainPagedResponse
-    where TEntity : DomainBase
+    where TQuery : AggregateQueryPaged<TRequest, TResponse>
+    where TRequest : AggregatePagedRequest
+    where TResponse : AggregatePagedResponse
+    where TEntity : AggregateBase
 {
-    /// <summary>实体仓储（只读）。</summary>
-    protected IDomainRepository<TEntity> Repository { get; } = repository;
+    /// <summary>聚合仓储（只读）。</summary>
+    protected IAggregateRepository<TEntity> Repository { get; } = repository;
 
     /// <summary>AutoMapper 映射器。</summary>
     protected IMapper Mapper { get; } = mapper;
@@ -78,8 +78,8 @@ public abstract class DomainQueryPagedHandler<TQuery, TRequest, TEntity, TRespon
         var predicate = BuildPredicate(request);
         var page = await Repository.GetPagedAsync(request, predicate is null ? null : [predicate], cancellationToken: cancellationToken);
 
-        // 依赖 CommonProfile 的开放泛型映射闭合 PagedResponse<实体> → PagedResponse<响应>：
-        // 分页元数据同名复制，Items 元素在运行期按各模块「实体 → Response」映射解析
+        // 依赖 CommonProfile 的开放泛型映射闭合 PagedResponse<聚合> → PagedResponse<响应>：
+        // 分页元数据同名复制，Items 元素在运行期按各模块「聚合 → Response」映射解析
         return Mapper.Map<PagedResponse<TResponse>>(page)!;
     }
 }
@@ -134,26 +134,26 @@ public abstract class AggregateQueryDetailHandler<TQuery, TEntity, TResponse>(
 }
 
 /// <summary>
-/// 领域列表查询处理器基类（对应 <see cref="DomainQueryList{TRequest, TResponse}"/>）：封装
-/// 「构造过滤条件 → 仓储条件查询 → 集合映射」的标准列表查询流程。
+/// 聚合列表查询处理器基类（对应 <see cref="AggregateQueryList{TRequest, TResponse}"/>）：封装
+/// 「构造过滤条件 → 仓储条件查询（自动附加租户隔离与软删除过滤）→ 集合映射」的标准列表查询流程。
 /// 需要关联数据批量组装的列表查询应直接继承 <see cref="QueryHandler{TQuery, List{TResponse}}"/> 显式实现。
 /// </summary>
 /// <typeparam name="TQuery">列表查询类型。</typeparam>
-/// <typeparam name="TRequest">列表请求类型（须继承 <see cref="DomainListRequest"/>）。</typeparam>
-/// <typeparam name="TEntity">实体类型。</typeparam>
-/// <typeparam name="TResponse">列表数据项响应类型（须继承 <see cref="DomainListResponse"/>）。</typeparam>
-/// <param name="repository">实体仓储（只读）。</param>
+/// <typeparam name="TRequest">列表请求类型（须继承 <see cref="AggregateListRequest"/>）。</typeparam>
+/// <typeparam name="TEntity">聚合实体类型。</typeparam>
+/// <typeparam name="TResponse">列表数据项响应类型（须继承 <see cref="AggregateListResponse"/>）。</typeparam>
+/// <param name="repository">聚合仓储（只读）。</param>
 /// <param name="mapper">AutoMapper 映射器。</param>
-public abstract class DomainQueryListHandler<TQuery, TRequest, TEntity, TResponse>(
-    IDomainRepository<TEntity> repository,
+public abstract class AggregateQueryListHandler<TQuery, TRequest, TEntity, TResponse>(
+    IAggregateRepository<TEntity> repository,
     IMapper mapper) : QueryHandler<TQuery, List<TResponse>>
-    where TQuery : DomainQueryList<TRequest, TResponse>
-    where TRequest : DomainListRequest
-    where TResponse : DomainListResponse
-    where TEntity : DomainBase
+    where TQuery : AggregateQueryList<TRequest, TResponse>
+    where TRequest : AggregateListRequest
+    where TResponse : AggregateListResponse
+    where TEntity : AggregateBase
 {
-    /// <summary>实体仓储（只读）。</summary>
-    protected IDomainRepository<TEntity> Repository { get; } = repository;
+    /// <summary>聚合仓储（只读）。</summary>
+    protected IAggregateRepository<TEntity> Repository { get; } = repository;
 
     /// <summary>AutoMapper 映射器。</summary>
     protected IMapper Mapper { get; } = mapper;
@@ -169,49 +169,9 @@ public abstract class DomainQueryListHandler<TQuery, TRequest, TEntity, TRespons
         var predicate = BuildListPredicate(query.Request);
         var entities = await Repository.GetListAsync(predicate is null ? null : [predicate], cancellationToken: cancellationToken);
 
-        // 页内实体集合整体映射（元素映射运行期按各模块「实体 → Response」注册解析）
+        // 页内实体集合整体映射（元素映射运行期按各模块「聚合 → Response」注册解析）
         return Mapper.Map<List<TResponse>>(entities);
     }
-}
-
-/// <summary>
-/// 聚合分页查询处理器基类（对应 <see cref="AggregateQueryPaged{TRequest, TResponse}"/>）：
-/// 继承领域分页处理器，实体约束收紧到聚合基类（仓储自动附加租户隔离与软删除过滤）。
-/// </summary>
-/// <typeparam name="TQuery">分页查询类型。</typeparam>
-/// <typeparam name="TRequest">分页请求类型（须继承 <see cref="AggregatePagedRequest"/>）。</typeparam>
-/// <typeparam name="TEntity">聚合实体类型。</typeparam>
-/// <typeparam name="TResponse">分页数据项响应类型（须继承 <see cref="AggregatePagedResponse"/>）。</typeparam>
-/// <param name="repository">聚合仓储（只读）。</param>
-/// <param name="mapper">AutoMapper 映射器。</param>
-public abstract class AggregateQueryPagedHandler<TQuery, TRequest, TEntity, TResponse>(
-    IAggregateRepository<TEntity> repository,
-    IMapper mapper) : DomainQueryPagedHandler<TQuery, TRequest, TEntity, TResponse>(repository, mapper)
-    where TQuery : AggregateQueryPaged<TRequest, TResponse>
-    where TRequest : AggregatePagedRequest
-    where TResponse : AggregatePagedResponse
-    where TEntity : AggregateBase
-{
-}
-
-/// <summary>
-/// 聚合列表查询处理器基类（对应 <see cref="AggregateQueryList{TRequest, TResponse}"/>）：
-/// 继承领域列表处理器，实体约束收紧到聚合基类（仓储自动附加租户隔离与软删除过滤）。
-/// </summary>
-/// <typeparam name="TQuery">列表查询类型。</typeparam>
-/// <typeparam name="TRequest">列表请求类型（须继承 <see cref="AggregateListRequest"/>）。</typeparam>
-/// <typeparam name="TEntity">聚合实体类型。</typeparam>
-/// <typeparam name="TResponse">列表数据项响应类型（须继承 <see cref="AggregateListResponse"/>）。</typeparam>
-/// <param name="repository">聚合仓储（只读）。</param>
-/// <param name="mapper">AutoMapper 映射器。</param>
-public abstract class AggregateQueryListHandler<TQuery, TRequest, TEntity, TResponse>(
-    IAggregateRepository<TEntity> repository,
-    IMapper mapper) : DomainQueryListHandler<TQuery, TRequest, TEntity, TResponse>(repository, mapper)
-    where TQuery : AggregateQueryList<TRequest, TResponse>
-    where TRequest : AggregateListRequest
-    where TResponse : AggregateListResponse
-    where TEntity : AggregateBase
-{
 }
 
 /// <summary>
