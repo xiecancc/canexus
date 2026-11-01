@@ -17,15 +17,17 @@ public sealed class PerformanceBehavior<TRequest, TResponse>(ILogger<Performance
     /// <summary>慢请求阈值（毫秒）。</summary>
     private const long SlowRequestThresholdMs = 500;
 
-    private readonly Stopwatch _timer = Stopwatch.StartNew();
-
     /// <inheritdoc />
     public async Task<TResponse> Handle(TRequest request, RequestHandlerDelegate<TResponse> next, CancellationToken cancellationToken)
     {
+        // 计时从 Handle 入口开始（局部变量）：字段初始化计时会在管道构建期即启动，
+        // 计入验证 / 日志等前序行为的执行开销，且异常路径不会停表
+        var timer = Stopwatch.StartNew();
+
         var response = await next();
 
-        _timer.Stop();
-        var elapsedMs = _timer.ElapsedMilliseconds;
+        timer.Stop();
+        var elapsedMs = timer.ElapsedMilliseconds;
         if (elapsedMs > SlowRequestThresholdMs)
         {
             var requestName = typeof(TRequest).Name;
