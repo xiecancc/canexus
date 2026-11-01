@@ -10,7 +10,7 @@ public sealed record ConfigQueryByKey(string ConfigKey) : Query<string>;
 
 /// <summary>分页查询参数配置（keyword 模糊匹配名称 / 键名 / 键值）。</summary>
 /// <param name="Request">分页与筛选条件。</param>
-public sealed record ConfigQueryPaged : DomainQueryPaged<ConfigPageRequest, ConfigListResponse>
+public sealed record ConfigQueryPaged : AggregateQueryPaged<ConfigPageRequest, ConfigListResponse>
 {
     public ConfigQueryPaged(ConfigPageRequest request) : base(request) { }
 }

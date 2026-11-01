@@ -37,7 +37,7 @@ public class SysDeptController(ISender sender) : ControllerBase
     [RequirePermission("system:dept:query")]
     public async Task<IActionResult> Get(Guid id)
     {
-        return Ok(Result.Ok(await sender.Send(new DeptQueryById(id))));
+        return Ok(Result.Ok(await sender.Send(new DeptQueryDetail(id))));
     }
 
     /// <summary>创建部门（父部门存在性由处理器校验）。</summary>

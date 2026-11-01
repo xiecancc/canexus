@@ -6,9 +6,9 @@ using Domain.Shared.Enums;
 namespace Application.Contracts.Queries;
 /// <summary>获取部门详情。</summary>
 /// <param name="Id">部门 Id。</param>
-public sealed record DeptQueryById : AggregateQueryById<DeptDetailResponse>
+public sealed record DeptQueryDetail : AggregateQueryDetail<DeptDetailResponse>
 {
-    public DeptQueryById(Guid id) : base(id) { }
+    public DeptQueryDetail(Guid id) : base(id) { }
 }
 
 /// <summary>查询部门树（keyword 匹配部门名称 / 负责人；status 精确）。</summary>

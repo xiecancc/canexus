@@ -15,14 +15,14 @@ public sealed record DictDataQueryByType : AggregateQueryList<DictDataByTypeRequ
 
 /// <summary>分页查询字典数据（dictType 精确、keyword 模糊匹配标签 / 键值）。</summary>
 /// <param name="Request">分页与筛选条件。</param>
-public sealed record DictDataQueryPaged : DomainQueryPaged<DictDataPageRequest, DictDataListResponse>
+public sealed record DictDataQueryPaged : AggregateQueryPaged<DictDataPageRequest, DictDataListResponse>
 {
     public DictDataQueryPaged(DictDataPageRequest request) : base(request) { }
 }
 
 /// <summary>分页查询字典类型（keyword 模糊匹配字典名称 / 字典类型）。</summary>
 /// <param name="Request">分页与筛选条件。</param>
-public sealed record DictTypeQueryPaged : DomainQueryPaged<DictTypePageRequest, DictTypeListResponse>
+public sealed record DictTypeQueryPaged : AggregateQueryPaged<DictTypePageRequest, DictTypeListResponse>
 {
     public DictTypeQueryPaged(DictTypePageRequest request) : base(request) { }
 }

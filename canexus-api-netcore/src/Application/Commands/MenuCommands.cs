@@ -19,7 +19,7 @@ namespace Application.Commands;
 public sealed class MenuCreateCommandHandler(
     IAggregateTreeRepository<SysMenu> menuRepository,
     IDomainEventPublisher domainEventPublisher,
-    IMapper mapper) : DomainCreateCommandHandler<MenuCreateCommand, MenuCreateRequest, SysMenu>(menuRepository, domainEventPublisher)
+    IMapper mapper) : AggregateCreateCommandHandler<MenuCreateCommand, MenuCreateRequest, SysMenu>(menuRepository, domainEventPublisher)
 {
     /// <summary>菜单树形仓储（父菜单存在性校验）。</summary>
     private IAggregateTreeRepository<SysMenu> MenuRepository { get; } = menuRepository;

@@ -12,7 +12,7 @@ using Domain.Shared.Results;
 namespace Application.Queries;
 /// <summary>获取菜单详情查询处理器（标准详情流程，无扩展字段组装）。</summary>
 /// <remarks>构造函数。</remarks>
-public sealed class MenuQueryByIdHandler(IAggregateTreeRepository<SysMenu> menuRepository, IMapper mapper) : AggregateQueryByIdHandler<MenuQueryById, SysMenu, MenuDetailResponse>(menuRepository, mapper)
+public sealed class MenuQueryDetailHandler(IAggregateTreeRepository<SysMenu> menuRepository, IMapper mapper) : AggregateQueryDetailHandler<MenuQueryDetail, SysMenu, MenuDetailResponse>(menuRepository, mapper)
 {
     /// <inheritdoc />
     protected override int NotFoundErrorCode => ErrorCodes.MenuNotFound;

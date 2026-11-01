@@ -5,7 +5,7 @@ using Application.Contracts.Menus;
 namespace Application.Contracts.Commands;
 /// <summary>创建菜单命令（目录必有 path；菜单必有 path 与 component；按钮必有 perms）。</summary>
 /// <param name="Request">创建请求。</param>
-public sealed record MenuCreateCommand : DomainCreateCommand<MenuCreateRequest>
+public sealed record MenuCreateCommand : AggregateCreateCommand<MenuCreateRequest>
 {
     public MenuCreateCommand(MenuCreateRequest request) : base(request) { }
 }

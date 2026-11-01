@@ -17,10 +17,10 @@ using Domain.Shared.Results;
 namespace Application.Queries;
 /// <summary>获取用户详情查询处理器（标准详情流程 + 组装已分配角色 Id 集合）。</summary>
 /// <remarks>构造函数。</remarks>
-public sealed class UserQueryByIdHandler(
+public sealed class UserQueryDetailHandler(
     IAggregateRepository<SysUser> userRepository,
     IDomainRepository<SysUserRole> userRoleRepository,
-    IMapper mapper) : AggregateQueryByIdHandler<UserQueryById, SysUser, UserDetailResponse>(userRepository, mapper)
+    IMapper mapper) : AggregateQueryDetailHandler<UserQueryDetail, SysUser, UserDetailResponse>(userRepository, mapper)
 {
     /// <summary>用户-角色关联仓储（角色 Id 集合组装）。</summary>
     private IDomainRepository<SysUserRole> UserRoleRepository { get; } = userRoleRepository;

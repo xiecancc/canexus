@@ -16,7 +16,7 @@ namespace Application.Commands;
 /// <param name="domainEventPublisher">领域事件发布器。</param>
 public sealed class DeptCreateCommandHandler(
     IAggregateTreeRepository<SysDept> deptRepository,
-    IDomainEventPublisher domainEventPublisher) : DomainCreateCommandHandler<DeptCreateCommand, DeptCreateRequest, SysDept>(deptRepository, domainEventPublisher)
+    IDomainEventPublisher domainEventPublisher) : AggregateCreateCommandHandler<DeptCreateCommand, DeptCreateRequest, SysDept>(deptRepository, domainEventPublisher)
 {
     /// <summary>部门树形仓储（父部门存在性校验）。</summary>
     private IAggregateTreeRepository<SysDept> DeptRepository { get; } = deptRepository;

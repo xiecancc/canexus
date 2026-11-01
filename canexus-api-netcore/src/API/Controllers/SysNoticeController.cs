@@ -36,7 +36,7 @@ public class SysNoticeController(ISender sender) : ControllerBase
     [RequirePermission("system:notice:query")]
     public async Task<IActionResult> GetById(Guid id)
     {
-        return Ok(Result.Ok(await sender.Send(new NoticeQueryById(id))));
+        return Ok(Result.Ok(await sender.Send(new NoticeQueryDetail(id))));
     }
 
     /// <summary>创建通知公告。</summary>

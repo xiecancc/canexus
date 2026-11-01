@@ -36,7 +36,7 @@ public class SysUserController(ISender sender) : ControllerBase
     [RequirePermission("system:user:query")]
     public async Task<IActionResult> Get(Guid id)
     {
-        return Ok(Result.Ok(await sender.Send(new UserQueryById(id))));
+        return Ok(Result.Ok(await sender.Send(new UserQueryDetail(id))));
     }
 
     /// <summary>创建用户（用户名唯一；密码缺省 "123456"）。</summary>

@@ -47,7 +47,7 @@ public sealed class DictDataCreateCommandHandler(
     IAggregateRepository<SysDictData> dictDataRepository,
     IAggregateRepository<SysDictType> dictTypeRepository,
     IDomainEventPublisher domainEventPublisher,
-    IMapper mapper) : DomainCreateCommandHandler<DictDataCreateCommand, DictDataCreateRequest, SysDictData>(dictDataRepository, domainEventPublisher)
+    IMapper mapper) : AggregateCreateCommandHandler<DictDataCreateCommand, DictDataCreateRequest, SysDictData>(dictDataRepository, domainEventPublisher)
 {
     /// <summary>字典类型仓储（类型存在性校验）。</summary>
     private IAggregateRepository<SysDictType> DictTypeRepository { get; } = dictTypeRepository;
@@ -82,7 +82,7 @@ public sealed class DictDataCreateCommandHandler(
 public sealed class DictTypeCreateCommandHandler(
     IAggregateRepository<SysDictType> dictTypeRepository,
     IDomainEventPublisher domainEventPublisher,
-    IMapper mapper) : DomainCreateCommandHandler<DictTypeCreateCommand, DictTypeCreateRequest, SysDictType>(dictTypeRepository, domainEventPublisher)
+    IMapper mapper) : AggregateCreateCommandHandler<DictTypeCreateCommand, DictTypeCreateRequest, SysDictType>(dictTypeRepository, domainEventPublisher)
 {
     /// <summary>AutoMapper 映射器。</summary>
     private IMapper Mapper { get; } = mapper;

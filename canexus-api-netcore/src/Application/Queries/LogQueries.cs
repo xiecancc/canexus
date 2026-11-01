@@ -47,7 +47,7 @@ public sealed class LoginLogQueryPagedHandler(ILoginLogRepository loginLogReposi
 /// <remarks>构造函数。</remarks>
 /// <param name="operLogRepository">操作日志仓储（只读）。</param>
 /// <param name="mapper">AutoMapper 映射器。</param>
-public sealed class OperLogQueryPagedHandler(IOperLogRepository operLogRepository, IMapper mapper) : DomainQueryPagedHandler<OperLogQueryPaged, OperLogPageRequest, SysOperLog, OperLogListResponse>(operLogRepository, mapper)
+public sealed class OperLogQueryPagedHandler(IOperLogRepository operLogRepository, IMapper mapper) : AggregateQueryPagedHandler<OperLogQueryPaged, OperLogPageRequest, SysOperLog, OperLogListResponse>(operLogRepository, mapper)
 {
     /// <inheritdoc />
     protected override Expression<Func<SysOperLog, bool>>? BuildPredicate(OperLogPageRequest request)

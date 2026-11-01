@@ -5,7 +5,7 @@ using Application.Contracts.Depts;
 namespace Application.Contracts.Commands;
 /// <summary>创建部门命令（父部门存在性由处理器校验）。</summary>
 /// <param name="Request">创建请求。</param>
-public sealed record DeptCreateCommand : DomainCreateCommand<DeptCreateRequest>
+public sealed record DeptCreateCommand : AggregateCreateCommand<DeptCreateRequest>
 {
     public DeptCreateCommand(DeptCreateRequest request) : base(request) { }
 }

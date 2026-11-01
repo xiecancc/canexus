@@ -36,7 +36,7 @@ public sealed class JobLogQueryPagedHandler(IJobLogRepository jobLogRepository, 
 /// <remarks>构造函数。</remarks>
 /// <param name="jobRepository">定时任务仓储（只读）。</param>
 /// <param name="mapper">AutoMapper 映射器。</param>
-public sealed class JobQueryPagedHandler(IDomainRepository<SysJob> jobRepository, IMapper mapper) : DomainQueryPagedHandler<JobQueryPaged, JobPageRequest, SysJob, JobListResponse>(jobRepository, mapper)
+public sealed class JobQueryPagedHandler(IAggregateRepository<SysJob> jobRepository, IMapper mapper) : AggregateQueryPagedHandler<JobQueryPaged, JobPageRequest, SysJob, JobListResponse>(jobRepository, mapper)
 {
     /// <inheritdoc />
     protected override Expression<Func<SysJob, bool>>? BuildPredicate(JobPageRequest request)

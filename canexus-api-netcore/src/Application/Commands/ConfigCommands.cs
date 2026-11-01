@@ -16,7 +16,7 @@ namespace Application.Commands;
 public sealed class ConfigCreateCommandHandler(
     IAggregateRepository<SysConfig> configRepository,
     IDomainEventPublisher domainEventPublisher,
-    IMapper mapper) : DomainCreateCommandHandler<ConfigCreateCommand, ConfigCreateRequest, SysConfig>(configRepository, domainEventPublisher)
+    IMapper mapper) : AggregateCreateCommandHandler<ConfigCreateCommand, ConfigCreateRequest, SysConfig>(configRepository, domainEventPublisher)
 {
     /// <summary>AutoMapper 映射器。</summary>
     private IMapper Mapper { get; } = mapper;

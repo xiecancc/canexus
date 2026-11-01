@@ -37,7 +37,7 @@ public class SysMenuController(ISender sender) : ControllerBase
     [RequirePermission("system:menu:query")]
     public async Task<IActionResult> Get(Guid id)
     {
-        return Ok(Result.Ok(await sender.Send(new MenuQueryById(id))));
+        return Ok(Result.Ok(await sender.Send(new MenuQueryDetail(id))));
     }
 
     /// <summary>创建菜单（目录必有 path；菜单必有 path 与 component；按钮必有 perms）。</summary>

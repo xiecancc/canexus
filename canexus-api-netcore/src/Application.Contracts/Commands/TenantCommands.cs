@@ -5,7 +5,7 @@ using Application.Contracts.Tenants;
 namespace Application.Contracts.Commands;
 /// <summary>创建租户命令（tenantKey 全局唯一）。</summary>
 /// <param name="Request">创建请求。</param>
-public sealed record TenantCreateCommand : DomainCreateCommand<TenantCreateRequest>
+public sealed record TenantCreateCommand : AggregateCreateCommand<TenantCreateRequest>
 {
     public TenantCreateCommand(TenantCreateRequest request) : base(request) { }
 }

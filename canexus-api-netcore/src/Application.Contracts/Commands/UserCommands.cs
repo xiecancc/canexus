@@ -5,7 +5,7 @@ using Application.Contracts.Users;
 namespace Application.Contracts.Commands;
 /// <summary>创建用户命令（用户名唯一；密码缺省 "123456"）。</summary>
 /// <param name="Request">创建请求。</param>
-public sealed record UserCreateCommand : DomainCreateCommand<UserCreateRequest>
+public sealed record UserCreateCommand : AggregateCreateCommand<UserCreateRequest>
 {
     public UserCreateCommand(UserCreateRequest request) : base(request) { }
 }

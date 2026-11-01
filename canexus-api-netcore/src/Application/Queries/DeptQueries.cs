@@ -12,7 +12,7 @@ using Domain.Shared.Results;
 namespace Application.Queries;
 /// <summary>获取部门详情查询处理器（标准详情流程，无扩展字段组装）。</summary>
 /// <remarks>构造函数。</remarks>
-public sealed class DeptQueryByIdHandler(IAggregateTreeRepository<SysDept> deptRepository, IMapper mapper) : AggregateQueryByIdHandler<DeptQueryById, SysDept, DeptDetailResponse>(deptRepository, mapper)
+public sealed class DeptQueryDetailHandler(IAggregateTreeRepository<SysDept> deptRepository, IMapper mapper) : AggregateQueryDetailHandler<DeptQueryDetail, SysDept, DeptDetailResponse>(deptRepository, mapper)
 {
     /// <inheritdoc />
     protected override int NotFoundErrorCode => ErrorCodes.DeptNotFound;

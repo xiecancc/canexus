@@ -36,7 +36,7 @@ public sealed class NoticeQueryLatestHandler(IAggregateRepository<SysNotice> not
 /// <remarks>构造函数。</remarks>
 /// <param name="noticeRepository">通知公告仓储。</param>
 /// <param name="mapper">AutoMapper 映射器。</param>
-public sealed class NoticeQueryByIdHandler(IAggregateRepository<SysNotice> noticeRepository, IMapper mapper) : AggregateQueryByIdHandler<NoticeQueryById, SysNotice, NoticeListResponse>(noticeRepository, mapper)
+public sealed class NoticeQueryDetailHandler(IAggregateRepository<SysNotice> noticeRepository, IMapper mapper) : AggregateQueryDetailHandler<NoticeQueryDetail, SysNotice, NoticeListResponse>(noticeRepository, mapper)
 {
     /// <inheritdoc />
     protected override int NotFoundErrorCode => ErrorCodes.NoticeNotFound;

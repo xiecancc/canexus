@@ -5,7 +5,7 @@ using Application.Contracts.Configs;
 namespace Application.Contracts.Commands;
 /// <summary>创建参数配置命令（configKey 唯一，创建项一律非内置）。</summary>
 /// <param name="Request">创建请求。</param>
-public sealed record ConfigCreateCommand : DomainCreateCommand<ConfigCreateRequest>
+public sealed record ConfigCreateCommand : AggregateCreateCommand<ConfigCreateRequest>
 {
     public ConfigCreateCommand(ConfigCreateRequest request) : base(request) { }
 }

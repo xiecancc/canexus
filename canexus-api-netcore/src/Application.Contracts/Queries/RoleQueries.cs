@@ -15,7 +15,7 @@ public sealed record RoleQueryDetail : AggregateQueryDetail<RoleDetailResponse>
 
 /// <summary>分页查询角色（keyword 匹配角色名称 / 角色权限字符；status 精确）。</summary>
 /// <param name="Request">分页与筛选条件。</param>
-public sealed record RoleQueryPaged : DomainQueryPaged<RolePageRequest, RoleListResponse>
+public sealed record RoleQueryPaged : AggregateQueryPaged<RolePageRequest, RoleListResponse>
 {
     public RoleQueryPaged(RolePageRequest request) : base(request) { }
 }

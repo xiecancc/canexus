@@ -8,7 +8,7 @@ public sealed record TenantQueryDropdown : AggregateQueryDropdown<TenantDropdown
 
 /// <summary>分页查询租户（keyword 模糊匹配租户名称 / 租户标识；status 精确）。</summary>
 /// <param name="Request">分页与筛选条件。</param>
-public sealed record TenantQueryPaged : DomainQueryPaged<TenantPageRequest, TenantListResponse>
+public sealed record TenantQueryPaged : AggregateQueryPaged<TenantPageRequest, TenantListResponse>
 {
     public TenantQueryPaged(TenantPageRequest request) : base(request) { }
 }

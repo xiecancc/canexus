@@ -5,7 +5,7 @@ using Application.Contracts.Notices;
 namespace Application.Contracts.Commands;
 /// <summary>创建通知公告命令（标题必填 ≤ 200、类型 ∈ {1,2}、状态 ∈ {0,1}、内容必填）。</summary>
 /// <param name="Request">创建请求。</param>
-public sealed record NoticeCreateCommand : DomainCreateCommand<NoticeCreateRequest>
+public sealed record NoticeCreateCommand : AggregateCreateCommand<NoticeCreateRequest>
 {
     public NoticeCreateCommand(NoticeCreateRequest request) : base(request) { }
 }

@@ -10,14 +10,14 @@ public sealed record NoticeQueryLatest(int Count = 5) : Query<List<NoticeLatestR
 
 /// <summary>按 Id 查询通知公告详情（含正文，供编辑回显与查看全文）。</summary>
 /// <param name="Id">公告 Id。</param>
-public sealed record NoticeQueryById : AggregateQueryById<NoticeListResponse>
+public sealed record NoticeQueryDetail : AggregateQueryDetail<NoticeListResponse>
 {
-    public NoticeQueryById(Guid id) : base(id) { }
+    public NoticeQueryDetail(Guid id) : base(id) { }
 }
 
 /// <summary>分页查询通知公告（title 模糊、类型 / 状态精确，按创建时间倒序；列表不含正文）。</summary>
 /// <param name="Request">分页与筛选条件。</param>
-public sealed record NoticeQueryPaged : DomainQueryPaged<NoticePageRequest, NoticeListResponse>
+public sealed record NoticeQueryPaged : AggregateQueryPaged<NoticePageRequest, NoticeListResponse>
 {
     /// <summary>构造通知公告分页查询。</summary>
     /// <param name="request">分页与筛选条件。</param>

@@ -14,7 +14,7 @@ namespace Application.Commands;
 /// <remarks>构造函数。</remarks>
 public sealed class TenantCreateCommandHandler(
     IAggregateRepository<SysTenant> tenantRepository,
-    IDomainEventPublisher domainEventPublisher) : DomainCreateCommandHandler<TenantCreateCommand, TenantCreateRequest, SysTenant>(tenantRepository, domainEventPublisher)
+    IDomainEventPublisher domainEventPublisher) : AggregateCreateCommandHandler<TenantCreateCommand, TenantCreateRequest, SysTenant>(tenantRepository, domainEventPublisher)
 {
     /// <inheritdoc />
     protected override async Task ValidateAsync(TenantCreateRequest request, CancellationToken cancellationToken)

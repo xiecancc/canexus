@@ -5,14 +5,14 @@ using Application.Contracts.Dicts;
 namespace Application.Contracts.Commands;
 /// <summary>创建字典数据命令（同字典类型下标签 / 键值唯一，写后失效类型缓存）。</summary>
 /// <param name="Request">创建请求。</param>
-public sealed record DictDataCreateCommand : DomainCreateCommand<DictDataCreateRequest>
+public sealed record DictDataCreateCommand : AggregateCreateCommand<DictDataCreateRequest>
 {
     public DictDataCreateCommand(DictDataCreateRequest request) : base(request) { }
 }
 
 /// <summary>创建字典类型命令（dictType 全局唯一）。</summary>
 /// <param name="Request">创建请求。</param>
-public sealed record DictTypeCreateCommand : DomainCreateCommand<DictTypeCreateRequest>
+public sealed record DictTypeCreateCommand : AggregateCreateCommand<DictTypeCreateRequest>
 {
     public DictTypeCreateCommand(DictTypeCreateRequest request) : base(request) { }
 }

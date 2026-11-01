@@ -15,7 +15,7 @@ namespace Application.Commands;
 public sealed class NoticeCreateCommandHandler(
     IAggregateRepository<SysNotice> noticeRepository,
     IDomainEventPublisher domainEventPublisher,
-    IMapper mapper) : DomainCreateCommandHandler<NoticeCreateCommand, NoticeCreateRequest, SysNotice>(noticeRepository, domainEventPublisher)
+    IMapper mapper) : AggregateCreateCommandHandler<NoticeCreateCommand, NoticeCreateRequest, SysNotice>(noticeRepository, domainEventPublisher)
 {
     /// <summary>AutoMapper 映射器。</summary>
     private IMapper Mapper { get; } = mapper;
