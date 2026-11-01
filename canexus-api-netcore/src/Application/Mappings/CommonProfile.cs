@@ -1,5 +1,4 @@
-
-using Application.Contracts.Common;
+using Application.Contracts.Dtos.Common;
 using AutoMapper;
 using Domain.Entities;
 using Domain.Shared.Paging;
@@ -33,10 +32,13 @@ public sealed class CommonProfile : Profile
         CreateMap<DomainBase, DomainListResponse>();
         CreateMap<AggregateBase, AggregateListResponse>()
             .IncludeBase<DomainBase, DomainListResponse>();
-        // —— 分页向 ——
+        // —— 详情向（聚合读模型全量根）——
         CreateMap<DomainBase, DomainPagedResponse>();
-        CreateMap<AggregateBase, AggregatePagedResponse>()
+        CreateMap<AggregateBase, AggregateDetailResponse>()
             .IncludeBase<DomainBase, DomainPagedResponse>();
+        // —— 分页向（分页行即详情形态，挂接详情基类映射链）——
+        CreateMap<AggregateBase, AggregatePagedResponse>()
+            .IncludeBase<AggregateBase, AggregateDetailResponse>();
 
         // DTO 写模型基类 → 领域基类映射（模板链）：为各模块「请求 → 实体」的
         // IncludeBase 派生映射提供基类承载，审计字段（CreatedAt / CreatedBy 等）

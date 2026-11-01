@@ -1,10 +1,9 @@
-
-using Application.Contracts.Common;
+using Application.Contracts.Dtos.Common;
 using Domain.Shared.Enums;
 
 namespace Application.Contracts.Depts;
-/// <summary>部门响应公共基类：对齐 SysDept 聚合的业务字段（Id / Version / CreatedAt 由 <see cref="AggregatePagedResponse"/> 承载）。</summary>
-public abstract class DeptBaseResponse : AggregatePagedResponse
+/// <summary>部门响应公共基类：对齐 SysDept 聚合的业务字段（树形模块无分页查询，树节点与详情统一以 <see cref="AggregateDetailResponse"/> 为根）。</summary>
+public abstract class DeptBaseResponse : AggregateDetailResponse
 {
     /// <summary>部门名称。</summary>
     public string DeptName { get; set; } = string.Empty;

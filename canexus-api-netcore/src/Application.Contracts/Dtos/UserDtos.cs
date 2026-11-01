@@ -1,5 +1,4 @@
-
-using Application.Contracts.Common;
+using Application.Contracts.Dtos.Common;
 using Domain.Shared.Enums;
 using Domain.Shared.Paging;
 
@@ -50,7 +49,7 @@ public class UserListResponse : UserBaseResponse
 }
 
 /// <summary>用户角色简项。</summary>
-public class UserRoleItemResponse : DomainListResponse
+public class UserRoleItemResponse : AggregateListResponse
 {
     /// <summary>角色 Id。</summary>
     public Guid Id { get; set; }

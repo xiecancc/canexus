@@ -1,10 +1,9 @@
-
-using Application.Contracts.Common;
+using Application.Contracts.Dtos.Common;
 using Domain.Shared.Enums;
 
 namespace Application.Contracts.Menus;
-/// <summary>菜单响应公共基类：对齐 SysMenu 聚合的业务字段（树形结构；Id / Version / CreatedAt 由 <see cref="AggregatePagedResponse"/> 承载）。</summary>
-public abstract class MenuBaseResponse : AggregatePagedResponse
+/// <summary>菜单响应公共基类：对齐 SysMenu 聚合的业务字段（树形模块无分页查询，树节点与详情统一以 <see cref="AggregateDetailResponse"/> 为根）。</summary>
+public abstract class MenuBaseResponse : AggregateDetailResponse
 {
     /// <summary>父菜单 Id；Guid.Empty 表示根节点。</summary>
     public Guid ParentId { get; set; }

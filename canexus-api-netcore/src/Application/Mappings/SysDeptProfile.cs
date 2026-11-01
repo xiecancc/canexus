@@ -1,6 +1,5 @@
-
-using Application.Contracts.Common;
 using Application.Contracts.Depts;
+using Application.Contracts.Dtos.Common;
 using AutoMapper;
 using Domain.Entities;
 
@@ -11,11 +10,11 @@ public sealed class SysDeptProfile : Profile
     /// <summary>构造函数。</summary>
     public SysDeptProfile()
     {
-        // 实体 → 响应模型（IncludeBase 挂接基类映射链，补齐 Id / Version / 审计字段）
+        // 实体 → 响应模型（IncludeBase 挂接基类映射链，补齐 Id / Version / 审计字段；树节点与详情统一挂详情基类）
         CreateMap<SysDept, DeptTreeResponse>()
-            .IncludeBase<AggregateBase, AggregatePagedResponse>();
+            .IncludeBase<AggregateBase, AggregateDetailResponse>();
         CreateMap<SysDept, DeptDetailResponse>()
-            .IncludeBase<AggregateBase, AggregatePagedResponse>();
+            .IncludeBase<AggregateBase, AggregateDetailResponse>();
 
         // 请求 → 实体（IncludeBase 挂接基类映射链）
         CreateMap<DeptCreateRequest, SysDept>(MemberList.None)
