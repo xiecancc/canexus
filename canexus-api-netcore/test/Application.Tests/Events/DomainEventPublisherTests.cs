@@ -54,14 +54,14 @@ public class RecordingPermissionChecker : IPermissionChecker
     }
 
     /// <inheritdoc />
-    public Task InvalidateAsync(Guid userId)
+    public Task InvalidateAsync(Guid userId, CancellationToken cancellationToken = default)
     {
         InvalidatedUserIds.Add(userId);
         return Task.CompletedTask;
     }
 
     /// <inheritdoc />
-    public Task InvalidateAllAsync()
+    public Task InvalidateAllAsync(CancellationToken cancellationToken = default)
     {
         InvalidateAllCallCount++;
         return Task.CompletedTask;
@@ -129,6 +129,48 @@ public class MediatRDomainEventPublisherTests
             var notification = (DomainEventNotification)publisher.Published[0];
             Assert.That(notification.DomainEvent, Is.SameAs(domainEvent));
         });
+    }
+}
+
+/// <summary>监听器隔离通知发布策略单元测试：单监听器异常不阻断其余监听器，取消异常原样传播。</summary>
+[TestFixture]
+public class IsolatedNotificationPublisherTests
+{
+    private static readonly DomainEventNotification Notification = new(new UserPasswordResetEvent(Guid.NewGuid()));
+
+    [Test]
+    public async Task Publish_OneListenerThrows_RemainingListenersStillExecute()
+    {
+        // 前一个监听器抛异常：降级记录日志，其余监听器照常执行，整体不抛
+        var executed = new List<string>();
+        NotificationHandlerExecutor[] executors =
+        [
+            new(new object(), (_, _) => throw new InvalidOperationException("模拟监听器故障")),
+            new(new object(), (_, _) =>
+            {
+                executed.Add("second");
+                return Task.CompletedTask;
+            }),
+        ];
+        var publisher = new IsolatedNotificationPublisher(NullLogger<IsolatedNotificationPublisher>.Instance);
+
+        await publisher.Publish(executors, Notification, CancellationToken.None);
+
+        Assert.That(executed, Is.EqualTo(new[] { "second" }));
+    }
+
+    [Test]
+    public void Publish_CancellationRequested_PropagatesWithoutDegradation()
+    {
+        // 请求取消属于正常控制流，不降级：原样向上传播
+        NotificationHandlerExecutor[] executors =
+        [
+            new(new object(), (_, _) => throw new OperationCanceledException()),
+        ];
+        var publisher = new IsolatedNotificationPublisher(NullLogger<IsolatedNotificationPublisher>.Instance);
+
+        Assert.ThrowsAsync<OperationCanceledException>(
+            () => publisher.Publish(executors, Notification, CancellationToken.None));
     }
 }
 

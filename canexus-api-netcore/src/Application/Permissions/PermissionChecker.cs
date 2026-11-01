@@ -61,17 +61,17 @@ public sealed class PermissionChecker(
     }
 
     /// <inheritdoc />
-    public async Task InvalidateAsync(Guid userId)
+    public async Task InvalidateAsync(Guid userId, CancellationToken cancellationToken = default)
     {
-        await cache.RemoveAsync(BuildKeyStatic(userId, await GetVersionAsync()));
+        await cache.RemoveAsync(BuildKeyStatic(userId, await GetVersionAsync(cancellationToken)), cancellationToken);
     }
 
     /// <inheritdoc />
-    public async Task InvalidateAllAsync()
+    public async Task InvalidateAllAsync(CancellationToken cancellationToken = default)
     {
         // 版本号递增后旧 key 全部失配，等效于全量失效；版本号 key 必须永不过期（Never 档），
         // 否则过期后版本号回退 0，历史 v0 用户权限 key 会复活（越权窗口）
-        await cache.SetAsync(VersionCacheKey, await GetVersionAsync() + 1, CacheTtl.Never);
+        await cache.SetAsync(VersionCacheKey, await GetVersionAsync(cancellationToken) + 1, CacheTtl.Never, cancellationToken);
     }
 
     /// <summary>加载用户权限集合：启用角色 → 超管通配 / 角色菜单 → 菜单 perms。</summary>

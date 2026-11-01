@@ -25,16 +25,16 @@ public sealed class PermissionCacheInvalidationHandler(IPermissionChecker permis
         await (notification.DomainEvent switch
         {
             // 用户事件：仅失效该用户的权限缓存
-            UserCreatedEvent userCreated => permissionChecker.InvalidateAsync(userCreated.NewEntity.Id),
-            UserUpdatedEvent userUpdated => permissionChecker.InvalidateAsync(userUpdated.NewEntity.Id),
-            UserRolesUpdatedEvent userRolesUpdated => permissionChecker.InvalidateAsync(userRolesUpdated.NewEntity.Id),
-            UserPasswordResetEvent passwordReset => permissionChecker.InvalidateAsync(passwordReset.UserId),
-            UserDeletedEvent userDeleted => permissionChecker.InvalidateAsync(userDeleted.NewEntity.Id),
+            UserCreatedEvent userCreated => permissionChecker.InvalidateAsync(userCreated.NewEntity.Id, cancellationToken),
+            UserUpdatedEvent userUpdated => permissionChecker.InvalidateAsync(userUpdated.NewEntity.Id, cancellationToken),
+            UserRolesUpdatedEvent userRolesUpdated => permissionChecker.InvalidateAsync(userRolesUpdated.NewEntity.Id, cancellationToken),
+            UserPasswordResetEvent passwordReset => permissionChecker.InvalidateAsync(passwordReset.UserId, cancellationToken),
+            UserDeletedEvent userDeleted => permissionChecker.InvalidateAsync(userDeleted.NewEntity.Id, cancellationToken),
 
             // 角色 / 菜单事件：影响任意持有（已授权）用户的权限，全量失效
             RoleCreatedEvent or RoleUpdatedEvent or RoleDeletedEvent
                 or MenuCreatedEvent or MenuUpdatedEvent or MenuDeletedEvent
-                => permissionChecker.InvalidateAllAsync(),
+                => permissionChecker.InvalidateAllAsync(cancellationToken),
 
             _ => Task.CompletedTask,
         });

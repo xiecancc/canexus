@@ -28,6 +28,9 @@ public static class DependencyExtensions
             configuration.AddBehavior(typeof(IPipelineBehavior<,>), typeof(ValidationBehavior<,>));
             configuration.AddBehavior(typeof(IPipelineBehavior<,>), typeof(LoggingBehavior<,>));
             configuration.AddBehavior(typeof(IPipelineBehavior<,>), typeof(PerformanceBehavior<,>));
+
+            // 通知发布策略：逐监听器异常隔离（单个监听器失败仅记录日志，不阻断其余监听器与业务请求）
+            configuration.NotificationPublisherType = typeof(IsolatedNotificationPublisher);
         });
 
         // AutoMapper：扫描本程序集 Profile 映射配置（Mappings 目录）

@@ -22,10 +22,12 @@ public interface IPermissionChecker
 
     /// <summary>失效指定用户的权限缓存（角色分配、角色菜单变更时调用）。</summary>
     /// <param name="userId">用户 Id。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>表示异步操作的任务。</returns>
-    public Task InvalidateAsync(Guid userId);
+    public Task InvalidateAsync(Guid userId, CancellationToken cancellationToken = default);
 
     /// <summary>失效全部用户的权限缓存（角色 / 菜单本身变更时调用）。</summary>
+    /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>表示异步操作的任务。</returns>
-    public Task InvalidateAllAsync();
+    public Task InvalidateAllAsync(CancellationToken cancellationToken = default);
 }
