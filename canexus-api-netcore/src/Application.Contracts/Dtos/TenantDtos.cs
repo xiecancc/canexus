@@ -76,8 +76,6 @@ public class TenantCreateRequest : TenantRequest
 /// <summary>更新租户请求（PUT /api/system/tenant/{id}；TenantKey 不可变更；Version 须回传乐观锁版本号）。</summary>
 public class TenantUpdateRequest : TenantRequest
 {
-    /// <summary>乐观锁版本号（须与服务端聚合当前版本一致才允许修改）。</summary>
-    public Guid Version { get; set; }
 }
 
 /// <summary>删除租户请求（DELETE /api/system/tenant/{id}；Version 须回传乐观锁版本号）。</summary>

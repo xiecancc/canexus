@@ -51,8 +51,6 @@ public class ConfigCreateRequest : ConfigRequest
 /// <summary>更新参数配置请求（PUT /api/system/config/{id}；内置参数可编辑但不可删除；Version 须回传乐观锁版本号）。</summary>
 public class ConfigUpdateRequest : ConfigRequest
 {
-    /// <summary>乐观锁版本号（须与服务端聚合当前版本一致才允许修改）。</summary>
-    public Guid Version { get; set; }
 }
 
 /// <summary>删除参数配置请求（DELETE /api/system/config/{id}；Version 须回传乐观锁版本号）。</summary>

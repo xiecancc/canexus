@@ -44,8 +44,10 @@ public sealed class CommonProfile : Profile
         // —— 领域层 ——
         CreateMap<DomainChangeRequest, DomainBase>();
         // —— 聚合根层 ——
+        // 实体 Version 由数据访问层生成并在更新时轮换，请求侧 Version 仅用于乐观锁比对，禁止映射回实体
         CreateMap<AggregateChangeRequest, AggregateBase>()
-            .IncludeBase<DomainChangeRequest, DomainBase>();
+            .IncludeBase<DomainChangeRequest, DomainBase>()
+            .ForMember(dest => dest.Version, opt => opt.Ignore());
 
         // 开放泛型映射：闭合 PagedResponse<实体> → PagedResponse<DTO> 时按已注册的元素映射解析 Items
         CreateMap(typeof(PagedResponse<>), typeof(PagedResponse<>));

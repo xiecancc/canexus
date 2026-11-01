@@ -86,8 +86,6 @@ public class RoleCreateRequest : RoleRequest
 /// <summary>更新角色请求（PUT /api/system/role/{id}；内置 super_admin 角色整体拒绝编辑；Version 须回传乐观锁版本号）。</summary>
 public class RoleUpdateRequest : RoleRequest
 {
-    /// <summary>乐观锁版本号（须与服务端聚合当前版本一致才允许修改）。</summary>
-    public Guid Version { get; set; }
 }
 
 /// <summary>删除角色请求（DELETE /api/system/role/{id}；Version 须回传乐观锁版本号）。</summary>

@@ -104,8 +104,6 @@ public class UserCreateRequest : UserRequest
 /// <summary>更新用户请求（PUT /api/system/user/{id}；内置 admin 拒绝编辑；Version 须回传详情接口的乐观锁版本号）。</summary>
 public class UserUpdateRequest : UserRequest
 {
-    /// <summary>乐观锁版本号（须与服务端聚合当前版本一致才允许修改）。</summary>
-    public Guid Version { get; set; }
 }
 
 /// <summary>修改用户状态请求（PUT /api/system/user/{id}/status）。</summary>
@@ -113,18 +111,11 @@ public class UserStatusRequest : AggregateChangeRequest
 {
     /// <summary>状态：启用（1），停用（0）。</summary>
     public CommonStatus Status { get; set; } = CommonStatus.Enabled;
-
-
-    /// <summary>乐观锁版本号（须与服务端聚合当前版本一致才允许修改）。</summary>
-    public Guid Version { get; set; }
 }
 
 /// <summary>重置密码请求（PUT /api/system/user/{id}/password）。</summary>
 public class UserPasswordRequest : AggregateChangeRequest
 {
-    /// <summary>乐观锁版本号（须与服务端聚合当前版本一致才允许修改）。</summary>
-    public Guid Version { get; set; }
-
     /// <summary>新密码。</summary>
     public string Password { get; set; } = string.Empty;
 }
@@ -132,9 +123,6 @@ public class UserPasswordRequest : AggregateChangeRequest
 /// <summary>分配角色请求（PUT /api/system/user/{id}/roles）。</summary>
 public class UserRolesRequest : AggregateChangeRequest
 {
-    /// <summary>乐观锁版本号（须与服务端聚合当前版本一致才允许修改）。</summary>
-    public Guid Version { get; set; }
-
     /// <summary>角色 Id 集合（全删全插保存）。</summary>
     public List<Guid> RoleIds { get; set; } = [];
 }

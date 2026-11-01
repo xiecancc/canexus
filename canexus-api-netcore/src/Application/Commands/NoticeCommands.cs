@@ -77,8 +77,7 @@ public sealed class NoticeUpdateCommandHandler(
     /// <inheritdoc />
     protected override Task ValidateAsync(NoticeUpdateRequest request, SysNotice entity, CancellationToken cancellationToken)
     {
-        // 乐观锁校验：业务守卫通过后比对客户端回传版本
-        EnsureVersionMatches(entity, request.Version);
+        // 无业务守卫：字段规则由验证器拦截，乐观锁比对由基类统一执行
         return Task.CompletedTask;
     }
 

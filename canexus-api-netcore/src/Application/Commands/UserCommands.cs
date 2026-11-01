@@ -169,8 +169,7 @@ public sealed class UserResetPasswordCommandHandler(
     /// <inheritdoc />
     protected override Task ValidateAsync(UserPasswordRequest request, SysUser entity, CancellationToken cancellationToken)
     {
-        // 乐观锁校验：比对客户端回传版本（密码重置同为聚合修改操作）
-        EnsureVersionMatches(entity, request.Version);
+        // 无业务守卫：密码强度由验证器拦截，乐观锁比对由基类统一执行
         return Task.CompletedTask;
     }
 
@@ -318,8 +317,6 @@ public sealed class UserUpdateStatusCommandHandler(
             throw new BusinessException(ErrorCodes.CommonInvalidRequest, "状态取值不合法：仅支持 1 启用 / 0 停用");
         }
 
-        // 乐观锁校验：守卫通过后比对客户端回传版本
-        EnsureVersionMatches(entity, request.Version);
         return Task.CompletedTask;
     }
 

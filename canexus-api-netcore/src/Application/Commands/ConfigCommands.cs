@@ -96,9 +96,6 @@ public sealed class ConfigUpdateCommandHandler(
         await Repository.EnsureNotDuplicateAsync(
             c => c.ConfigKey == configKey && c.Id != entity.Id, ErrorCodes.ConfigKeyDuplicate,
             $"参数键名「{configKey}」已存在", cancellationToken);
-
-        // 乐观锁校验：业务守卫通过后比对客户端回传版本
-        EnsureVersionMatches(entity, request.Version);
     }
 
     /// <inheritdoc />

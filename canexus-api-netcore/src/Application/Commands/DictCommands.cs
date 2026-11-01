@@ -191,9 +191,6 @@ public sealed class DictDataUpdateCommandHandler(
 
         await DictDataRules.EnsureNotDuplicateAsync(
             Repository, dictType, request.DictLabel.Trim(), request.DictValue.Trim(), excludeId: entity.Id, cancellationToken);
-
-        // 乐观锁校验：业务守卫通过后比对客户端回传版本
-        EnsureVersionMatches(entity, request.Version);
     }
 
     /// <inheritdoc />
@@ -234,8 +231,6 @@ public sealed class DictTypeUpdateCommandHandler(
             throw new BusinessException(ErrorCodes.DictTypeImmutable, "字典类型（dictType）不可变更");
         }
 
-        // 乐观锁校验：业务守卫通过后比对客户端回传版本
-        EnsureVersionMatches(entity, request.Version);
         return Task.CompletedTask;
     }
 

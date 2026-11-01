@@ -101,8 +101,6 @@ public sealed class TenantUpdateCommandHandler(
             throw new BusinessException(ErrorCodes.TenantKeyImmutable, "租户标识（tenantKey）不可变更");
         }
 
-        // 乐观锁校验：业务守卫通过后比对客户端回传版本
-        EnsureVersionMatches(entity, request.Version);
         return Task.CompletedTask;
     }
 

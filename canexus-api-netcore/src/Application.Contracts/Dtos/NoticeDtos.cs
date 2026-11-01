@@ -65,8 +65,6 @@ public class NoticeCreateRequest : NoticeRequest
 /// <summary>更新通知公告请求（PUT /api/system/notice/{id}，字段与创建一致；Version 须回传乐观锁版本号）。</summary>
 public class NoticeUpdateRequest : NoticeRequest
 {
-    /// <summary>乐观锁版本号（须与服务端聚合当前版本一致才允许修改）。</summary>
-    public Guid Version { get; set; }
 }
 
 /// <summary>删除通知公告请求（DELETE /api/system/notice/{id}；Version 须回传乐观锁版本号）。</summary>

@@ -100,8 +100,6 @@ public class MenuCreateRequest : MenuRequest
 /// <summary>更新菜单请求（PUT /api/system/menu/{id}；父级不可选自身或自己的后代；Version 须回传乐观锁版本号）。</summary>
 public class MenuUpdateRequest : MenuRequest
 {
-    /// <summary>乐观锁版本号（须与服务端聚合当前版本一致才允许修改）。</summary>
-    public Guid Version { get; set; }
 }
 
 /// <summary>删除菜单请求（DELETE /api/system/menu/{id}；Version 须回传乐观锁版本号）。</summary>

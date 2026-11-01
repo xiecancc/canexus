@@ -1,7 +1,10 @@
 namespace Application.Contracts.Common;
-/// <summary>聚合请求载荷基类：新增 / 修改公共属性的挂载点（聚合 Id、乐观锁版本号与审计字段由数据访问层生成，不随载荷提交）。</summary>
+/// <summary>聚合请求载荷基类：新增 / 修改公共属性的挂载点（聚合 Id 与审计字段由数据访问层生成，不随载荷提交）。</summary>
 public abstract class AggregateChangeRequest : DomainChangeRequest
 {
+    /// <summary>乐观锁版本号：修改类请求须原样回传列表 / 详情响应携带的版本（须与服务端聚合当前版本一致才允许修改）；
+    /// 创建请求无需提交，实体 Version 由数据访问层生成并轮换。</summary>
+    public Guid Version { get; set; }
 }
 
 public abstract class AggregateDetailResponse : DomainDetailResponse

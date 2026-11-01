@@ -43,8 +43,6 @@ public class DictTypeCreateRequest : DictTypeRequest
 /// <summary>更新字典类型请求（PUT /api/system/dict-type/{id}；DictType 不可变更；Version 须回传乐观锁版本号）。</summary>
 public class DictTypeUpdateRequest : DictTypeRequest
 {
-    /// <summary>乐观锁版本号（须与服务端聚合当前版本一致才允许修改）。</summary>
-    public Guid Version { get; set; }
 }
 
 /// <summary>删除字典类型请求（DELETE /api/system/dict-type/{id}；Version 须回传乐观锁版本号）。</summary>
@@ -132,8 +130,6 @@ public class DictDataCreateRequest : DictDataRequest
 /// <summary>更新字典数据请求（PUT /api/system/dict-data/{id}；类型可迁移，迁移后新旧类型缓存均失效；Version 须回传乐观锁版本号）。</summary>
 public class DictDataUpdateRequest : DictDataRequest
 {
-    /// <summary>乐观锁版本号（须与服务端聚合当前版本一致才允许修改）。</summary>
-    public Guid Version { get; set; }
 }
 
 /// <summary>删除字典数据请求（DELETE /api/system/dict-data/{id}；Version 须回传乐观锁版本号）。</summary>

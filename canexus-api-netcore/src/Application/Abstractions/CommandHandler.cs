@@ -123,13 +123,13 @@ public abstract class AggregateCreateCommandHandler<TCommand, TRequest, TEntity>
 
 /// <summary>
 /// 聚合更新命令处理器基类（对应 <see cref="AggregateUpdateCommand{TRequest}"/>）：封装
-/// 「按 Id 取值兜底 → 业务校验（含乐观锁版本比对，由 <see cref="ValidateAsync"/> 钩子末尾调用
+/// 「按 Id 取值兜底 → 业务校验 → 乐观锁版本比对（基类在 <see cref="ValidateAsync"/> 后统一执行
 /// <see cref="EnsureVersionMatches"/>）→ 捕获变更前快照 → 请求原位映射 → 乐观并发更新 → 发布修改事件」
 /// 的标准更新流程。适用于单聚合原位更新；涉及关联表替换或事务编排的更新应直接继承
 /// <see cref="CommandHandler{TCommand, TResponse}"/> 显式实现。
 /// </summary>
 /// <typeparam name="TCommand">更新命令类型。</typeparam>
-/// <typeparam name="TRequest">更新请求类型（携带乐观锁版本号 Version，由钩子负责比对）。</typeparam>
+/// <typeparam name="TRequest">更新请求类型（乐观锁版本号 Version 由基类统一比对）。</typeparam>
 /// <typeparam name="TEntity">目标聚合类型。</typeparam>
 /// <param name="repository">目标聚合仓储。</param>
 /// <param name="eventPublisher">领域事件发布器。</param>
@@ -175,6 +175,9 @@ public abstract class AggregateUpdateCommandHandler<TCommand, TRequest, TEntity>
     {
         var entity = await Repository.GetOrThrowAsync(command.Id, NotFoundErrorCode, EntityDisplayName, cancellationToken);
         await ValidateAsync(command.Request, entity, cancellationToken);
+
+        // 乐观锁校验：业务守卫通过后、任何写操作之前，由基类统一比对客户端回传版本（模块钩子不再重复调用）
+        EnsureVersionMatches(entity, command.Request.Version);
 
         // 变更前捕获聚合快照（供修改事件携带变更前状态）
         var before = entity.Snapshot<TEntity>();

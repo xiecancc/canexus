@@ -70,8 +70,6 @@ public class JobCreateRequest : JobRequest
 /// <summary>更新定时任务请求（PUT /api/system/job/{id}；分组变更时旧调度一并清理；Version 须回传乐观锁版本号）。</summary>
 public class JobUpdateRequest : JobRequest
 {
-    /// <summary>乐观锁版本号（须与服务端聚合当前版本一致才允许修改）。</summary>
-    public Guid Version { get; set; }
 }
 
 /// <summary>修改任务状态请求（PUT /api/system/job/{id}/status；运行即入调度、暂停即移出；Version 须回传乐观锁版本号）。</summary>
@@ -79,10 +77,6 @@ public class JobStatusRequest : AggregateChangeRequest
 {
     /// <summary>状态：运行（1），暂停（0）。</summary>
     public CommonStatus Status { get; set; } = CommonStatus.Enabled;
-
-
-    /// <summary>乐观锁版本号（须与服务端聚合当前版本一致才允许修改）。</summary>
-    public Guid Version { get; set; }
 }
 
 /// <summary>删除定时任务请求（DELETE /api/system/job/{id}；Version 须回传乐观锁版本号）。</summary>

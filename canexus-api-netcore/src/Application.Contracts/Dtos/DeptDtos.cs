@@ -77,9 +77,6 @@ public class DeptCreateRequest : DeptRequest
 /// <summary>更新部门请求（PUT /api/system/dept/{id}；父级不可选自身或自己的后代；Version 须回传乐观锁版本号）。</summary>
 public class DeptUpdateRequest : DeptRequest
 {
-    /// <summary>乐观锁版本号（须与服务端聚合当前版本一致才允许修改）。</summary>
-    public Guid Version { get; set; }
-
     /// <summary>父部门 Id。</summary>
     public Guid ParentId { get; set; }
 }
