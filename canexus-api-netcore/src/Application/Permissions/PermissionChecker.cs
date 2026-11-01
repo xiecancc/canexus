@@ -8,7 +8,7 @@ using Infrastructure.Shared.Caching;
 namespace Application.Permissions;
 /// <summary>
 /// 权限校验器实现：双层缓存按 userId 缓存权限集合（L1 2 分钟 / L2 10 分钟）。
-/// <para>全局版本号存于缓存（<see cref="VersionCacheKey"/>），全量失效时递增，旧 key 自然失配，无需遍历缓存。</para>
+/// <para>全局版本号存于缓存（<see cref="VersionCacheKey"/>，永不过期），全量失效时递增，旧 key 自然失配，无需遍历缓存。</para>
 /// </summary>
 /// <remarks>构造函数。</remarks>
 public sealed class PermissionChecker(
@@ -21,10 +21,10 @@ public sealed class PermissionChecker(
     /// <summary>缓存 key 前缀（key 格式：{prefix}{version}:{userId}）。</summary>
     public const string CacheKeyPrefix = "auth:permissions:";
 
-    /// <summary>全局版本号缓存 key。</summary>
+    /// <summary>全局版本号缓存 key（永不过期：若过期回退 0，历史 v0 用户权限 key 会复活，产生越权窗口）。</summary>
     private const string VersionCacheKey = CacheKeyPrefix + "version";
 
-    /// <summary>权限缓存 TTL：L1 2 分钟（降低跨节点权限变更可见延迟）/ L2 10 分钟（与原内存缓存时长一致）。</summary>
+    /// <summary>用户权限缓存 TTL：L1 2 分钟（降低跨节点权限变更可见延迟）/ L2 10 分钟（与原内存缓存时长一致）；仅作用于用户权限 key。</summary>
     private static readonly CacheTtlProfile PermissionTtl = new(TimeSpan.FromMinutes(2), TimeSpan.FromMinutes(10));
 
     /// <summary>超管通配权限标识。</summary>
@@ -69,8 +69,9 @@ public sealed class PermissionChecker(
     /// <inheritdoc />
     public async Task InvalidateAllAsync()
     {
-        // 版本号递增后旧 key 全部失配，等效于全量失效
-        await cache.SetAsync(VersionCacheKey, await GetVersionAsync() + 1, PermissionTtl);
+        // 版本号递增后旧 key 全部失配，等效于全量失效；版本号 key 必须永不过期（Never 档），
+        // 否则过期后版本号回退 0，历史 v0 用户权限 key 会复活（越权窗口）
+        await cache.SetAsync(VersionCacheKey, await GetVersionAsync() + 1, CacheTtl.Never);
     }
 
     /// <summary>加载用户权限集合：启用角色 → 超管通配 / 角色菜单 → 菜单 perms。</summary>

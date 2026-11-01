@@ -108,6 +108,14 @@ public sealed class Cache(HybridCache cache, IOptionsMonitor<CacheOption> monito
     {
         CacheTtl.Hot => Pair(Option.Hot),
         CacheTtl.Cold => Pair(Option.Cold),
+
+        // 不过期档：条目选项不设置过期时间（HybridCache 对 null 过期时间按永不过期处理），
+        // 用于必须持久存续的元数据（如权限全局版本号），不参与档位配置
+        CacheTtl.Never => new HybridCacheEntryOptions
+        {
+            Expiration = null,
+            LocalCacheExpiration = null,
+        },
         _ => Pair(Option.Medium),
     };
 
