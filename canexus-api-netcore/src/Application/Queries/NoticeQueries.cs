@@ -72,21 +72,20 @@ public sealed class NoticeQueryPagedHandler(IAggregateRepository<SysNotice> noti
             && (noticeType == null || n.NoticeType == noticeType.Value)
             && (status == null || n.Status == status.Value);
 
-        // 通用仓储分页固定按主键升序；公告要求按创建时间倒序且数据量小，取筛选结果后内存排序分页
-        var matched = await noticeRepository.GetListAsync([predicate], cancellationToken: cancellationToken);
-        var ordered = matched
-            .OrderByDescending(n => n.CreatedAt)
-            .ThenByDescending(n => n.Id)
-            .ToList();
+        // DB 端排序分页：创建时间倒序，Id 倒序作平局裁决（替代原全量拉取后内存排序分页）
+        var paged = await noticeRepository.GetPagedAsync(
+            request,
+            [predicate],
+            new Dictionary<Expression<Func<SysNotice, object>>, bool?>
+            {
+                [n => n.CreatedAt] = false,
+                [n => n.Id] = false
+            },
+            cancellationToken);
 
-        // 页内实体列表整体集合映射（元素映射运行期按模块注册解析）
-        var pageItems = ordered
-            .Skip((request.PageIndex - 1) * request.PageSize)
-            .Take(request.PageSize)
-            .ToList();
-
+        // 页内实体列表整体集合映射（元素映射运行期按模块注册解析；列表映射忽略正文）
         return PagedResponse<NoticeListResponse>.Create(
-            mapper.Map<List<NoticeListResponse>>(pageItems), ordered.Count, request);
+            mapper.Map<List<NoticeListResponse>>(paged.Items), paged.Total, request);
     }
 
 }
