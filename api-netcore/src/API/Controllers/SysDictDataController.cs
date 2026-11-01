@@ -26,7 +26,7 @@ public class SysDictDataController(ISender sender) : ControllerBase
     [RequirePermission("system:dict:list")]
     public async Task<IActionResult> Page([FromQuery] DictDataPageRequest request)
     {
-        return Ok(Result.Ok(await sender.Send(new GetDictDataPageQuery(request))));
+        return Ok(Result.Ok(await sender.Send(new DictDataQueryPaged(request))));
     }
 
     /// <summary>按字典类型查询启用状态的字典数据（走缓存，写操作后立即刷新）。</summary>
@@ -36,7 +36,7 @@ public class SysDictDataController(ISender sender) : ControllerBase
     [RequirePermission("system:dict:query")]
     public async Task<IActionResult> GetByType(string dictType)
     {
-        return Ok(Result.Ok(await sender.Send(new GetDictDataByTypeQuery(dictType))));
+        return Ok(Result.Ok(await sender.Send(new DictDataQueryByType(dictType))));
     }
 
     /// <summary>创建字典数据（所属类型必须存在；同类型下标签 / 键值唯一）。</summary>
@@ -47,8 +47,8 @@ public class SysDictDataController(ISender sender) : ControllerBase
     [OperLog("字典数据", OperBusinessType.Add)]
     public async Task<IActionResult> Create([FromBody] DictDataCreateRequest request)
     {
-        var id = await sender.Send(new CreateDictDataCommand(request));
-        return Ok(Result.Ok(id, "创建成功"));
+        await sender.Send(new DictDataCreateCommand(request));
+        return Ok(Result.Ok(message: "创建成功"));
     }
 
     /// <summary>更新字典数据（类型可迁移，迁移后新旧类型缓存均失效）。</summary>
@@ -60,19 +60,20 @@ public class SysDictDataController(ISender sender) : ControllerBase
     [OperLog("字典数据", OperBusinessType.Update)]
     public async Task<IActionResult> Update(Guid id, [FromBody] DictDataUpdateRequest request)
     {
-        await sender.Send(new UpdateDictDataCommand(id, request));
+        await sender.Send(new DictDataUpdateCommand(id, request));
         return Ok(Result.Ok(message: "更新成功"));
     }
 
     /// <summary>删除字典数据。</summary>
     /// <param name="id">字典数据 Id。</param>
     /// <returns>统一响应。</returns>
+    /// <param name="request">删除请求（含乐观锁版本号）。</param>
     [HttpDelete("{id:guid}")]
     [RequirePermission("system:dict:remove")]
     [OperLog("字典数据", OperBusinessType.Delete)]
-    public async Task<IActionResult> Delete(Guid id)
+    public async Task<IActionResult> Delete(Guid id, [FromBody] DictDataDeleteRequest request)
     {
-        await sender.Send(new DeleteDictDataCommand(id));
+        await sender.Send(new DictDataDeleteCommand(id, request.Version));
         return Ok(Result.Ok(message: "删除成功"));
     }
 }

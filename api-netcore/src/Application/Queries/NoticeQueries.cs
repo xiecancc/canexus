@@ -8,7 +8,6 @@ using AutoMapper;
 using Domain.Entities;
 using Domain.Repositories;
 using Domain.Shared.Enums;
-using Domain.Shared.Exceptions;
 using Domain.Shared.Paging;
 using Domain.Shared.Results;
 
@@ -17,37 +16,40 @@ namespace Application.Queries;
 /// <remarks>构造函数。</remarks>
 /// <param name="noticeRepository">通知公告仓储。</param>
 /// <param name="mapper">AutoMapper 映射器。</param>
-public sealed class GetLatestNoticesQueryHandler(IAggregateRepository<SysNotice> noticeRepository, IMapper mapper) : QueryHandler<GetLatestNoticesQuery, List<NoticeLatestVO>>
+public sealed class NoticeQueryLatestHandler(IAggregateRepository<SysNotice> noticeRepository, IMapper mapper) : QueryHandler<NoticeQueryLatest, List<NoticeLatestResponse>>
 {
     /// <inheritdoc />
-    protected override async Task<List<NoticeLatestVO>> HandleAsync(GetLatestNoticesQuery query, CancellationToken cancellationToken)
+    protected override async Task<List<NoticeLatestResponse>> HandleAsync(NoticeQueryLatest query, CancellationToken cancellationToken)
     {
         var limit = NoticeQueryLimits.NormalizeLatestCount(query.Count);
         var notices = await noticeRepository.GetListAsync([n => n.Status == CommonStatus.Enabled], cancellationToken: cancellationToken);
-        return [.. notices
+        var latest = notices
             .OrderByDescending(n => n.CreatedAt)
             .ThenByDescending(n => n.Id)
             .Take(limit)
-            .Select(n => mapper.Map<NoticeLatestVO>(n))];
+            .ToList();
+        return mapper.Map<List<NoticeLatestResponse>>(latest);
     }
 }
 
-/// <summary>查询通知公告详情处理器。</summary>
+/// <summary>查询通知公告详情处理器（标准详情流程 + 回填映射忽略的正文）。</summary>
 /// <remarks>构造函数。</remarks>
 /// <param name="noticeRepository">通知公告仓储。</param>
 /// <param name="mapper">AutoMapper 映射器。</param>
-public sealed class GetNoticeByIdQueryHandler(IAggregateRepository<SysNotice> noticeRepository, IMapper mapper) : QueryHandler<GetNoticeByIdQuery, NoticeListVO>
+public sealed class NoticeQueryByIdHandler(IAggregateRepository<SysNotice> noticeRepository, IMapper mapper) : AggregateQueryByIdHandler<NoticeQueryById, SysNotice, NoticeListResponse>(noticeRepository, mapper)
 {
     /// <inheritdoc />
-    protected override async Task<NoticeListVO> HandleAsync(GetNoticeByIdQuery query, CancellationToken cancellationToken)
-    {
-        var entity = await noticeRepository.GetAsync([it => it.Id == query.Id], cancellationToken)
-            ?? throw new BusinessException(ErrorCodes.NoticeNotFound, $"通知公告 {query.Id} 不存在");
+    protected override int NotFoundErrorCode => ErrorCodes.NoticeNotFound;
 
+    /// <inheritdoc />
+    protected override string EntityDisplayName => "通知公告";
+
+    /// <inheritdoc />
+    protected override Task EnrichAsync(NoticeListResponse response, SysNotice entity, CancellationToken cancellationToken)
+    {
         // 列表映射忽略正文，详情在此显式补充
-        var vo = mapper.Map<NoticeListVO>(entity);
-        vo.Content = entity.Content;
-        return vo;
+        response.Content = entity.Content;
+        return Task.CompletedTask;
     }
 }
 
@@ -55,13 +57,13 @@ public sealed class GetNoticeByIdQueryHandler(IAggregateRepository<SysNotice> no
 /// <remarks>构造函数。</remarks>
 /// <param name="noticeRepository">通知公告仓储。</param>
 /// <param name="mapper">AutoMapper 映射器。</param>
-public sealed class GetNoticePageQueryHandler(IAggregateRepository<SysNotice> noticeRepository, IMapper mapper) : QueryHandler<GetNoticePageQuery, PagedResult<NoticeListVO>>
+public sealed class NoticeQueryPagedHandler(IAggregateRepository<SysNotice> noticeRepository, IMapper mapper) : QueryHandler<NoticeQueryPaged, PagedResponse<NoticeListResponse>>
 {
     /// <inheritdoc />
-    protected override async Task<PagedResult<NoticeListVO>> HandleAsync(GetNoticePageQuery query, CancellationToken cancellationToken)
+    protected override async Task<PagedResponse<NoticeListResponse>> HandleAsync(NoticeQueryPaged query, CancellationToken cancellationToken)
     {
         var request = query.Request;
-        var title = string.IsNullOrWhiteSpace(request.Title) ? null : request.Title.Trim();
+        var title = NormalizeFilter(request.Title);
         var noticeType = request.NoticeType;
         var status = request.Status;
 
@@ -77,13 +79,14 @@ public sealed class GetNoticePageQueryHandler(IAggregateRepository<SysNotice> no
             .ThenByDescending(n => n.Id)
             .ToList();
 
-        var items = ordered
+        // 页内实体列表整体集合映射（元素映射运行期按模块注册解析）
+        var pageItems = ordered
             .Skip((request.PageIndex - 1) * request.PageSize)
             .Take(request.PageSize)
-            .Select(n => mapper.Map<NoticeListVO>(n))
             .ToList();
 
-        return PagedResult<NoticeListVO>.Create(items, ordered.Count, request);
+        return PagedResponse<NoticeListResponse>.Create(
+            mapper.Map<List<NoticeListResponse>>(pageItems), ordered.Count, request);
     }
 
 }

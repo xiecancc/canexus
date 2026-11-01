@@ -1,4 +1,5 @@
 
+using Application.Contracts.Common;
 using Application.Contracts.Menus;
 using AutoMapper;
 using Domain.Entities;
@@ -10,12 +11,16 @@ public sealed class SysMenuProfile : Profile
     /// <summary>构造函数。</summary>
     public SysMenuProfile()
     {
-        // 实体 → 视图对象
-        CreateMap<SysMenu, MenuTreeVO>();
-        CreateMap<SysMenu, MenuDetailVO>();
+        // 实体 → 响应模型（IncludeBase 挂接基类映射链，补齐 Id / Version / 审计字段）
+        CreateMap<SysMenu, MenuTreeResponse>()
+            .IncludeBase<AggregateBase, AggregatePagedResponse>();
+        CreateMap<SysMenu, MenuDetailResponse>()
+            .IncludeBase<AggregateBase, AggregatePagedResponse>();
 
-        // 请求 → 实体
-        CreateMap<MenuCreateRequest, SysMenu>();
-        CreateMap<MenuUpdateRequest, SysMenu>();
+        // 请求 → 实体（IncludeBase 挂接基类映射链）
+        CreateMap<MenuCreateRequest, SysMenu>()
+            .IncludeBase<AggregateChangeRequest, AggregateBase>();
+        CreateMap<MenuUpdateRequest, SysMenu>()
+            .IncludeBase<AggregateChangeRequest, AggregateBase>();
     }
 }

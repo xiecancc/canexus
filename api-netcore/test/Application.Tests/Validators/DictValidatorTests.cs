@@ -11,9 +11,9 @@ namespace Application.Tests.Validators;
 [TestFixture]
 public class DictValidatorTests
 {
-    private static CreateDictDataCommand BuildCommand(TagType tagType, CommonStatus status)
+    private static DictDataCreateCommand BuildCommand(TagType tagType, CommonStatus status)
     {
-        return new CreateDictDataCommand(new DictDataCreateRequest
+        return new DictDataCreateCommand(new DictDataCreateRequest
         {
             DictType = "test_dict",
             DictLabel = "测试",
@@ -26,21 +26,21 @@ public class DictValidatorTests
     [Test]
     public void Validate_InvalidTagType_HasFailure()
     {
-        var result = new CreateDictDataCommandValidator().TestValidate(BuildCommand((TagType)9, CommonStatus.Enabled));
+        var result = new DictDataCreateCommandValidator().TestValidate(BuildCommand((TagType)9, CommonStatus.Enabled));
         result.ShouldHaveValidationErrorFor(command => command.Request.TagType);
     }
 
     [Test]
     public void Validate_InvalidStatus_HasFailure()
     {
-        var result = new CreateDictDataCommandValidator().TestValidate(BuildCommand(TagType.Primary, (CommonStatus)2));
+        var result = new DictDataCreateCommandValidator().TestValidate(BuildCommand(TagType.Primary, (CommonStatus)2));
         result.ShouldHaveValidationErrorFor(command => command.Request.Status);
     }
 
     [Test]
     public void Validate_ValidFields_NoFailures()
     {
-        var result = new CreateDictDataCommandValidator().TestValidate(BuildCommand(TagType.Info, CommonStatus.Disabled));
+        var result = new DictDataCreateCommandValidator().TestValidate(BuildCommand(TagType.Info, CommonStatus.Disabled));
         result.ShouldNotHaveAnyValidationErrors();
     }
 }

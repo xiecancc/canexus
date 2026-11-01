@@ -13,7 +13,7 @@ namespace Infrastructure.Repositories;
 public class JobLogRepository(ISqlSugarClient client, IUserContext currentUser) : AggregateRepository<SysJobLog>(client, currentUser), IJobLogRepository
 {
     /// <inheritdoc />
-    public async Task<PagedResult<SysJobLog>> GetPagedDescAsync(
+    public async Task<PagedResponse<SysJobLog>> GetPagedDescAsync(
         PagedRequest request,
         Expression<Func<SysJobLog, bool>>? predicate = null,
         CancellationToken cancellationToken = default)
@@ -30,6 +30,6 @@ public class JobLogRepository(ISqlSugarClient client, IUserContext currentUser) 
         var items = await query.OrderBy(it => it.TriggerTime, OrderByType.Desc)
             .OrderBy(it => it.Id, OrderByType.Desc)
             .ToPageListAsync(request.PageIndex, request.PageSize, total);
-        return PagedResult<SysJobLog>.Create(items, total.Value, request);
+        return PagedResponse<SysJobLog>.Create(items, total.Value, request);
     }
 }

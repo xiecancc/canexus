@@ -1,5 +1,7 @@
 
+using System.Reflection;
 using Application.Behaviors;
+using Application.Contracts.Configs;
 using Application.Events;
 using Application.Permissions;
 using Application.Scopes;
@@ -20,19 +22,22 @@ public static class DependencyExtensions
         // MediatR：扫描本程序集注册全部命令 / 查询处理器（Commands / Queries 目录）
         services.AddMediatR(configuration =>
         {
-            configuration.RegisterServicesFromAssembly(typeof(DependencyExtensions).Assembly);
+            configuration.RegisterServicesFromAssembly(Assembly.GetExecutingAssembly());
+
+            // Pipeline Behaviors：验证在最前（失败抛 ValidationException），其后日志与性能监控
+            configuration.AddBehavior(typeof(IPipelineBehavior<,>), typeof(ValidationBehavior<,>));
+            configuration.AddBehavior(typeof(IPipelineBehavior<,>), typeof(LoggingBehavior<,>));
+            configuration.AddBehavior(typeof(IPipelineBehavior<,>), typeof(PerformanceBehavior<,>));
         });
 
-        // Pipeline Behaviors：验证在最前（失败抛 ValidationException），其后日志与性能监控
-        services.AddTransient(typeof(IPipelineBehavior<,>), typeof(ValidationBehavior<,>));
-        services.AddTransient(typeof(IPipelineBehavior<,>), typeof(LoggingBehavior<,>));
-        services.AddTransient(typeof(IPipelineBehavior<,>), typeof(PerformanceBehavior<,>));
+        // AutoMapper：扫描本程序集 Profile 映射配置（Mappings 目录）
+        services.AddAutoMapper(config =>
+        {
+            config.AddMaps(Assembly.GetExecutingAssembly());
+        });
 
         // FluentValidation：扫描本程序集注册全部验证器（Validators 目录），按请求类型注入验证管道
         services.AddValidatorsFromAssembly(typeof(DependencyExtensions).Assembly);
-
-        // AutoMapper：扫描本程序集 Profile 映射配置（Mappings 目录）
-        services.AddAutoMapper(expression => expression.AddMaps(typeof(DependencyExtensions).Assembly));
 
         // 领域事件发布器：业务关键节点经此发布事件（监听器由上方 MediatR 扫描自动注册，见 Events 目录）
         services.AddScoped<IDomainEventPublisher, MediatRDomainEventPublisher>();

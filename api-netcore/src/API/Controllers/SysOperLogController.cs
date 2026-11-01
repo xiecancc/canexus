@@ -24,7 +24,7 @@ public class SysOperLogController(ISender sender) : ControllerBase
     [RequirePermission("monitor:operlog:list")]
     public async Task<IActionResult> Page([FromQuery] OperLogPageRequest request)
     {
-        return Ok(Result.Ok(await sender.Send(new GetOperLogPageQuery(request))));
+        return Ok(Result.Ok(await sender.Send(new OperLogQueryPaged(request))));
     }
 
     /// <summary>清空全部操作日志（物理删除，危险操作；自身不记录操作日志，保证清空后列表为空）。</summary>
@@ -33,7 +33,7 @@ public class SysOperLogController(ISender sender) : ControllerBase
     [RequirePermission("monitor:operlog:clean")]
     public async Task<IActionResult> Clean()
     {
-        await sender.Send(new CleanOperLogCommand());
+        await sender.Send(new OperLogCleanCommand());
         return Ok(Result.Ok(message: "清空成功"));
     }
 
@@ -42,9 +42,9 @@ public class SysOperLogController(ISender sender) : ControllerBase
     /// <returns>统一响应。</returns>
     [HttpDelete("{id:guid}")]
     [RequirePermission("monitor:operlog:remove")]
-    public async Task<IActionResult> Delete(Guid id)
+    public async Task<IActionResult> Delete(Guid id, [FromBody] OperLogDeleteRequest request)
     {
-        await sender.Send(new DeleteOperLogCommand(id));
+        await sender.Send(new OperLogDeleteCommand(id, request.Version));
         return Ok(Result.Ok(message: "删除成功"));
     }
 }

@@ -11,44 +11,48 @@ using Domain.Entities;
 using Domain.Repositories;
 using Domain.Services.Users;
 using Domain.Shared.Enums;
-using Domain.Shared.Exceptions;
 using Domain.Shared.Paging;
 using Domain.Shared.Results;
 
 namespace Application.Queries;
-/// <summary>获取用户详情查询处理器。</summary>
+/// <summary>获取用户详情查询处理器（标准详情流程 + 组装已分配角色 Id 集合）。</summary>
 /// <remarks>构造函数。</remarks>
-public sealed class GetUserDetailQueryHandler(
+public sealed class UserQueryByIdHandler(
     IAggregateRepository<SysUser> userRepository,
     IDomainRepository<SysUserRole> userRoleRepository,
-    IMapper mapper) : QueryHandler<GetUserDetailQuery, UserDetailVO>
+    IMapper mapper) : AggregateQueryByIdHandler<UserQueryById, SysUser, UserDetailResponse>(userRepository, mapper)
 {
+    /// <summary>用户-角色关联仓储（角色 Id 集合组装）。</summary>
+    private IDomainRepository<SysUserRole> UserRoleRepository { get; } = userRoleRepository;
+
     /// <inheritdoc />
-    protected override async Task<UserDetailVO> HandleAsync(GetUserDetailQuery query, CancellationToken cancellationToken)
+    protected override int NotFoundErrorCode => ErrorCodes.UserNotFound;
+
+    /// <inheritdoc />
+    protected override string EntityDisplayName => "用户";
+
+    /// <inheritdoc />
+    protected override async Task EnrichAsync(UserDetailResponse response, SysUser entity, CancellationToken cancellationToken)
     {
-        var user = await userRepository.GetAsync([it => it.Id == query.Id], cancellationToken)
-            ?? throw new BusinessException(ErrorCodes.UserNotFound, $"用户 {query.Id} 不存在");
-        var detail = mapper.Map<UserDetailVO>(user);
-        detail.RoleIds = [.. (await userRoleRepository.GetListAsync([ur => ur.UserId == query.Id], cancellationToken: cancellationToken))
+        response.RoleIds = [.. (await UserRoleRepository.GetListAsync([ur => ur.UserId == entity.Id], cancellationToken: cancellationToken))
             .Select(ur => ur.RoleId)
             .Distinct()];
-        return detail;
     }
 }
 
 /// <summary>分页查询用户处理器。</summary>
 /// <remarks>构造函数。</remarks>
-public sealed class GetUserPageQueryHandler(
+public sealed class UserQueryPagedHandler(
     IAggregateRepository<SysUser> userRepository,
     IAggregateRepository<SysRole> roleRepository,
     IAggregateTreeRepository<SysDept> deptRepository,
     IDomainRepository<SysUserRole> userRoleRepository,
     IDataScopeFilter dataScopeFilter,
     IUserContext currentUser,
-    IMapper mapper) : QueryHandler<GetUserPageQuery, PagedResult<UserListVO>>
+    IMapper mapper) : QueryHandler<UserQueryPaged, PagedResponse<UserListResponse>>
 {
     /// <inheritdoc />
-    protected override async Task<PagedResult<UserListVO>> HandleAsync(GetUserPageQuery query, CancellationToken cancellationToken)
+    protected override async Task<PagedResponse<UserListResponse>> HandleAsync(UserQueryPaged query, CancellationToken cancellationToken)
     {
         var request = query.Request;
 
@@ -65,10 +69,6 @@ public sealed class GetUserPageQueryHandler(
 
         var predicate = BuildPredicate(request, scope, deptFilterIds);
         var page = await userRepository.GetPagedAsync(request, [predicate], cancellationToken: cancellationToken);
-        if (page.Items.Count == 0)
-        {
-            return PagedResult<UserListVO>.Create([], page.Total, request);
-        }
 
         // 关联数据一次性批量查询组装（避免 N+1）：部门名 + 角色
         var users = page.Items;
@@ -86,29 +86,29 @@ public sealed class GetUserPageQueryHandler(
                 : await deptRepository.GetListAsync([d => relatedDeptIds.Contains(d.Id)], cancellationToken: cancellationToken))
             .ToDictionary(d => d.Id, d => d);
 
-        var items = users.Select(user =>
+        // 开放泛型映射闭合分页结果，再按实体↔响应顺序配对组装扩展字段（DeptName / Roles）
+        var result = mapper.Map<PagedResponse<UserListResponse>>(page)!;
+        foreach (var (user, response) in users.Zip(result.Items))
         {
-            var vo = mapper.Map<UserListVO>(user);
-            vo.DeptName = user.DeptId is not null && deptMap.TryGetValue(user.DeptId.Value, out var dept)
+            response.DeptName = user.DeptId is not null && deptMap.TryGetValue(user.DeptId.Value, out var dept)
                 ? dept.DeptName
                 : null;
-            vo.Roles = [.. userRoles
+            response.Roles = [.. userRoles
                 .Where(ur => ur.UserId == user.Id && roleMap.ContainsKey(ur.RoleId))
-                .Select(ur => new UserRoleItemVO
+                .Select(ur => new UserRoleItemResponse
                 {
                     Id = ur.RoleId,
                     RoleName = roleMap[ur.RoleId].RoleName
                 })];
-            return vo;
-        }).ToList();
+        }
 
-        return PagedResult<UserListVO>.Create(items, page.Total, request);
+        return result;
     }
 
     /// <summary>构造分页查询条件：关键字 / 部门子树 / 状态与数据范围合并为单一表达式。</summary>
     private Expression<Func<SysUser, bool>> BuildPredicate(UserPageRequest request, UserDataScope scope, List<Guid>? deptFilterIds)
     {
-        var keyword = string.IsNullOrWhiteSpace(request.Keyword) ? null : request.Keyword.Trim();
+        var keyword = NormalizeFilter(request.Keyword);
         var status = request.Status;
         var scopeType = scope.Scope;
         var scopeDeptIds = scope.DeptIds?.ToList();

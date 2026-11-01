@@ -1,4 +1,5 @@
 
+using Application.Contracts.Common;
 using Application.Contracts.Dicts;
 using AutoMapper;
 using Domain.Entities;
@@ -10,15 +11,22 @@ public sealed class SysDictProfile : Profile
     /// <summary>构造函数。</summary>
     public SysDictProfile()
     {
-        // 实体 → 视图对象
-        CreateMap<SysDictType, DictTypeListVO>();
-        CreateMap<SysDictData, DictDataListVO>();
-        CreateMap<SysDictData, DictDataSimpleVO>();
+        // 实体 → 响应模型（IncludeBase 挂接基类映射链，补齐 Id / Version / 审计字段）
+        CreateMap<SysDictType, DictTypeListResponse>()
+            .IncludeBase<AggregateBase, AggregatePagedResponse>();
+        CreateMap<SysDictData, DictDataListResponse>()
+            .IncludeBase<AggregateBase, AggregatePagedResponse>();
+        CreateMap<SysDictData, DictDataSimpleResponse>()
+            .IncludeBase<AggregateBase, AggregateListResponse>();
 
-        // 请求 → 实体
-        CreateMap<DictTypeCreateRequest, SysDictType>();
-        CreateMap<DictTypeUpdateRequest, SysDictType>();
-        CreateMap<DictDataCreateRequest, SysDictData>();
-        CreateMap<DictDataUpdateRequest, SysDictData>();
+        // 请求 → 实体（IncludeBase 挂接基类映射链）
+        CreateMap<DictTypeCreateRequest, SysDictType>()
+            .IncludeBase<AggregateChangeRequest, AggregateBase>();
+        CreateMap<DictTypeUpdateRequest, SysDictType>()
+            .IncludeBase<AggregateChangeRequest, AggregateBase>();
+        CreateMap<DictDataCreateRequest, SysDictData>()
+            .IncludeBase<AggregateChangeRequest, AggregateBase>();
+        CreateMap<DictDataUpdateRequest, SysDictData>()
+            .IncludeBase<AggregateChangeRequest, AggregateBase>();
     }
 }

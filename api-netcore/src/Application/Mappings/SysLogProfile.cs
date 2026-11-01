@@ -1,4 +1,5 @@
 
+using Application.Contracts.Common;
 using Application.Contracts.Logs;
 using AutoMapper;
 using Domain.Entities;
@@ -10,8 +11,10 @@ public sealed class SysLogProfile : Profile
     /// <summary>构造函数。</summary>
     public SysLogProfile()
     {
-        // 实体 → 视图对象
-        CreateMap<SysOperLog, OperLogListVO>();
-        CreateMap<SysLoginLog, LoginLogListVO>();
+        // 实体 → 响应模型（IncludeBase 挂接基类映射链，补齐 Id / Version / 审计字段）
+        CreateMap<SysOperLog, OperLogListResponse>()
+            .IncludeBase<AggregateBase, AggregatePagedResponse>();
+        CreateMap<SysLoginLog, LoginLogListResponse>()
+            .IncludeBase<AggregateBase, AggregatePagedResponse>();
     }
 }

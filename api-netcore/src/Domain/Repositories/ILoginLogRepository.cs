@@ -22,7 +22,7 @@ public interface ILoginLogRepository : IAggregateRepository<SysLoginLog>
     /// <param name="predicate">过滤条件。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>分页结果。</returns>
-    public Task<PagedResult<SysLoginLog>> GetPagedByTimeDescAsync(
+    public Task<PagedResponse<SysLoginLog>> GetPagedByTimeDescAsync(
         PagedRequest request,
         System.Linq.Expressions.Expression<Func<SysLoginLog, bool>>? predicate = null,
         CancellationToken cancellationToken = default);

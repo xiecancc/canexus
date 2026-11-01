@@ -20,7 +20,7 @@ public class RouteMeta
 }
 
 /// <summary>前端路由视图对象（/api/auth/routes 响应数据，完整菜单树）。</summary>
-public class RouteVO
+public class RouteResponse
 {
     /// <summary>路由名（驼峰，全局唯一）。</summary>
     public string Name { get; set; } = string.Empty;
@@ -38,5 +38,5 @@ public class RouteVO
     public RouteMeta Meta { get; set; } = new();
 
     /// <summary>子路由。</summary>
-    public List<RouteVO> Children { get; set; } = [];
+    public List<RouteResponse> Children { get; set; } = [];
 }

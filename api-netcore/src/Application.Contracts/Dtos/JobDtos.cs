@@ -5,7 +5,7 @@ using Domain.Shared.Paging;
 
 namespace Application.Contracts.Jobs;
 /// <summary>定时任务分页查询请求（GET /api/system/job/page）。</summary>
-public class JobPageRequest : PagedRequest
+public class JobPageRequest : AggregatePagedRequest
 {
     /// <summary>关键字：模糊匹配任务名称。</summary>
     public string? Keyword { get; set; }
@@ -15,8 +15,11 @@ public class JobPageRequest : PagedRequest
 }
 
 /// <summary>定时任务列表行（分页数据项）。</summary>
-public class JobListVO : StatusVO
+public class JobListResponse : AggregatePagedResponse
 {
+    /// <summary>状态：运行（1），暂停（0）。</summary>
+    public CommonStatus Status { get; set; }
+
     /// <summary>任务名称。</summary>
     public string JobName { get; set; } = string.Empty;
 
@@ -32,13 +35,17 @@ public class JobListVO : StatusVO
     /// <summary>是否允许并发执行。</summary>
     public bool Concurrent { get; set; }
 
-    /// <summary>备注。</summary>
-    public string? Description { get; set; }
 }
 
-/// <summary>定时任务写入请求基类：创建 / 更新共同字段（对齐 SysJob 聚合；平台级数据不做租户隔离）。</summary>
-public abstract class JobWriteRequest : StatusDescriptionRequest
+/// <summary>定时任务写入请求基类：创建 / 更新共同字段（镜像 SysJob 聚合的启停 / 备注与业务字段；平台级数据不做租户隔离）。</summary>
+public abstract class JobRequest : AggregateChangeRequest
 {
+    /// <summary>状态：启用（1），停用（0）。</summary>
+    public CommonStatus Status { get; set; } = CommonStatus.Enabled;
+
+    /// <summary>备注。</summary>
+    public string? Description { get; set; }
+
     /// <summary>任务名称。</summary>
     public string JobName { get; set; } = string.Empty;
 
@@ -56,22 +63,37 @@ public abstract class JobWriteRequest : StatusDescriptionRequest
 }
 
 /// <summary>创建定时任务请求（POST /api/system/job；运行状态任务创建后立即入调度）。</summary>
-public class JobCreateRequest : JobWriteRequest
+public class JobCreateRequest : JobRequest
 {
 }
 
-/// <summary>更新定时任务请求（PUT /api/system/job/{id}；分组变更时旧调度一并清理）。</summary>
-public class JobUpdateRequest : JobWriteRequest
+/// <summary>更新定时任务请求（PUT /api/system/job/{id}；分组变更时旧调度一并清理；Version 须回传乐观锁版本号）。</summary>
+public class JobUpdateRequest : JobRequest
 {
+    /// <summary>乐观锁版本号（须与服务端聚合当前版本一致才允许修改）。</summary>
+    public Guid Version { get; set; }
 }
 
-/// <summary>修改任务状态请求（PUT /api/system/job/{id}/status；运行即入调度、暂停即移出）。</summary>
-public class JobStatusRequest : StatusRequest
+/// <summary>修改任务状态请求（PUT /api/system/job/{id}/status；运行即入调度、暂停即移出；Version 须回传乐观锁版本号）。</summary>
+public class JobStatusRequest : AggregateChangeRequest
 {
+    /// <summary>状态：运行（1），暂停（0）。</summary>
+    public CommonStatus Status { get; set; } = CommonStatus.Enabled;
+
+
+    /// <summary>乐观锁版本号（须与服务端聚合当前版本一致才允许修改）。</summary>
+    public Guid Version { get; set; }
+}
+
+/// <summary>删除定时任务请求（DELETE /api/system/job/{id}；Version 须回传乐观锁版本号）。</summary>
+public class JobDeleteRequest
+{
+    /// <summary>乐观锁版本号（须与聚合当前版本一致才允许删除）。</summary>
+    public Guid Version { get; set; }
 }
 
 /// <summary>任务执行日志分页查询请求（GET /api/system/job-log/page）。</summary>
-public class JobLogPageRequest : PagedRequest
+public class JobLogPageRequest : AggregatePagedRequest
 {
     /// <summary>任务 Id 精确过滤。</summary>
     public Guid? JobId { get; set; }
@@ -81,8 +103,11 @@ public class JobLogPageRequest : PagedRequest
 }
 
 /// <summary>任务执行日志列表行（分页数据项）。</summary>
-public class JobLogListVO : StatusVO
+public class JobLogListResponse : AggregatePagedResponse
 {
+    /// <summary>执行状态：成功（1），失败（0）。</summary>
+    public ExecutionStatus Status { get; set; }
+
     /// <summary>任务 Id。</summary>
     public Guid JobId { get; set; }
 

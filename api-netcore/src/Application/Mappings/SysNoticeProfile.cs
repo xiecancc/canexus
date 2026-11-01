@@ -1,4 +1,5 @@
 
+using Application.Contracts.Common;
 using Application.Contracts.Notices;
 using AutoMapper;
 using Domain.Entities;
@@ -10,12 +11,17 @@ public sealed class SysNoticeProfile : Profile
     /// <summary>构造函数。</summary>
     public SysNoticeProfile()
     {
-        // 实体 → 视图对象
-        CreateMap<SysNotice, NoticeListVO>().ForMember(dest => dest.Content, opt => opt.Ignore());
-        CreateMap<SysNotice, NoticeLatestVO>();
+        // 实体 → 响应模型（IncludeBase 挂接基类映射链，补齐 Id / Version / 审计字段）
+        CreateMap<SysNotice, NoticeListResponse>()
+            .IncludeBase<AggregateBase, AggregatePagedResponse>()
+            .ForMember(dest => dest.Content, opt => opt.Ignore());
+        CreateMap<SysNotice, NoticeLatestResponse>()
+            .IncludeBase<AggregateBase, AggregatePagedResponse>();
 
-        // 请求 → 实体
-        CreateMap<NoticeCreateRequest, SysNotice>();
-        CreateMap<NoticeUpdateRequest, SysNotice>();
+        // 请求 → 实体（IncludeBase 挂接基类映射链）
+        CreateMap<NoticeCreateRequest, SysNotice>()
+            .IncludeBase<AggregateChangeRequest, AggregateBase>();
+        CreateMap<NoticeUpdateRequest, SysNotice>()
+            .IncludeBase<AggregateChangeRequest, AggregateBase>();
     }
 }

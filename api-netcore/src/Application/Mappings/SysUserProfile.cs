@@ -1,4 +1,5 @@
 
+using Application.Contracts.Common;
 using Application.Contracts.Users;
 using AutoMapper;
 using Domain.Entities;
@@ -10,12 +11,16 @@ public sealed class SysUserProfile : Profile
     /// <summary>构造函数。</summary>
     public SysUserProfile()
     {
-        // 实体 → 视图对象
-        CreateMap<SysUser, UserListVO>();
-        CreateMap<SysUser, UserDetailVO>();
+        // 实体 → 响应模型（IncludeBase 挂接基类映射链，补齐 Id / Version / 审计字段）
+        CreateMap<SysUser, UserListResponse>()
+            .IncludeBase<AggregateBase, AggregatePagedResponse>();
+        CreateMap<SysUser, UserDetailResponse>()
+            .IncludeBase<AggregateBase, AggregatePagedResponse>();
 
-        // 请求 → 实体（UserName / Password 仅创建时有意义，更新映射会被同名空缺自动跳过）
-        CreateMap<UserCreateRequest, SysUser>();
-        CreateMap<UserUpdateRequest, SysUser>();
+        // 请求 → 实体（IncludeBase 挂接基类映射链；UserName / Password 仅创建时有意义，更新映射会被同名空缺自动跳过）
+        CreateMap<UserCreateRequest, SysUser>()
+            .IncludeBase<AggregateChangeRequest, AggregateBase>();
+        CreateMap<UserUpdateRequest, SysUser>()
+            .IncludeBase<AggregateChangeRequest, AggregateBase>();
     }
 }

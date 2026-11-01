@@ -121,7 +121,7 @@ internal sealed class InMemoryRefreshTokenRepository : ISysRefreshTokenRepositor
     }
 
     /// <inheritdoc />
-    public Task<PagedResult<SysRefreshToken>> GetPagedAsync(
+    public Task<PagedResponse<SysRefreshToken>> GetPagedAsync(
         PagedRequest request,
         IEnumerable<Expression<Func<SysRefreshToken, bool>>>? predicates = null,
         IDictionary<Expression<Func<SysRefreshToken, object>>, bool?>? orders = null,
@@ -129,7 +129,7 @@ internal sealed class InMemoryRefreshTokenRepository : ISysRefreshTokenRepositor
         => throw new NotSupportedException("令牌单测不使用分页");
 
     /// <inheritdoc />
-    public Task<PagedResult<TDto>> GetPagedAsync<TDto>(
+    public Task<PagedResponse<TDto>> GetPagedAsync<TDto>(
         PagedRequest request,
         IEnumerable<Expression<Func<SysRefreshToken, bool>>>? predicates = null,
         IDictionary<Expression<Func<SysRefreshToken, object>>, bool?>? orders = null,
@@ -138,15 +138,15 @@ internal sealed class InMemoryRefreshTokenRepository : ISysRefreshTokenRepositor
         => throw new NotSupportedException("令牌单测不使用分页");
 
     /// <inheritdoc />
-    public Task<SysRefreshToken> InsertAsync(SysRefreshToken entity, CancellationToken cancellationToken = default)
+    public Task<bool> InsertAsync(SysRefreshToken entity, CancellationToken cancellationToken = default)
     {
         entity.Id = Guid.NewGuid();
         _store.Add(entity);
-        return Task.FromResult(entity);
+        return Task.FromResult(true);
     }
 
     /// <inheritdoc />
-    public Task UpdateAsync(SysRefreshToken entity, CancellationToken cancellationToken = default)
+    public Task<bool> UpdateAsync(SysRefreshToken entity, CancellationToken cancellationToken = default)
     {
         // 内存对象为同一引用，属性修改即生效；这里同步替换快照保持语义一致
         var index = _store.FindIndex(e => e.Id == entity.Id);
@@ -155,29 +155,29 @@ internal sealed class InMemoryRefreshTokenRepository : ISysRefreshTokenRepositor
             _store[index] = entity;
         }
 
-        return Task.CompletedTask;
+        return Task.FromResult(index >= 0);
     }
 
     /// <inheritdoc />
-    public Task<int> DeleteAsync(Guid id, CancellationToken cancellationToken = default)
-        => Task.FromResult(_store.RemoveAll(e => e.Id == id));
+    public Task<bool> DeleteAsync(Guid id, CancellationToken cancellationToken = default)
+        => Task.FromResult(_store.RemoveAll(e => e.Id == id) > 0);
 
     /// <inheritdoc />
-    public Task<int> DeleteAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken = default)
-        => Task.FromResult(_store.RemoveAll(e => ids.Contains(e.Id)));
+    public Task<bool> DeleteAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken = default)
+        => Task.FromResult(_store.RemoveAll(e => ids.Contains(e.Id)) > 0);
 
     /// <inheritdoc />
-    public Task<int> RestoreAsync(Guid id, CancellationToken cancellationToken = default)
+    public Task<bool> RestoreAsync(Guid id, CancellationToken cancellationToken = default)
         => RestoreAsync(e => e.Id == id, cancellationToken);
 
     /// <inheritdoc />
-    public Task<int> RestoreAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken = default)
+    public Task<bool> RestoreAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken = default)
         => RestoreAsync(e => ids.Contains(e.Id), cancellationToken);
 
     /// <inheritdoc />
-    public Task<int> RestoreAsync(Expression<Func<SysRefreshToken, bool>> predicate, CancellationToken cancellationToken = default)
+    public Task<bool> RestoreAsync(Expression<Func<SysRefreshToken, bool>> predicate, CancellationToken cancellationToken = default)
     {
-        // 与 SqlSugar 实现语义对齐：仅解除已删除行的墓碑，返回解除数量
+        // 与 SqlSugar 实现语义对齐：仅解除已删除行的墓碑，返回是否命中
         var restored = 0;
         foreach (var entity in _store.Where(new Func<SysRefreshToken, bool>(predicate.Compile())))
         {
@@ -188,7 +188,7 @@ internal sealed class InMemoryRefreshTokenRepository : ISysRefreshTokenRepositor
             }
         }
 
-        return Task.FromResult(restored);
+        return Task.FromResult(restored > 0);
     }
 
     /// <inheritdoc />
@@ -213,14 +213,14 @@ internal sealed class InMemoryRefreshTokenRepository : ISysRefreshTokenRepositor
     }
 
     /// <inheritdoc />
-    public Task<int> DeleteAsync(Expression<Func<SysRefreshToken, bool>> predicate, CancellationToken cancellationToken = default)
-        => Task.FromResult(_store.RemoveAll(new Predicate<SysRefreshToken>(predicate.Compile())));
+    public Task<bool> DeleteAsync(Expression<Func<SysRefreshToken, bool>> predicate, CancellationToken cancellationToken = default)
+        => Task.FromResult(_store.RemoveAll(new Predicate<SysRefreshToken>(predicate.Compile())) > 0);
 
     /// <inheritdoc />
-    public Task InsertAsync(IEnumerable<SysRefreshToken> entities, CancellationToken cancellationToken = default)
+    public Task<bool> InsertAsync(IEnumerable<SysRefreshToken> entities, CancellationToken cancellationToken = default)
     {
         _store.AddRange(entities);
-        return Task.CompletedTask;
+        return Task.FromResult(true);
     }
 
     /// <inheritdoc />

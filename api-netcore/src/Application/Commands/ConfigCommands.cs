@@ -2,89 +2,114 @@
 using Application.Abstractions;
 using Application.Contracts.Commands;
 using Application.Contracts.Configs;
-using Application.Mappings;
 using AutoMapper;
 using Domain.Entities;
 using Domain.Events;
 using Domain.Repositories;
 using Domain.Services.Events;
-using Domain.Shared.Enums;
 using Domain.Shared.Exceptions;
 using Domain.Shared.Results;
 
 namespace Application.Commands;
-/// <summary>创建参数配置命令处理器。</summary>
+/// <summary>创建参数配置命令处理器（校验 configKey 唯一；创建项一律非内置）。</summary>
 /// <remarks>构造函数。</remarks>
-public sealed class CreateConfigCommandHandler(IAggregateRepository<SysConfig> configRepository, IDomainEventPublisher domainEventPublisher, IMapper mapper) : CommandHandler<CreateConfigCommand, Guid>
+public sealed class ConfigCreateCommandHandler(
+    IAggregateRepository<SysConfig> configRepository,
+    IDomainEventPublisher domainEventPublisher,
+    IMapper mapper) : DomainCreateCommandHandler<ConfigCreateCommand, ConfigCreateRequest, SysConfig>(configRepository, domainEventPublisher)
 {
+    /// <summary>AutoMapper 映射器。</summary>
+    private IMapper Mapper { get; } = mapper;
+
     /// <inheritdoc />
-    protected override async Task<Guid> HandleAsync(CreateConfigCommand command, CancellationToken cancellationToken)
+    protected override async Task ValidateAsync(ConfigCreateRequest request, CancellationToken cancellationToken)
     {
-        var request = command.Request;
         var configKey = request.ConfigKey.Trim();
-        if (await configRepository.CountAsync([c => c.ConfigKey == configKey], cancellationToken) > 0)
-        {
-            throw new BusinessException(ErrorCodes.ConfigKeyDuplicate, $"参数键名「{configKey}」已存在");
-        }
+        await Repository.EnsureNotDuplicateAsync(
+            c => c.ConfigKey == configKey, ErrorCodes.ConfigKeyDuplicate,
+            $"参数键名「{configKey}」已存在", cancellationToken);
+    }
 
-        var entity = mapper.Map<SysConfig>(request);
-        var inserted = await configRepository.InsertAsync(entity, cancellationToken);
+    /// <inheritdoc />
+    protected override SysConfig MapToEntity(ConfigCreateRequest request)
+    {
+        return Mapper.Map<SysConfig>(request);
+    }
 
-        // 关键节点发布参数配置创建领域事件（缓存清理等响应动作由监听器处理）
-        await domainEventPublisher.PublishAsync(new ConfigCreatedEvent(inserted), cancellationToken);
-        return inserted.Id;
+    /// <inheritdoc />
+    protected override DomainEvent CreateEvent(SysConfig inserted)
+    {
+        return new ConfigCreatedEvent(inserted);
     }
 }
 
-/// <summary>删除参数配置命令处理器。</summary>
+/// <summary>删除参数配置命令处理器（内置参数拒绝删除）。</summary>
 /// <remarks>构造函数。</remarks>
-public sealed class DeleteConfigCommandHandler(IAggregateRepository<SysConfig> configRepository, IDomainEventPublisher domainEventPublisher) : CommandHandler<DeleteConfigCommand>
+public sealed class ConfigDeleteCommandHandler(
+    IAggregateRepository<SysConfig> configRepository,
+    IDomainEventPublisher domainEventPublisher) : AggregateDeleteCommandHandler<ConfigDeleteCommand, SysConfig>(configRepository, domainEventPublisher)
 {
     /// <inheritdoc />
-    protected override async Task HandleAsync(DeleteConfigCommand command, CancellationToken cancellationToken)
-    {
-        var entity = await configRepository.GetAsync([it => it.Id == command.Id], cancellationToken)
-            ?? throw new BusinessException(ErrorCodes.ConfigNotFound, $"参数配置 {command.Id} 不存在");
+    protected override int NotFoundErrorCode => ErrorCodes.ConfigNotFound;
 
+    /// <inheritdoc />
+    protected override string EntityDisplayName => "参数配置";
+
+    /// <inheritdoc />
+    protected override Task ValidateBeforeDeleteAsync(SysConfig entity, CancellationToken cancellationToken)
+    {
         if (entity.BuiltIn)
         {
             throw new BusinessException(ErrorCodes.ConfigBuiltInProtected, "内置参数不允许删除");
         }
 
-        // 变更前捕获配置状态快照（软删除可能回填墓碑字段）
-        var snapshot = entity.Snapshot<SysConfig>();
+        return Task.CompletedTask;
+    }
 
-        await configRepository.DeleteAsync(command.Id, cancellationToken);
-
-        // 关键节点发布参数配置删除领域事件（携带删除前的配置状态）
-        await domainEventPublisher.PublishAsync(new ConfigDeletedEvent(snapshot), cancellationToken);
+    /// <inheritdoc />
+    protected override DomainEvent CreateEvent(SysConfig deleted)
+    {
+        return new ConfigDeletedEvent(deleted);
     }
 }
 
-/// <summary>更新参数配置命令处理器。</summary>
+/// <summary>更新参数配置命令处理器（键名可变更并校验唯一，新旧键缓存均由监听器失效）。</summary>
 /// <remarks>构造函数。</remarks>
-public sealed class UpdateConfigCommandHandler(IAggregateRepository<SysConfig> configRepository, IDomainEventPublisher domainEventPublisher, IMapper mapper) : CommandHandler<UpdateConfigCommand>
+public sealed class ConfigUpdateCommandHandler(
+    IAggregateRepository<SysConfig> configRepository,
+    IDomainEventPublisher domainEventPublisher,
+    IMapper mapper) : AggregateUpdateCommandHandler<ConfigUpdateCommand, ConfigUpdateRequest, SysConfig>(configRepository, domainEventPublisher)
 {
+    /// <summary>AutoMapper 映射器。</summary>
+    private IMapper Mapper { get; } = mapper;
+
     /// <inheritdoc />
-    protected override async Task HandleAsync(UpdateConfigCommand command, CancellationToken cancellationToken)
+    protected override int NotFoundErrorCode => ErrorCodes.ConfigNotFound;
+
+    /// <inheritdoc />
+    protected override string EntityDisplayName => "参数配置";
+
+    /// <inheritdoc />
+    protected override async Task ValidateAsync(ConfigUpdateRequest request, SysConfig entity, CancellationToken cancellationToken)
     {
-        var request = command.Request;
-        var entity = await configRepository.GetAsync([it => it.Id == command.Id], cancellationToken)
-            ?? throw new BusinessException(ErrorCodes.ConfigNotFound, $"参数配置 {command.Id} 不存在");
-
         var configKey = request.ConfigKey.Trim();
-        if (await configRepository.CountAsync([c => c.ConfigKey == configKey && c.Id != command.Id], cancellationToken) > 0)
-        {
-            throw new BusinessException(ErrorCodes.ConfigKeyDuplicate, $"参数键名「{configKey}」已存在");
-        }
+        await Repository.EnsureNotDuplicateAsync(
+            c => c.ConfigKey == configKey && c.Id != entity.Id, ErrorCodes.ConfigKeyDuplicate,
+            $"参数键名「{configKey}」已存在", cancellationToken);
 
-        // 变更前捕获配置状态快照（键名变更时旧键名由 OldEntity.ConfigKey 表达）
-        var before = entity.Snapshot<SysConfig>();
+        // 乐观锁校验：业务守卫通过后比对客户端回传版本
+        EnsureVersionMatches(entity, request.Version);
+    }
 
-        mapper.Map(request, entity);
-        await configRepository.UpdateAsync(entity, cancellationToken);
+    /// <inheritdoc />
+    protected override void MapToEntity(ConfigUpdateRequest request, SysConfig entity)
+    {
+        Mapper.Map(request, entity);
+    }
 
-        // 关键节点发布参数配置修改领域事件（携带变更前后状态，新旧键缓存均由监听器失效）
-        await domainEventPublisher.PublishAsync(new ConfigUpdatedEvent(before, entity), cancellationToken);
+    /// <inheritdoc />
+    protected override DomainEvent CreateEvent(SysConfig before, SysConfig after)
+    {
+        return new ConfigUpdatedEvent(before, after);
     }
 }

@@ -1,10 +1,11 @@
 
+using Application.Contracts.Common;
 using Domain.Shared.Enums;
 using Domain.Shared.Paging;
 
 namespace Application.Contracts.Logs;
 /// <summary>操作日志分页查询请求（GET /api/system/oper-log/page；beginTime / endTime 格式 yyyy-MM-dd，可空）。</summary>
-public class OperLogPageRequest : PagedRequest
+public class OperLogPageRequest : AggregatePagedRequest
 {
     /// <summary>操作模块：模糊匹配。</summary>
     public string? Title { get; set; }
@@ -26,11 +27,8 @@ public class OperLogPageRequest : PagedRequest
 }
 
 /// <summary>操作日志列表行（分页数据项）。</summary>
-public class OperLogListVO
+public class OperLogListResponse : AggregatePagedResponse
 {
-    /// <summary>日志 Id。</summary>
-    public Guid Id { get; set; }
-
     /// <summary>操作模块。</summary>
     public string Title { get; set; } = string.Empty;
 
@@ -69,7 +67,7 @@ public class OperLogListVO
 }
 
 /// <summary>登录日志分页查询请求（GET /api/system/login-log/page；beginTime / endTime 格式 yyyy-MM-dd，可空）。</summary>
-public class LoginLogPageRequest : PagedRequest
+public class LoginLogPageRequest : AggregatePagedRequest
 {
     /// <summary>登录账号：模糊匹配。</summary>
     public string? UserName { get; set; }
@@ -88,11 +86,8 @@ public class LoginLogPageRequest : PagedRequest
 }
 
 /// <summary>登录日志列表行（分页数据项）。</summary>
-public class LoginLogListVO
+public class LoginLogListResponse : AggregatePagedResponse
 {
-    /// <summary>日志 Id。</summary>
-    public Guid Id { get; set; }
-
     /// <summary>登录账号。</summary>
     public string UserName { get; set; } = string.Empty;
 
@@ -113,4 +108,18 @@ public class LoginLogListVO
 
     /// <summary>登录时间。</summary>
     public DateTime? LoginTime { get; set; }
+}
+
+/// <summary>删除登录日志请求（DELETE /api/system/login-log/{id}；物理删除不做版本校验，Version 仅保持删除调用形态统一）。</summary>
+public class LoginLogDeleteRequest
+{
+    /// <summary>乐观锁版本号（物理删除不校验，仅为删除调用形态统一）。</summary>
+    public Guid Version { get; set; }
+}
+
+/// <summary>删除操作日志请求（DELETE /api/system/oper-log/{id}；物理删除不做版本校验，Version 仅保持删除调用形态统一）。</summary>
+public class OperLogDeleteRequest
+{
+    /// <summary>乐观锁版本号（物理删除不校验，仅为删除调用形态统一）。</summary>
+    public Guid Version { get; set; }
 }

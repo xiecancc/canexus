@@ -26,7 +26,7 @@ public class SysConfigController(ISender sender) : ControllerBase
     [RequirePermission("system:config:list")]
     public async Task<IActionResult> Page([FromQuery] ConfigPageRequest request)
     {
-        return Ok(Result.Ok(await sender.Send(new GetConfigPageQuery(request))));
+        return Ok(Result.Ok(await sender.Send(new ConfigQueryPaged(request))));
     }
 
     /// <summary>按参数键名查询参数值（走缓存，写操作后立即刷新）。</summary>
@@ -37,7 +37,7 @@ public class SysConfigController(ISender sender) : ControllerBase
     public async Task<IActionResult> GetByKey(string configKey)
     {
         // 显式泛型参数：避免 string 实参被解析为非泛型 Ok(message) 重载导致 data 丢失
-        return Ok(Result.Ok<string>(await sender.Send(new GetConfigByKeyQuery(configKey))));
+        return Ok(Result.Ok<string>(await sender.Send(new ConfigQueryByKey(configKey))));
     }
 
     /// <summary>创建参数配置（configKey 唯一，创建项一律非内置）。</summary>
@@ -48,8 +48,8 @@ public class SysConfigController(ISender sender) : ControllerBase
     [OperLog("参数配置", OperBusinessType.Add)]
     public async Task<IActionResult> Create([FromBody] ConfigCreateRequest request)
     {
-        var id = await sender.Send(new CreateConfigCommand(request));
-        return Ok(Result.Ok(id, "创建成功"));
+        await sender.Send(new ConfigCreateCommand(request));
+        return Ok(Result.Ok(message: "创建成功"));
     }
 
     /// <summary>更新参数配置（键名可变更，新旧键缓存均失效；内置参数可编辑）。</summary>
@@ -61,19 +61,20 @@ public class SysConfigController(ISender sender) : ControllerBase
     [OperLog("参数配置", OperBusinessType.Update)]
     public async Task<IActionResult> Update(Guid id, [FromBody] ConfigUpdateRequest request)
     {
-        await sender.Send(new UpdateConfigCommand(id, request));
+        await sender.Send(new ConfigUpdateCommand(id, request));
         return Ok(Result.Ok(message: "更新成功"));
     }
 
     /// <summary>删除参数配置（内置参数拒绝删除）。</summary>
     /// <param name="id">参数 Id。</param>
     /// <returns>统一响应。</returns>
+    /// <param name="request">删除请求（含乐观锁版本号）。</param>
     [HttpDelete("{id:guid}")]
     [RequirePermission("system:config:remove")]
     [OperLog("参数配置", OperBusinessType.Delete)]
-    public async Task<IActionResult> Delete(Guid id)
+    public async Task<IActionResult> Delete(Guid id, [FromBody] ConfigDeleteRequest request)
     {
-        await sender.Send(new DeleteConfigCommand(id));
+        await sender.Send(new ConfigDeleteCommand(id, request.Version));
         return Ok(Result.Ok(message: "删除成功"));
     }
 }

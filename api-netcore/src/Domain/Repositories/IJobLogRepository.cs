@@ -12,7 +12,7 @@ public interface IJobLogRepository : IAggregateRepository<SysJobLog>
     /// <param name="predicate">过滤条件。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>分页结果。</returns>
-    public Task<PagedResult<SysJobLog>> GetPagedDescAsync(
+    public Task<PagedResponse<SysJobLog>> GetPagedDescAsync(
         PagedRequest request,
         Expression<Func<SysJobLog, bool>>? predicate = null,
         CancellationToken cancellationToken = default);

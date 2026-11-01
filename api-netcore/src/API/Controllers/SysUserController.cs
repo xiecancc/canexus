@@ -26,7 +26,7 @@ public class SysUserController(ISender sender) : ControllerBase
     [RequirePermission("system:user:list")]
     public async Task<IActionResult> Page([FromQuery] UserPageRequest request)
     {
-        return Ok(Result.Ok(await sender.Send(new GetUserPageQuery(request))));
+        return Ok(Result.Ok(await sender.Send(new UserQueryPaged(request))));
     }
 
     /// <summary>获取用户详情（含角色 Id 集合）。</summary>
@@ -36,7 +36,7 @@ public class SysUserController(ISender sender) : ControllerBase
     [RequirePermission("system:user:query")]
     public async Task<IActionResult> Get(Guid id)
     {
-        return Ok(Result.Ok(await sender.Send(new GetUserDetailQuery(id))));
+        return Ok(Result.Ok(await sender.Send(new UserQueryById(id))));
     }
 
     /// <summary>创建用户（用户名唯一；密码缺省 "123456"）。</summary>
@@ -47,8 +47,8 @@ public class SysUserController(ISender sender) : ControllerBase
     [OperLog("用户管理", OperBusinessType.Add)]
     public async Task<IActionResult> Create([FromBody] UserCreateRequest request)
     {
-        var id = await sender.Send(new CreateUserCommand(request));
-        return Ok(Result.Ok(id, "创建成功"));
+        await sender.Send(new UserCreateCommand(request));
+        return Ok(Result.Ok(message: "创建成功"));
     }
 
     /// <summary>更新用户（不含用户名；内置超管 admin 拒绝编辑；角色全量替换）。</summary>
@@ -60,19 +60,20 @@ public class SysUserController(ISender sender) : ControllerBase
     [OperLog("用户管理", OperBusinessType.Update)]
     public async Task<IActionResult> Update(Guid id, [FromBody] UserUpdateRequest request)
     {
-        await sender.Send(new UpdateUserCommand(id, request));
+        await sender.Send(new UserUpdateCommand(id, request));
         return Ok(Result.Ok(message: "更新成功"));
     }
 
     /// <summary>删除用户（内置超管 admin 与当前登录人自身拒绝删除）。</summary>
     /// <param name="id">用户 Id。</param>
     /// <returns>统一响应。</returns>
+    /// <param name="request">删除请求（含乐观锁版本号）。</param>
     [HttpDelete("{id:guid}")]
     [RequirePermission("system:user:remove")]
     [OperLog("用户管理", OperBusinessType.Delete)]
-    public async Task<IActionResult> Delete(Guid id)
+    public async Task<IActionResult> Delete(Guid id, [FromBody] UserDeleteRequest request)
     {
-        await sender.Send(new DeleteUserCommand(id));
+        await sender.Send(new UserDeleteCommand(id, request.Version));
         return Ok(Result.Ok(message: "删除成功"));
     }
 
@@ -85,7 +86,7 @@ public class SysUserController(ISender sender) : ControllerBase
     [OperLog("用户管理", OperBusinessType.Update)]
     public async Task<IActionResult> UpdateStatus(Guid id, [FromBody] UserStatusRequest request)
     {
-        await sender.Send(new UpdateUserStatusCommand(id, request));
+        await sender.Send(new UserUpdateStatusCommand(id, request));
         return Ok(Result.Ok(message: "状态更新成功"));
     }
 
@@ -98,7 +99,7 @@ public class SysUserController(ISender sender) : ControllerBase
     [OperLog("用户管理", OperBusinessType.Update)]
     public async Task<IActionResult> ResetPassword(Guid id, [FromBody] UserPasswordRequest request)
     {
-        await sender.Send(new ResetUserPasswordCommand(id, request));
+        await sender.Send(new UserResetPasswordCommand(id, request));
         return Ok(Result.Ok(message: "密码重置成功"));
     }
 
@@ -111,7 +112,7 @@ public class SysUserController(ISender sender) : ControllerBase
     [OperLog("用户管理", OperBusinessType.Grant)]
     public async Task<IActionResult> UpdateRoles(Guid id, [FromBody] UserRolesRequest request)
     {
-        await sender.Send(new UpdateUserRolesCommand(id, request));
+        await sender.Send(new UserUpdateRolesCommand(id, request));
         return Ok(Result.Ok(message: "角色分配成功"));
     }
 }

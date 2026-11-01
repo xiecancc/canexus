@@ -26,7 +26,7 @@ public class SysRoleController(ISender sender) : ControllerBase
     [RequirePermission("system:role:list")]
     public async Task<IActionResult> Page([FromQuery] RolePageRequest request)
     {
-        return Ok(Result.Ok(await sender.Send(new GetRolePageQuery(request))));
+        return Ok(Result.Ok(await sender.Send(new RoleQueryPaged(request))));
     }
 
     /// <summary>获取全部启用角色（不分页，含超管角色，用于用户分配角色下拉）。</summary>
@@ -35,7 +35,7 @@ public class SysRoleController(ISender sender) : ControllerBase
     [RequirePermission("system:role:list")]
     public async Task<IActionResult> All()
     {
-        return Ok(Result.Ok(await sender.Send(new GetAllEnabledRolesQuery())));
+        return Ok(Result.Ok(await sender.Send(new RoleQueryList())));
     }
 
     /// <summary>获取角色详情（含授权菜单 Id 集合，前端用作菜单授权回显）。</summary>
@@ -45,7 +45,7 @@ public class SysRoleController(ISender sender) : ControllerBase
     [RequirePermission("system:role:query")]
     public async Task<IActionResult> Get(Guid id)
     {
-        return Ok(Result.Ok(await sender.Send(new GetRoleDetailQuery(id))));
+        return Ok(Result.Ok(await sender.Send(new RoleQueryById(id))));
     }
 
     /// <summary>创建角色（roleKey 唯一且不可使用保留值 super_admin；菜单授权全删全插）。</summary>
@@ -56,8 +56,8 @@ public class SysRoleController(ISender sender) : ControllerBase
     [OperLog("角色管理", OperBusinessType.Add)]
     public async Task<IActionResult> Create([FromBody] RoleCreateRequest request)
     {
-        var id = await sender.Send(new CreateRoleCommand(request));
-        return Ok(Result.Ok(id, "创建成功"));
+        await sender.Send(new RoleCreateCommand(request));
+        return Ok(Result.Ok(message: "创建成功"));
     }
 
     /// <summary>更新角色（内置 super_admin 角色整体拒绝编辑）。</summary>
@@ -69,19 +69,20 @@ public class SysRoleController(ISender sender) : ControllerBase
     [OperLog("角色管理", OperBusinessType.Update)]
     public async Task<IActionResult> Update(Guid id, [FromBody] RoleUpdateRequest request)
     {
-        await sender.Send(new UpdateRoleCommand(id, request));
+        await sender.Send(new RoleUpdateCommand(id, request));
         return Ok(Result.Ok(message: "更新成功"));
     }
 
     /// <summary>删除角色（内置 super_admin 角色拒绝删除；已被用户引用拒绝删除）。</summary>
     /// <param name="id">角色 Id。</param>
     /// <returns>统一响应。</returns>
+    /// <param name="request">删除请求（含乐观锁版本号）。</param>
     [HttpDelete("{id:guid}")]
     [RequirePermission("system:role:remove")]
     [OperLog("角色管理", OperBusinessType.Delete)]
-    public async Task<IActionResult> Delete(Guid id)
+    public async Task<IActionResult> Delete(Guid id, [FromBody] RoleDeleteRequest request)
     {
-        await sender.Send(new DeleteRoleCommand(id));
+        await sender.Send(new RoleDeleteCommand(id, request.Version));
         return Ok(Result.Ok(message: "删除成功"));
     }
 }

@@ -26,7 +26,7 @@ public class SysTenantController(ISender sender) : ControllerBase
     [RequirePermission("system:tenant:list")]
     public async Task<IActionResult> Page([FromQuery] TenantPageRequest request)
     {
-        return Ok(Result.Ok(await sender.Send(new GetTenantPageQuery(request))));
+        return Ok(Result.Ok(await sender.Send(new TenantQueryPaged(request))));
     }
 
     /// <summary>查询启用状态的租户简易列表（下拉框等场景）。</summary>
@@ -35,7 +35,7 @@ public class SysTenantController(ISender sender) : ControllerBase
     [RequirePermission("system:tenant:list")]
     public async Task<IActionResult> All()
     {
-        return Ok(Result.Ok(await sender.Send(new GetAllTenantsQuery())));
+        return Ok(Result.Ok(await sender.Send(new TenantQueryList())));
     }
 
     /// <summary>创建租户（tenantKey 唯一）。</summary>
@@ -46,8 +46,8 @@ public class SysTenantController(ISender sender) : ControllerBase
     [OperLog("租户管理", OperBusinessType.Add)]
     public async Task<IActionResult> Create([FromBody] TenantCreateRequest request)
     {
-        var id = await sender.Send(new CreateTenantCommand(request));
-        return Ok(Result.Ok(id, "创建成功"));
+        await sender.Send(new TenantCreateCommand(request));
+        return Ok(Result.Ok(message: "创建成功"));
     }
 
     /// <summary>更新租户（tenantKey 不可变更）。</summary>
@@ -59,19 +59,20 @@ public class SysTenantController(ISender sender) : ControllerBase
     [OperLog("租户管理", OperBusinessType.Update)]
     public async Task<IActionResult> Update(Guid id, [FromBody] TenantUpdateRequest request)
     {
-        await sender.Send(new UpdateTenantCommand(id, request));
+        await sender.Send(new TenantUpdateCommand(id, request));
         return Ok(Result.Ok(message: "更新成功"));
     }
 
     /// <summary>删除租户（存在归属用户时拒绝删除）。</summary>
     /// <param name="id">租户 Id。</param>
     /// <returns>统一响应。</returns>
+    /// <param name="request">删除请求（含乐观锁版本号）。</param>
     [HttpDelete("{id:guid}")]
     [RequirePermission("system:tenant:remove")]
     [OperLog("租户管理", OperBusinessType.Delete)]
-    public async Task<IActionResult> Delete(Guid id)
+    public async Task<IActionResult> Delete(Guid id, [FromBody] TenantDeleteRequest request)
     {
-        await sender.Send(new DeleteTenantCommand(id));
+        await sender.Send(new TenantDeleteCommand(id, request.Version));
         return Ok(Result.Ok(message: "删除成功"));
     }
 }

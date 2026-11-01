@@ -24,7 +24,7 @@ public class SysLoginLogController(ISender sender) : ControllerBase
     [RequirePermission("monitor:logininfor:list")]
     public async Task<IActionResult> Page([FromQuery] LoginLogPageRequest request)
     {
-        return Ok(Result.Ok(await sender.Send(new GetLoginLogPageQuery(request))));
+        return Ok(Result.Ok(await sender.Send(new LoginLogQueryPaged(request))));
     }
 
     /// <summary>清空全部登录日志（物理删除，危险操作）。</summary>
@@ -33,7 +33,7 @@ public class SysLoginLogController(ISender sender) : ControllerBase
     [RequirePermission("monitor:logininfor:clean")]
     public async Task<IActionResult> Clean()
     {
-        await sender.Send(new CleanLoginLogCommand());
+        await sender.Send(new LoginLogCleanCommand());
         return Ok(Result.Ok(message: "清空成功"));
     }
 
@@ -42,9 +42,9 @@ public class SysLoginLogController(ISender sender) : ControllerBase
     /// <returns>统一响应。</returns>
     [HttpDelete("{id:guid}")]
     [RequirePermission("monitor:logininfor:remove")]
-    public async Task<IActionResult> Delete(Guid id)
+    public async Task<IActionResult> Delete(Guid id, [FromBody] LoginLogDeleteRequest request)
     {
-        await sender.Send(new DeleteLoginLogCommand(id));
+        await sender.Send(new LoginLogDeleteCommand(id, request.Version));
         return Ok(Result.Ok(message: "删除成功"));
     }
 }

@@ -1,25 +1,29 @@
 
 using Application.Contracts.Commands;
+using Application.Contracts.Menus;
+using Application.Validators.Common;
 using Domain.Shared.Enums;
 using Domain.Shared.Exceptions;
 using Domain.Shared.Results;
 using FluentValidation;
 
 namespace Application.Validators;
-/// <summary>菜单命令验证器：菜单类型 / 名称 / 状态 / 显示标记取值，
+/// <summary>菜单写入请求验证器：菜单类型 / 名称 / 状态 / 显示标记取值，
 /// 以及类型与字段耦合的跨属性规则（目录必有 path、菜单必有 path 与 component、按钮必有 perms）。
-/// 错误码保持 MenuRuleInvalid（400404）与原服务层文案一致；创建 / 更新共用同一校验方法消除重复。</summary>
-public static class MenuValidation
+/// 错误码保持 MenuRuleInvalid（400404）与原服务层文案一致；创建 / 更新共用（消除重复定义）。</summary>
+public class MenuRequestValidator<TRequest> : AbstractValidator<TRequest>
+    where TRequest : MenuRequest
 {
-    /// <summary>菜单字段耦合校验（创建 / 更新共用）。</summary>
-    /// <param name="menuType">菜单类型。</param>
-    /// <param name="menuName">菜单名称。</param>
-    /// <param name="path">路由地址。</param>
-    /// <param name="component">组件路径。</param>
-    /// <param name="perms">权限标识。</param>
-    /// <param name="visible">显示标记。</param>
-    /// <param name="status">状态。</param>
-    public static void ValidateMenuFields(MenuType menuType, string menuName, string? path, string? component, string? perms, MenuVisible visible, CommonStatus status)
+    /// <summary>构造函数。</summary>
+    public MenuRequestValidator()
+    {
+        RuleFor(request => request)
+            .Custom((request, context) => ValidateMenuFields(
+                request.MenuType, request.MenuName, request.Path, request.Component, request.Perms, request.Visible, request.Status));
+    }
+
+    /// <summary>菜单字段耦合校验（错误码与文案逐字保持原服务层语义）。</summary>
+    private static void ValidateMenuFields(MenuType menuType, string menuName, string? path, string? component, string? perms, MenuVisible visible, CommonStatus status)
     {
         if (string.IsNullOrWhiteSpace(menuName))
         {
@@ -59,26 +63,10 @@ public static class MenuValidation
     }
 }
 
-/// <summary>创建菜单命令验证器（Custom 规则抛模块错误码）。</summary>
-public sealed class CreateMenuCommandValidator : AbstractValidator<CreateMenuCommand>
-{
-    /// <summary>构造函数。</summary>
-    public CreateMenuCommandValidator()
-    {
-        RuleFor(command => command.Request)
-            .Custom((request, context) => MenuValidation.ValidateMenuFields(
-                request.MenuType, request.MenuName, request.Path, request.Component, request.Perms, request.Visible, request.Status));
-    }
-}
+/// <summary>创建菜单命令验证器（桥接请求验证器）；父菜单存在性与层级深度由处理器校验。</summary>
+public sealed class MenuCreateCommandValidator() :
+    WriteCommandValidator<MenuCreateCommand, MenuCreateRequest>(new MenuRequestValidator<MenuCreateRequest>());
 
-/// <summary>更新菜单命令验证器（Custom 规则抛模块错误码）。</summary>
-public sealed class UpdateMenuCommandValidator : AbstractValidator<UpdateMenuCommand>
-{
-    /// <summary>构造函数。</summary>
-    public UpdateMenuCommandValidator()
-    {
-        RuleFor(command => command.Request)
-            .Custom((request, context) => MenuValidation.ValidateMenuFields(
-                request.MenuType, request.MenuName, request.Path, request.Component, request.Perms, request.Visible, request.Status));
-    }
-}
+/// <summary>更新菜单命令验证器（桥接请求验证器）；父级不可选自身或后代由处理器校验。</summary>
+public sealed class MenuUpdateCommandValidator() :
+    WriteCommandValidator<MenuUpdateCommand, MenuUpdateRequest>(new MenuRequestValidator<MenuUpdateRequest>());

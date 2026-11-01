@@ -27,7 +27,7 @@ public class SysMenuController(ISender sender) : ControllerBase
     [RequirePermission("system:menu:list")]
     public async Task<IActionResult> Tree([FromQuery] string? keyword, [FromQuery] Domain.Shared.Enums.CommonStatus? status)
     {
-        return Ok(Result.Ok(await sender.Send(new GetMenuTreeQuery(keyword, status))));
+        return Ok(Result.Ok(await sender.Send(new MenuQueryTree(keyword, status))));
     }
 
     /// <summary>获取菜单详情。</summary>
@@ -37,7 +37,7 @@ public class SysMenuController(ISender sender) : ControllerBase
     [RequirePermission("system:menu:query")]
     public async Task<IActionResult> Get(Guid id)
     {
-        return Ok(Result.Ok(await sender.Send(new GetMenuDetailQuery(id))));
+        return Ok(Result.Ok(await sender.Send(new MenuQueryById(id))));
     }
 
     /// <summary>创建菜单（目录必有 path；菜单必有 path 与 component；按钮必有 perms）。</summary>
@@ -48,8 +48,8 @@ public class SysMenuController(ISender sender) : ControllerBase
     [OperLog("菜单管理", OperBusinessType.Add)]
     public async Task<IActionResult> Create([FromBody] MenuCreateRequest request)
     {
-        var id = await sender.Send(new CreateMenuCommand(request));
-        return Ok(Result.Ok(id, "创建成功"));
+        await sender.Send(new MenuCreateCommand(request));
+        return Ok(Result.Ok(message: "创建成功"));
     }
 
     /// <summary>更新菜单（父级不可选自身或自己的后代）。</summary>
@@ -61,19 +61,20 @@ public class SysMenuController(ISender sender) : ControllerBase
     [OperLog("菜单管理", OperBusinessType.Update)]
     public async Task<IActionResult> Update(Guid id, [FromBody] MenuUpdateRequest request)
     {
-        await sender.Send(new UpdateMenuCommand(id, request));
+        await sender.Send(new MenuUpdateCommand(id, request));
         return Ok(Result.Ok(message: "更新成功"));
     }
 
     /// <summary>删除菜单（存在子菜单或已被角色引用时拒绝）。</summary>
     /// <param name="id">菜单 Id。</param>
     /// <returns>统一响应。</returns>
+    /// <param name="request">删除请求（含乐观锁版本号）。</param>
     [HttpDelete("{id:guid}")]
     [RequirePermission("system:menu:remove")]
     [OperLog("菜单管理", OperBusinessType.Delete)]
-    public async Task<IActionResult> Delete(Guid id)
+    public async Task<IActionResult> Delete(Guid id, [FromBody] MenuDeleteRequest request)
     {
-        await sender.Send(new DeleteMenuCommand(id));
+        await sender.Send(new MenuDeleteCommand(id, request.Version));
         return Ok(Result.Ok(message: "删除成功"));
     }
 }

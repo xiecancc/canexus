@@ -77,7 +77,7 @@ public class DomainRepository<TEntity>(ISqlSugarClient client) : IDomainReposito
     }
 
     /// <inheritdoc />
-    public virtual async Task<PagedResult<TEntity>> GetPagedAsync(
+    public virtual async Task<PagedResponse<TEntity>> GetPagedAsync(
         PagedRequest request,
         IEnumerable<Expression<Func<TEntity, bool>>>? predicates = null,
         IDictionary<Expression<Func<TEntity, object>>, bool?>? orders = null,
@@ -90,11 +90,11 @@ public class DomainRepository<TEntity>(ISqlSugarClient client) : IDomainReposito
         var total = new RefAsync<int>();
         var items = await query
             .ToPageListAsync(request.PageIndex, request.PageSize, total, cancellationToken);
-        return PagedResult<TEntity>.Create(items, total.Value, request);
+        return PagedResponse<TEntity>.Create(items, total.Value, request);
     }
 
     /// <inheritdoc />
-    public virtual async Task<PagedResult<TDto>> GetPagedAsync<TDto>(
+    public virtual async Task<PagedResponse<TDto>> GetPagedAsync<TDto>(
         PagedRequest request,
         IEnumerable<Expression<Func<TEntity, bool>>>? predicates = null,
         IDictionary<Expression<Func<TEntity, object>>, bool?>? orders = null,
@@ -107,7 +107,7 @@ public class DomainRepository<TEntity>(ISqlSugarClient client) : IDomainReposito
         var items = await query
             .Select<TDto>()
             .ToPageListAsync(request.PageIndex, request.PageSize, total, cancellationToken);
-        return PagedResult<TDto>.Create(items, total.Value, request);
+        return PagedResponse<TDto>.Create(items, total.Value, request);
     }
 
     /// <inheritdoc />
@@ -120,27 +120,30 @@ public class DomainRepository<TEntity>(ISqlSugarClient client) : IDomainReposito
     }
 
     /// <inheritdoc />
-    public virtual async Task<TEntity> InsertAsync(TEntity entity, CancellationToken cancellationToken = default)
+    public virtual async Task<bool> InsertAsync(TEntity entity, CancellationToken cancellationToken = default)
     {
         // 创建审计（创建时间 / 创建人）由 Aop.DataExecuting 自动填充；
-        // 聚合根的空主键与软删除标记亦由其初始化，业务代码无需显式赋值
-        return await client.Insertable(entity).ExecuteReturnEntityAsync();
+        // 聚合根的空主键与软删除标记亦由其初始化，业务代码无需显式赋值；
+        // ExecuteReturnEntityAsync 对非自增主键返回传入实体本身（审计切面就地填充），
+        // 调用方继续持有的 entity 引用在插入后即携带主键与审计字段
+        var inserted = await client.Insertable(entity).ExecuteReturnEntityAsync();
+        return inserted is not null;
     }
 
     /// <inheritdoc />
-    public virtual async Task<int> DeleteAsync(Expression<Func<TEntity, bool>> predicate, CancellationToken cancellationToken = default)
+    public virtual async Task<bool> DeleteAsync(Expression<Func<TEntity, bool>> predicate, CancellationToken cancellationToken = default)
     {
         // 批量物理删除：单条 DELETE ... WHERE；聚合根软删除场景请勿使用本方法
         return await client.Deleteable<TEntity>()
             .Where(predicate)
-            .ExecuteCommandAsync(cancellationToken);
+            .ExecuteCommandAsync(cancellationToken) > 0;
     }
 
     /// <inheritdoc />
-    public virtual async Task InsertAsync(IEnumerable<TEntity> entities, CancellationToken cancellationToken = default)
+    public virtual async Task<bool> InsertAsync(IEnumerable<TEntity> entities, CancellationToken cancellationToken = default)
     {
         // 批量插入：单条多值 INSERT；Aop.DataExecuting 对每个实体生效（审计 / 主键填充）
-        await client.Insertable(entities.ToList()).ExecuteCommandAsync(cancellationToken);
+        return await client.Insertable(entities.ToList()).ExecuteCommandAsync(cancellationToken) > 0;
     }
 
     /// <summary>

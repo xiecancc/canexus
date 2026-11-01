@@ -26,7 +26,7 @@ public class SysDictTypeController(ISender sender) : ControllerBase
     [RequirePermission("system:dict:list")]
     public async Task<IActionResult> Page([FromQuery] DictTypePageRequest request)
     {
-        return Ok(Result.Ok(await sender.Send(new GetDictTypePageQuery(request))));
+        return Ok(Result.Ok(await sender.Send(new DictTypeQueryPaged(request))));
     }
 
     /// <summary>创建字典类型（dictType 唯一）。</summary>
@@ -37,8 +37,8 @@ public class SysDictTypeController(ISender sender) : ControllerBase
     [OperLog("字典类型", OperBusinessType.Add)]
     public async Task<IActionResult> Create([FromBody] DictTypeCreateRequest request)
     {
-        var id = await sender.Send(new CreateDictTypeCommand(request));
-        return Ok(Result.Ok(id, "创建成功"));
+        await sender.Send(new DictTypeCreateCommand(request));
+        return Ok(Result.Ok(message: "创建成功"));
     }
 
     /// <summary>更新字典类型（dictType 不可变更，与原值不同则拒绝）。</summary>
@@ -50,19 +50,20 @@ public class SysDictTypeController(ISender sender) : ControllerBase
     [OperLog("字典类型", OperBusinessType.Update)]
     public async Task<IActionResult> Update(Guid id, [FromBody] DictTypeUpdateRequest request)
     {
-        await sender.Send(new UpdateDictTypeCommand(id, request));
+        await sender.Send(new DictTypeUpdateCommand(id, request));
         return Ok(Result.Ok(message: "更新成功"));
     }
 
     /// <summary>删除字典类型（存在字典数据时拒绝）。</summary>
     /// <param name="id">字典类型 Id。</param>
     /// <returns>统一响应。</returns>
+    /// <param name="request">删除请求（含乐观锁版本号）。</param>
     [HttpDelete("{id:guid}")]
     [RequirePermission("system:dict:remove")]
     [OperLog("字典类型", OperBusinessType.Delete)]
-    public async Task<IActionResult> Delete(Guid id)
+    public async Task<IActionResult> Delete(Guid id, [FromBody] DictTypeDeleteRequest request)
     {
-        await sender.Send(new DeleteDictTypeCommand(id));
+        await sender.Send(new DictTypeDeleteCommand(id, request.Version));
         return Ok(Result.Ok(message: "删除成功"));
     }
 }

@@ -1,4 +1,5 @@
 
+using Application.Contracts.Common;
 using Application.Contracts.Roles;
 using AutoMapper;
 using Domain.Entities;
@@ -10,13 +11,18 @@ public sealed class SysRoleProfile : Profile
     /// <summary>构造函数。</summary>
     public SysRoleProfile()
     {
-        // 实体 → 视图对象
-        CreateMap<SysRole, RoleListVO>();
-        CreateMap<SysRole, RoleSimpleVO>();
-        CreateMap<SysRole, RoleDetailVO>();
+        // 实体 → 响应模型（IncludeBase 挂接基类映射链，补齐 Id / Version / 审计字段）
+        CreateMap<SysRole, RoleListResponse>()
+            .IncludeBase<AggregateBase, AggregatePagedResponse>();
+        CreateMap<SysRole, RoleSimpleResponse>()
+            .IncludeBase<AggregateBase, AggregateListResponse>();
+        CreateMap<SysRole, RoleDetailResponse>()
+            .IncludeBase<AggregateBase, AggregatePagedResponse>();
 
-        // 请求 → 实体
-        CreateMap<RoleCreateRequest, SysRole>();
-        CreateMap<RoleUpdateRequest, SysRole>();
+        // 请求 → 实体（IncludeBase 挂接基类映射链）
+        CreateMap<RoleCreateRequest, SysRole>()
+            .IncludeBase<AggregateChangeRequest, AggregateBase>();
+        CreateMap<RoleUpdateRequest, SysRole>()
+            .IncludeBase<AggregateChangeRequest, AggregateBase>();
     }
 }

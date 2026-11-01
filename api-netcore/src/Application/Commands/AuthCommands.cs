@@ -15,7 +15,7 @@ using Infrastructure.Shared.Caching;
 namespace Application.Commands;
 /// <summary>账号密码登录命令处理器。</summary>
 /// <remarks>构造函数。</remarks>
-public sealed class LoginCommandHandler(
+public sealed class AuthLoginCommandHandler(
     IAggregateRepository<SysUser> userRepository,
     IAggregateRepository<SysRole> roleRepository,
     IDomainRepository<SysUserRole> userRoleRepository,
@@ -24,7 +24,7 @@ public sealed class LoginCommandHandler(
     ITokenService tokenService,
     IPasswordHasher passwordHasher,
     IUnitOfWork unitOfWork,
-    ICache cache) : CommandHandler<LoginCommand, TokenPairDto>
+    ICache cache) : CommandHandler<AuthLoginCommand, TokenPairDto>
 {
     /// <summary>登录失败计数缓存 key 前缀（key 格式：{prefix}{userName}）。</summary>
     public const string LoginFailCacheKeyPrefix = "auth:login-fail:";
@@ -41,7 +41,7 @@ public sealed class LoginCommandHandler(
     private sealed record LoginFailState(int Count, DateTime LastFailTime);
 
     /// <inheritdoc />
-    protected override async Task<TokenPairDto> HandleAsync(LoginCommand command, CancellationToken cancellationToken)
+    protected override async Task<TokenPairDto> HandleAsync(AuthLoginCommand command, CancellationToken cancellationToken)
     {
         var request = command.Request;
 
@@ -155,13 +155,13 @@ public sealed class LoginCommandHandler(
 
 /// <summary>登出命令处理器。</summary>
 /// <remarks>构造函数。</remarks>
-public sealed class LogoutCommandHandler(
+public sealed class AuthLogoutCommandHandler(
     ISysRefreshTokenRepository refreshTokenRepository,
     ITokenService tokenService,
-    IUserContext currentUser) : CommandHandler<LogoutCommand>
+    IUserContext currentUser) : CommandHandler<AuthLogoutCommand>
 {
     /// <inheritdoc />
-    protected override async Task HandleAsync(LogoutCommand command, CancellationToken cancellationToken)
+    protected override async Task HandleAsync(AuthLogoutCommand command, CancellationToken cancellationToken)
     {
         if (!string.IsNullOrWhiteSpace(command.RefreshToken))
         {
@@ -180,15 +180,15 @@ public sealed class LogoutCommandHandler(
 
 /// <summary>刷新令牌命令处理器。</summary>
 /// <remarks>构造函数。</remarks>
-public sealed class RefreshTokenCommandHandler(
+public sealed class AuthRefreshTokenCommandHandler(
     IAggregateRepository<SysUser> userRepository,
     IAggregateRepository<SysRole> roleRepository,
     IDomainRepository<SysUserRole> userRoleRepository,
     ITokenService tokenService,
-    IUnitOfWork unitOfWork) : CommandHandler<RefreshTokenCommand, TokenPairDto>
+    IUnitOfWork unitOfWork) : CommandHandler<AuthRefreshTokenCommand, TokenPairDto>
 {
     /// <inheritdoc />
-    protected override async Task<TokenPairDto> HandleAsync(RefreshTokenCommand command, CancellationToken cancellationToken)
+    protected override async Task<TokenPairDto> HandleAsync(AuthRefreshTokenCommand command, CancellationToken cancellationToken)
     {
         var active = await tokenService.GetActiveRefreshTokenAsync(command.RefreshToken, cancellationToken)
             ?? throw new BusinessException(ErrorCodes.AuthRefreshTokenInvalid, "刷新令牌无效或已过期，请重新登录");

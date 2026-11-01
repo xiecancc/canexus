@@ -42,9 +42,6 @@ public static class ErrorCodes
     /// <summary>未登录 / 未认证。</summary>
     public const int AuthUnauthorized = 40100;
 
-    /// <summary>令牌无效。</summary>
-    public const int AuthInvalidToken = 40101;
-
     /// <summary>令牌已过期。</summary>
     public const int AuthTokenExpired = 40102;
 
@@ -72,9 +69,6 @@ public static class ErrorCodes
 
     /// <summary>用户已停用。</summary>
     public const int UserDisabled = 400202;
-
-    /// <summary>旧密码不正确。</summary>
-    public const int UserPasswordError = 400203;
 
     /// <summary>用户名已存在（唯一性冲突）。</summary>
     public const int UserNameDuplicate = 400204;

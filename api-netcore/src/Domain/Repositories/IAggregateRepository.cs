@@ -21,39 +21,39 @@ public interface IAggregateRepository<TEntity> : IDomainRepository<TEntity>
     /// 并基于版本号做乐观并发校验——版本不一致时抛出并发冲突业务异常。</summary>
     /// <param name="entity">聚合（其 <see cref="AggregateBase.Version"/> 须为读取时的值）。</param>
     /// <param name="cancellationToken">取消令牌。</param>
-    /// <returns>表示异步操作的任务。</returns>
-    public Task UpdateAsync(TEntity entity, CancellationToken cancellationToken = default);
+    /// <returns>更新成功返回 true（版本冲突时抛出业务异常而非返回 false）。</returns>
+    public Task<bool> UpdateAsync(TEntity entity, CancellationToken cancellationToken = default);
 
     /// <summary>按主键软删除（标记 IsDeleted，单条 SQL 按列更新，仓储兜底填充更新人 / 更新时间并轮换版本令牌）；
     /// 主键不存在时静默忽略（幂等）。</summary>
     /// <param name="id">主键。</param>
     /// <param name="cancellationToken">取消令牌。</param>
-    /// <returns>受影响的行数（存在为 1，不存在为 0）。</returns>
-    public Task<int> DeleteAsync(Guid id, CancellationToken cancellationToken = default);
+    /// <returns>受影响行数 &gt; 0 返回 true（不存在时为 false）。</returns>
+    public Task<bool> DeleteAsync(Guid id, CancellationToken cancellationToken = default);
 
     /// <summary>按主键集合软删除：单条 SQL 按列更新（仓储兜底填充更新人 / 更新时间并轮换版本令牌）；
     /// 主键均不存在或均已删除时静默忽略（幂等）。</summary>
     /// <param name="ids">主键集合。</param>
     /// <param name="cancellationToken">取消令牌。</param>
-    /// <returns>受影响的行数。</returns>
-    public Task<int> DeleteAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken = default);
+    /// <returns>受影响行数 &gt; 0 返回 true。</returns>
+    public Task<bool> DeleteAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken = default);
 
     /// <summary>按条件恢复软删除的聚合（解除墓碑，单条 SQL 按列更新）；无匹配时静默忽略（幂等）。
     /// 注意：恢复为按列更新，仓储兜底填充更新人 / 更新时间并轮换版本令牌。</summary>
     /// <param name="predicate">恢复条件。</param>
     /// <param name="cancellationToken">取消令牌。</param>
-    /// <returns>受影响的行数。</returns>
-    public Task<int> RestoreAsync(Expression<Func<TEntity, bool>> predicate, CancellationToken cancellationToken = default);
+    /// <returns>受影响行数 &gt; 0 返回 true。</returns>
+    public Task<bool> RestoreAsync(Expression<Func<TEntity, bool>> predicate, CancellationToken cancellationToken = default);
 
     /// <summary>按主键恢复软删除的聚合（解除墓碑）；主键不存在或未删除时静默忽略（幂等）。</summary>
     /// <param name="id">主键。</param>
     /// <param name="cancellationToken">取消令牌。</param>
-    /// <returns>受影响的行数（成功恢复为 1，不存在或未删除为 0）。</returns>
-    public Task<int> RestoreAsync(Guid id, CancellationToken cancellationToken = default);
+    /// <returns>受影响行数 &gt; 0 返回 true。</returns>
+    public Task<bool> RestoreAsync(Guid id, CancellationToken cancellationToken = default);
 
     /// <summary>按主键集合恢复软删除的聚合（解除墓碑，单条 SQL）；主键均不存在或均未删除时静默忽略（幂等）。</summary>
     /// <param name="ids">主键集合。</param>
     /// <param name="cancellationToken">取消令牌。</param>
-    /// <returns>受影响的行数。</returns>
-    public Task<int> RestoreAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken = default);
+    /// <returns>受影响行数 &gt; 0 返回 true。</returns>
+    public Task<bool> RestoreAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken = default);
 }

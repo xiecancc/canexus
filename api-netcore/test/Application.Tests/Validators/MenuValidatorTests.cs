@@ -13,11 +13,11 @@ namespace Application.Tests.Validators;
 [TestFixture]
 public class MenuValidatorTests
 {
-    private static CreateMenuCommand BuildCommand(Action<MenuCreateRequest> configure)
+    private static MenuCreateCommand BuildCommand(Action<MenuCreateRequest> configure)
     {
         var request = new MenuCreateRequest { MenuType = MenuType.Directory, MenuName = "测试菜单", Path = "/test" };
         configure(request);
-        return new CreateMenuCommand(request);
+        return new MenuCreateCommand(request);
     }
 
     [Test]
@@ -25,7 +25,7 @@ public class MenuValidatorTests
     {
         var command = BuildCommand(request => request.Path = " ");
         Assert.That(
-            () => new CreateMenuCommandValidator().Validate(command),
+            () => new MenuCreateCommandValidator().Validate(command),
             Throws.TypeOf<BusinessException>().With.Property("Code").EqualTo(ErrorCodes.MenuRuleInvalid));
     }
 
@@ -38,7 +38,7 @@ public class MenuValidatorTests
             request.Component = null;
         });
         Assert.That(
-            () => new CreateMenuCommandValidator().Validate(command),
+            () => new MenuCreateCommandValidator().Validate(command),
             Throws.TypeOf<BusinessException>().With.Property("Code").EqualTo(ErrorCodes.MenuRuleInvalid));
     }
 
@@ -52,7 +52,7 @@ public class MenuValidatorTests
             request.Perms = null;
         });
         Assert.That(
-            () => new CreateMenuCommandValidator().Validate(command),
+            () => new MenuCreateCommandValidator().Validate(command),
             Throws.TypeOf<BusinessException>().With.Property("Code").EqualTo(ErrorCodes.MenuRuleInvalid));
     }
 
@@ -60,7 +60,7 @@ public class MenuValidatorTests
     public void Validate_ValidDirectory_Passes()
     {
         var command = BuildCommand(request => request.MenuType = MenuType.Directory);
-        Assert.That(() => new CreateMenuCommandValidator().Validate(command), Throws.Nothing);
+        Assert.That(() => new MenuCreateCommandValidator().Validate(command), Throws.Nothing);
     }
 
     [Test]
@@ -68,7 +68,7 @@ public class MenuValidatorTests
     {
         var command = BuildCommand(request => request.Status = (CommonStatus)2);
         Assert.That(
-            () => new CreateMenuCommandValidator().Validate(command),
+            () => new MenuCreateCommandValidator().Validate(command),
             Throws.TypeOf<BusinessException>().With.Property("Code").EqualTo(ErrorCodes.MenuRuleInvalid));
     }
 }

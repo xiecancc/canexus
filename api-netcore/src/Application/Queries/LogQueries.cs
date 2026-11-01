@@ -15,14 +15,14 @@ namespace Application.Queries;
 /// <remarks>构造函数。</remarks>
 /// <param name="loginLogRepository">登录日志仓储（只读）。</param>
 /// <param name="mapper">AutoMapper 映射器。</param>
-public sealed class GetLoginLogPageQueryHandler(ILoginLogRepository loginLogRepository, IMapper mapper) : QueryHandler<GetLoginLogPageQuery, PagedResult<LoginLogListVO>>
+public sealed class LoginLogQueryPagedHandler(ILoginLogRepository loginLogRepository, IMapper mapper) : QueryHandler<LoginLogQueryPaged, PagedResponse<LoginLogListResponse>>
 {
     /// <inheritdoc />
-    protected override async Task<PagedResult<LoginLogListVO>> HandleAsync(GetLoginLogPageQuery query, CancellationToken cancellationToken)
+    protected override async Task<PagedResponse<LoginLogListResponse>> HandleAsync(LoginLogQueryPaged query, CancellationToken cancellationToken)
     {
         var request = query.Request;
-        var userName = string.IsNullOrWhiteSpace(request.UserName) ? null : request.UserName.Trim();
-        var ip = string.IsNullOrWhiteSpace(request.Ip) ? null : request.Ip.Trim();
+        var userName = NormalizeFilter(request.UserName);
+        var ip = NormalizeFilter(request.Ip);
         var status = request.Status;
         var beginTime = request.BeginTime;
         var endTime = LogQueryBounds.NormalizeEndTime(request.EndTime);
@@ -36,38 +36,35 @@ public sealed class GetLoginLogPageQueryHandler(ILoginLogRepository loginLogRepo
 
         // 按登录时间倒序：日志列表最新记录在前（Guid 主键无时序语义，不能按 Id 排序）
         var page = await loginLogRepository.GetPagedByTimeDescAsync(request, predicate, cancellationToken);
-        var items = page.Items.Select(l => mapper.Map<LoginLogListVO>(l)).ToList();
-        return PagedResult<LoginLogListVO>.Create(items, page.Total, request);
+
+        // 开放泛型映射闭合 PagedResponse<SysLoginLog> → PagedResponse<LoginLogListResponse>：
+        // 分页元数据同名复制，Items 元素运行期按模块映射解析
+        return mapper.Map<PagedResponse<LoginLogListResponse>>(page)!;
     }
 }
 
-/// <summary>分页查询操作日志处理器。</summary>
+/// <summary>分页查询操作日志处理器（标准分页流程：标题 / 操作人 / 业务类型 / 状态 / 时间段过滤）。</summary>
 /// <remarks>构造函数。</remarks>
 /// <param name="operLogRepository">操作日志仓储（只读）。</param>
 /// <param name="mapper">AutoMapper 映射器。</param>
-public sealed class GetOperLogPageQueryHandler(IOperLogRepository operLogRepository, IMapper mapper) : QueryHandler<GetOperLogPageQuery, PagedResult<OperLogListVO>>
+public sealed class OperLogQueryPagedHandler(IOperLogRepository operLogRepository, IMapper mapper) : DomainQueryPagedHandler<OperLogQueryPaged, OperLogPageRequest, SysOperLog, OperLogListResponse>(operLogRepository, mapper)
 {
     /// <inheritdoc />
-    protected override async Task<PagedResult<OperLogListVO>> HandleAsync(GetOperLogPageQuery query, CancellationToken cancellationToken)
+    protected override Expression<Func<SysOperLog, bool>>? BuildPredicate(OperLogPageRequest request)
     {
-        var request = query.Request;
-        var title = string.IsNullOrWhiteSpace(request.Title) ? null : request.Title.Trim();
-        var operUserName = string.IsNullOrWhiteSpace(request.OperUserName) ? null : request.OperUserName.Trim();
+        var title = NormalizeFilter(request.Title);
+        var operUserName = NormalizeFilter(request.OperUserName);
         var businessType = request.BusinessType;
         var status = request.Status;
         var beginTime = request.BeginTime;
         var endTime = LogQueryBounds.NormalizeEndTime(request.EndTime);
 
-        Expression<Func<SysOperLog, bool>> predicate = l =>
+        return l =>
             (title == null || l.Title.Contains(title))
             && (businessType == null || l.BusinessType == businessType.Value)
             && (status == null || l.Status == status.Value)
             && (operUserName == null || (l.OperUserName != null && l.OperUserName.Contains(operUserName)))
             && (beginTime == null || (l.OperTime != null && l.OperTime >= beginTime.Value))
             && (endTime == null || (l.OperTime != null && l.OperTime < endTime.Value));
-
-        var page = await operLogRepository.GetPagedAsync(request, [predicate], cancellationToken: cancellationToken);
-        var items = page.Items.Select(l => mapper.Map<OperLogListVO>(l)).ToList();
-        return PagedResult<OperLogListVO>.Create(items, page.Total, request);
     }
 }

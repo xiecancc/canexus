@@ -7,30 +7,26 @@ using Application.Mappings;
 using AutoMapper;
 using Domain.Entities;
 using Domain.Repositories;
-using Domain.Shared.Enums;
-using Domain.Shared.Exceptions;
 using Domain.Shared.Results;
 
 namespace Application.Queries;
-/// <summary>获取部门详情查询处理器。</summary>
+/// <summary>获取部门详情查询处理器（标准详情流程，无扩展字段组装）。</summary>
 /// <remarks>构造函数。</remarks>
-public sealed class GetDeptDetailQueryHandler(IAggregateTreeRepository<SysDept> deptRepository, IMapper mapper) : QueryHandler<GetDeptDetailQuery, DeptDetailVO>
+public sealed class DeptQueryByIdHandler(IAggregateTreeRepository<SysDept> deptRepository, IMapper mapper) : AggregateQueryByIdHandler<DeptQueryById, SysDept, DeptDetailResponse>(deptRepository, mapper)
 {
     /// <inheritdoc />
-    protected override async Task<DeptDetailVO> HandleAsync(GetDeptDetailQuery query, CancellationToken cancellationToken)
-    {
-        var dept = await deptRepository.GetAsync([it => it.Id == query.Id], cancellationToken)
-            ?? throw new BusinessException(ErrorCodes.DeptNotFound, $"部门 {query.Id} 不存在");
-        return mapper.Map<DeptDetailVO>(dept);
-    }
+    protected override int NotFoundErrorCode => ErrorCodes.DeptNotFound;
+
+    /// <inheritdoc />
+    protected override string EntityDisplayName => "部门";
 }
 
 /// <summary>查询部门树处理器。</summary>
 /// <remarks>构造函数。</remarks>
-public sealed class GetDeptTreeQueryHandler(IAggregateTreeRepository<SysDept> deptRepository, IMapper mapper) : QueryHandler<GetDeptTreeQuery, List<DeptTreeVO>>
+public sealed class DeptQueryTreeHandler(IAggregateTreeRepository<SysDept> deptRepository, IMapper mapper) : QueryHandler<DeptQueryTree, List<DeptTreeResponse>>
 {
     /// <inheritdoc />
-    protected override async Task<List<DeptTreeVO>> HandleAsync(GetDeptTreeQuery query, CancellationToken cancellationToken)
+    protected override async Task<List<DeptTreeResponse>> HandleAsync(DeptQueryTree query, CancellationToken cancellationToken)
     {
         var depts = await deptRepository.GetListAsync(cancellationToken: cancellationToken);
         var filtered = depts.Where(d =>
@@ -39,7 +35,7 @@ public sealed class GetDeptTreeQueryHandler(IAggregateTreeRepository<SysDept> de
                 || (d.Leader is not null && d.Leader.Contains(query.Keyword.Trim(), StringComparison.OrdinalIgnoreCase)))
             && (query.Status is null || d.Status == query.Status.Value)).ToList();
 
-        // 过滤后经聚合基类装配为树（孤儿部门挂到根级不丢失），实体树递归映射为 VO 树
-        return mapper.Map<List<DeptTreeVO>>(SysDept.BuildTree(filtered));
+        // 过滤后经聚合基类装配为树（孤儿部门挂到根级不丢失），实体树递归映射为 Response 树
+        return mapper.Map<List<DeptTreeResponse>>(SysDept.BuildTree(filtered));
     }
 }

@@ -23,6 +23,6 @@ public class SysJobLogController(ISender sender) : ControllerBase
     [RequirePermission("monitor:job:query")]
     public async Task<IActionResult> Page([FromQuery] JobLogPageRequest request)
     {
-        return Ok(Result.Ok(await sender.Send(new GetJobLogPageQuery(request))));
+        return Ok(Result.Ok(await sender.Send(new JobLogQueryPaged(request))));
     }
 }

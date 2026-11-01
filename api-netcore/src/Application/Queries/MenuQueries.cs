@@ -7,30 +7,26 @@ using Application.Mappings;
 using AutoMapper;
 using Domain.Entities;
 using Domain.Repositories;
-using Domain.Shared.Enums;
-using Domain.Shared.Exceptions;
 using Domain.Shared.Results;
 
 namespace Application.Queries;
-/// <summary>获取菜单详情查询处理器。</summary>
+/// <summary>获取菜单详情查询处理器（标准详情流程，无扩展字段组装）。</summary>
 /// <remarks>构造函数。</remarks>
-public sealed class GetMenuDetailQueryHandler(IAggregateTreeRepository<SysMenu> menuRepository, IMapper mapper) : QueryHandler<GetMenuDetailQuery, MenuDetailVO>
+public sealed class MenuQueryByIdHandler(IAggregateTreeRepository<SysMenu> menuRepository, IMapper mapper) : AggregateQueryByIdHandler<MenuQueryById, SysMenu, MenuDetailResponse>(menuRepository, mapper)
 {
     /// <inheritdoc />
-    protected override async Task<MenuDetailVO> HandleAsync(GetMenuDetailQuery query, CancellationToken cancellationToken)
-    {
-        var menu = await menuRepository.GetAsync([it => it.Id == query.Id], cancellationToken)
-            ?? throw new BusinessException(ErrorCodes.MenuNotFound, $"菜单 {query.Id} 不存在");
-        return mapper.Map<MenuDetailVO>(menu);
-    }
+    protected override int NotFoundErrorCode => ErrorCodes.MenuNotFound;
+
+    /// <inheritdoc />
+    protected override string EntityDisplayName => "菜单";
 }
 
 /// <summary>查询菜单树处理器。</summary>
 /// <remarks>构造函数。</remarks>
-public sealed class GetMenuTreeQueryHandler(IAggregateTreeRepository<SysMenu> menuRepository, IMapper mapper) : QueryHandler<GetMenuTreeQuery, List<MenuTreeVO>>
+public sealed class MenuQueryTreeHandler(IAggregateTreeRepository<SysMenu> menuRepository, IMapper mapper) : QueryHandler<MenuQueryTree, List<MenuTreeResponse>>
 {
     /// <inheritdoc />
-    protected override async Task<List<MenuTreeVO>> HandleAsync(GetMenuTreeQuery query, CancellationToken cancellationToken)
+    protected override async Task<List<MenuTreeResponse>> HandleAsync(MenuQueryTree query, CancellationToken cancellationToken)
     {
         var menus = await menuRepository.GetListAsync(cancellationToken: cancellationToken);
         var filtered = menus.Where(m =>
@@ -39,7 +35,7 @@ public sealed class GetMenuTreeQueryHandler(IAggregateTreeRepository<SysMenu> me
                 || (m.Perms is not null && m.Perms.Contains(query.Keyword.Trim(), StringComparison.OrdinalIgnoreCase)))
             && (query.Status is null || m.Status == query.Status.Value)).ToList();
 
-        // 过滤后经聚合基类装配为树（孤儿菜单挂到根级不丢失），实体树递归映射为 VO 树
-        return mapper.Map<List<MenuTreeVO>>(SysMenu.BuildTree(filtered));
+        // 过滤后经聚合基类装配为树（孤儿菜单挂到根级不丢失），实体树递归映射为 Response 树
+        return mapper.Map<List<MenuTreeResponse>>(SysMenu.BuildTree(filtered));
     }
 }

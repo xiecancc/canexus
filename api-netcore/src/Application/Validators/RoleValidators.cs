@@ -1,23 +1,29 @@
 
 using Application.Contracts.Commands;
 using Application.Contracts.Roles;
+using Application.Validators.Common;
 using Domain.Shared.Enums;
 using Domain.Shared.Exceptions;
 using Domain.Shared.Results;
 using FluentValidation;
 
 namespace Application.Validators;
-/// <summary>角色命令验证器：名称 / 权限字符非空、数据范围（1~5）、状态（启用/停用）；
-/// 错误码保持 CommonInvalidRequest（40000）与原服务层文案一致；roleKey 唯一性与保留值校验由处理器完成；
-/// 创建 / 更新共用同一校验方法消除重复。</summary>
-public static class RoleValidation
+/// <summary>角色写入请求验证器：名称 / 权限字符非空、数据范围（1~5）、状态（启用/停用）；
+/// 错误码保持 CommonInvalidRequest（40000）与原服务层文案一致；创建 / 更新共用（消除重复定义）。</summary>
+/// <typeparam name="TRequest">角色写入请求类型。</typeparam>
+public class RoleRequestValidator<TRequest> : AbstractValidator<TRequest>
+    where TRequest : RoleRequest
 {
-    /// <summary>角色字段校验（创建 / 更新共用）。</summary>
-    /// <param name="roleName">角色名称。</param>
-    /// <param name="roleKey">角色权限字符。</param>
-    /// <param name="dataScope">数据范围。</param>
-    /// <param name="status">状态。</param>
-    public static void ValidateRoleFields(string roleName, string roleKey, DataScope dataScope, CommonStatus status)
+    /// <summary>构造函数。</summary>
+    public RoleRequestValidator()
+    {
+        RuleFor(request => request)
+            .Custom((request, context) => ValidateRoleFields(
+                request.RoleName, request.RoleKey, request.DataScope, request.Status));
+    }
+
+    /// <summary>角色字段校验（错误码与文案逐字保持原服务层语义）。</summary>
+    private static void ValidateRoleFields(string roleName, string roleKey, DataScope dataScope, CommonStatus status)
     {
         if (string.IsNullOrWhiteSpace(roleName))
         {
@@ -41,26 +47,10 @@ public static class RoleValidation
     }
 }
 
-/// <summary>创建角色命令验证器（Custom 规则抛模块错误码）。</summary>
-public sealed class CreateRoleCommandValidator : AbstractValidator<CreateRoleCommand>
-{
-    /// <summary>构造函数。</summary>
-    public CreateRoleCommandValidator()
-    {
-        RuleFor(command => command.Request)
-            .Custom((request, context) => RoleValidation.ValidateRoleFields(
-                request.RoleName, request.RoleKey, request.DataScope, request.Status));
-    }
-}
+/// <summary>创建角色命令验证器（桥接请求验证器）；roleKey 唯一性与保留值校验由处理器完成。</summary>
+public sealed class RoleCreateCommandValidator() :
+    WriteCommandValidator<RoleCreateCommand, RoleCreateRequest>(new RoleRequestValidator<RoleCreateRequest>());
 
-/// <summary>更新角色命令验证器（Custom 规则抛模块错误码）。</summary>
-public sealed class UpdateRoleCommandValidator : AbstractValidator<UpdateRoleCommand>
-{
-    /// <summary>构造函数。</summary>
-    public UpdateRoleCommandValidator()
-    {
-        RuleFor(command => command.Request)
-            .Custom((request, context) => RoleValidation.ValidateRoleFields(
-                request.RoleName, request.RoleKey, request.DataScope, request.Status));
-    }
-}
+/// <summary>更新角色命令验证器（桥接请求验证器）；roleKey 唯一性与保留值校验由处理器完成。</summary>
+public sealed class RoleUpdateCommandValidator() :
+    WriteCommandValidator<RoleUpdateCommand, RoleUpdateRequest>(new RoleRequestValidator<RoleUpdateRequest>());

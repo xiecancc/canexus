@@ -4,6 +4,7 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
 using API;
+using Domain.Entities;
 using Domain.Services.Security;
 using Infrastructure.Scheduling;
 using Infrastructure.Shared.Caching;
@@ -83,8 +84,7 @@ public class JobApiTests
             concurrent = false,
             description = "B10 集成测试"
         });
-        var jobId = createBody.RootElement.GetProperty("data").GetGuid();
-        Assert.That(jobId, Is.Not.EqualTo(Guid.Empty), "创建应返回任务 Id");
+        var jobId = await ApiTestSupport.GetEntityIdAsync<SysJob>(_db, it => it.JobName == jobName);
 
         // 分页字段校验
         var page = await GetJsonAsync($"/api/monitor/job/page?keyword={jobName}");
@@ -113,8 +113,9 @@ public class JobApiTests
             Assert.That(firstLog.GetProperty("triggerTime").GetDateTime(), Is.Not.EqualTo(default(DateTime)));
         });
 
-        // 3. 修改状态为运行（1）→ 入调度
-        await SendForJsonAsync(HttpMethod.Put, $"/api/monitor/job/{jobId}/status", new { status = 1 });
+        // 3. 修改状态为运行（1）→ 入调度（乐观锁：先回读版本号）
+        var statusVersion = await ApiTestSupport.GetVersionAsync<SysJob>(_db, jobId);
+        await SendForJsonAsync(HttpMethod.Put, $"/api/monitor/job/{jobId}/status", new { version = statusVersion, status = 1 });
         var afterChange = (await GetJsonAsync($"/api/monitor/job/page?keyword={jobName}"))
             .RootElement.GetProperty("data").GetProperty("items")[0];
         Assert.That(afterChange.GetProperty("status").GetInt32(), Is.EqualTo(1), "启用后状态应为运行");
@@ -129,7 +130,7 @@ public class JobApiTests
             "日志应按触发时间倒序排列");
 
         // 5. 删除任务（同时移出调度）→ 分页不再返回
-        var deleted = await SendAsync(HttpMethod.Delete, $"/api/monitor/job/{jobId}", null);
+        var deleted = await SendAsync(HttpMethod.Delete, $"/api/monitor/job/{jobId}", new { version = await ApiTestSupport.GetVersionAsync<SysJob>(_db, jobId) });
         Assert.That(deleted.StatusCode, Is.EqualTo(HttpStatusCode.OK), "删除任务应成功");
         var afterDelete = await GetJsonAsync($"/api/monitor/job/page?keyword={jobName}");
         Assert.That(afterDelete.RootElement.GetProperty("data").GetProperty("items").GetArrayLength(), Is.EqualTo(0),
@@ -191,7 +192,7 @@ public class JobApiTests
     {
         // 更新：修改 Cron 与备注后仍可正常立即执行
         var jobName = NewJobName();
-        var jobId = (await SendForJsonAsync(HttpMethod.Post, "/api/monitor/job", new
+        await SendForJsonAsync(HttpMethod.Post, "/api/monitor/job", new
         {
             jobName,
             jobGroup = "DEFAULT",
@@ -199,12 +200,15 @@ public class JobApiTests
             jobType = NoOpJob.TypeFullName,
             status = 0,
             concurrent = false
-        })).RootElement.GetProperty("data").GetGuid();
+        });
+        var jobId = await ApiTestSupport.GetEntityIdAsync<SysJob>(_db, it => it.JobName == jobName);
 
         try
         {
+            var jobVersion = await ApiTestSupport.GetVersionAsync<SysJob>(_db, jobId);
             await SendForJsonAsync(HttpMethod.Put, $"/api/monitor/job/{jobId}", new
             {
+                version = jobVersion,
                 jobName,
                 jobGroup = "B10_GROUP",
                 cronExpression = "0/5 * * * * ?",
@@ -225,7 +229,7 @@ public class JobApiTests
             });
 
             // 不存在的任务删除 → 400901
-            var deleteMissing = await SendAsync(HttpMethod.Delete, "/api/monitor/job/00000000-0000-0000-0000-000000009999", null);
+            var deleteMissing = await SendAsync(HttpMethod.Delete, "/api/monitor/job/00000000-0000-0000-0000-000000009999", new { version = Guid.Empty });
             var deleteMissingBody = await ReadBodyAsync(deleteMissing);
             Assert.Multiple(() =>
             {
@@ -235,7 +239,7 @@ public class JobApiTests
         }
         finally
         {
-            await SendAsync(HttpMethod.Delete, $"/api/monitor/job/{jobId}", null);
+            await SendAsync(HttpMethod.Delete, $"/api/monitor/job/{jobId}", new { version = await ApiTestSupport.GetVersionAsync<SysJob>(_db, jobId) });
         }
     }
 

@@ -1,7 +1,6 @@
 
 using Domain.Shared.Enums;
 using Domain.Shared.Exceptions;
-using Domain.Shared.Results;
 using FluentValidation;
 
 namespace Application.Validators.Common;

@@ -25,7 +25,7 @@ public class LoginLogRepository(ISqlSugarClient client, IUserContext currentUser
     }
 
     /// <inheritdoc />
-    public async Task<PagedResult<SysLoginLog>> GetPagedByTimeDescAsync(
+    public async Task<PagedResponse<SysLoginLog>> GetPagedByTimeDescAsync(
         PagedRequest request,
         Expression<Func<SysLoginLog, bool>>? predicate = null,
         CancellationToken cancellationToken = default)
@@ -41,6 +41,6 @@ public class LoginLogRepository(ISqlSugarClient client, IUserContext currentUser
             .OrderBy(it => it.LoginTime, OrderByType.Desc)
             .OrderBy(it => it.Id, OrderByType.Desc)
             .ToPageListAsync(request.PageIndex, request.PageSize, total);
-        return PagedResult<SysLoginLog>.Create(items, total.Value, request);
+        return PagedResponse<SysLoginLog>.Create(items, total.Value, request);
     }
 }

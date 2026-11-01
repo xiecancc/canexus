@@ -87,8 +87,7 @@ public class TenantApiTests
             description = "B9 集成测试",
             expireTime = (DateTime?)new DateTime(2030, 1, 1)
         });
-        var tenantId = createBody.RootElement.GetProperty("data").GetGuid();
-        Assert.That(tenantId, Is.Not.EqualTo(Guid.Empty), "创建应返回租户 Id");
+        var tenantId = await ApiTestSupport.GetEntityIdAsync<SysTenant>(_db, it => it.TenantKey == tenantKey);
 
         var page = await GetJsonAsync($"/api/system/tenant/page?keyword={tenantKey}");
         var row = page.RootElement.GetProperty("data").GetProperty("items")[0];
@@ -115,9 +114,11 @@ public class TenantApiTests
             Assert.That(duplicateBody.RootElement.GetProperty("code").GetInt32(), Is.EqualTo(400802));
         });
 
-        // 更新（tenantKey 不变）→ 成功
+        // 更新（tenantKey 不变）→ 成功（乐观锁：先回读版本号）
+        var tenantVersion = await ApiTestSupport.GetVersionAsync<SysTenant>(_db, tenantId);
         await SendForJsonAsync(HttpMethod.Put, $"/api/system/tenant/{tenantId}", new
         {
+            version = tenantVersion,
             tenantKey,
             tenantName = "B9 流程租户V2",
             contactPhone = (string?)null,
@@ -152,7 +153,7 @@ public class TenantApiTests
         // 存在归属用户时删除 → 400804
         var userName = NewUserName();
         await InsertTenantUserAsync(userName, tenantId);
-        var inUse = await SendAsync(HttpMethod.Delete, $"/api/system/tenant/{tenantId}", null);
+        var inUse = await SendAsync(HttpMethod.Delete, $"/api/system/tenant/{tenantId}", new { version = Guid.Empty });
         var inUseBody = await ReadBodyAsync(inUse);
         Assert.Multiple(() =>
         {
@@ -162,7 +163,7 @@ public class TenantApiTests
 
         // 清理归属用户后租户可删除
         RemoveTenantUser(userName);
-        var deleted = await SendAsync(HttpMethod.Delete, $"/api/system/tenant/{tenantId}", null);
+        var deleted = await SendAsync(HttpMethod.Delete, $"/api/system/tenant/{tenantId}", new { version = await ApiTestSupport.GetVersionAsync<SysTenant>(_db, tenantId) });
         Assert.That(deleted.StatusCode, Is.EqualTo(HttpStatusCode.OK), "无归属用户的租户应可删除");
     }
 

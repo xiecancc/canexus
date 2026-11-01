@@ -8,43 +8,35 @@ using AutoMapper;
 using Domain.Entities;
 using Domain.Repositories;
 using Domain.Shared.Enums;
-using Domain.Shared.Paging;
 
 namespace Application.Queries;
 /// <summary>查询启用租户简易列表处理器。</summary>
 /// <remarks>构造函数。</remarks>
 /// <param name="tenantRepository">租户仓储。</param>
 /// <param name="mapper">AutoMapper 映射器。</param>
-public sealed class GetAllTenantsQueryHandler(IAggregateRepository<SysTenant> tenantRepository, IMapper mapper) : QueryHandler<GetAllTenantsQuery, List<TenantSimpleVO>>
+public sealed class TenantQueryListHandler(IAggregateRepository<SysTenant> tenantRepository, IMapper mapper) : QueryHandler<TenantQueryList, List<TenantSimpleResponse>>
 {
     /// <inheritdoc />
-    protected override async Task<List<TenantSimpleVO>> HandleAsync(GetAllTenantsQuery query, CancellationToken cancellationToken)
+    protected override async Task<List<TenantSimpleResponse>> HandleAsync(TenantQueryList query, CancellationToken cancellationToken)
     {
         var tenants = await tenantRepository.GetListAsync([t => t.Status == CommonStatus.Enabled], cancellationToken: cancellationToken);
-        return [.. tenants
-            .OrderBy(t => t.Id)
-            .Select(t => mapper.Map<TenantSimpleVO>(t))];
+        var enabled = tenants.OrderBy(t => t.Id).ToList();
+        return mapper.Map<List<TenantSimpleResponse>>(enabled);
     }
 }
 
-/// <summary>分页查询租户处理器。</summary>
+/// <summary>分页查询租户处理器（标准分页流程：关键字模糊匹配租户名 / 租户标识、状态过滤）。</summary>
 /// <remarks>构造函数。</remarks>
 /// <param name="tenantRepository">租户仓储（只读）。</param>
 /// <param name="mapper">AutoMapper 映射器。</param>
-public sealed class GetTenantPageQueryHandler(IDomainRepository<SysTenant> tenantRepository, IMapper mapper) : QueryHandler<GetTenantPageQuery, PagedResult<TenantListVO>>
+public sealed class TenantQueryPagedHandler(IDomainRepository<SysTenant> tenantRepository, IMapper mapper) : DomainQueryPagedHandler<TenantQueryPaged, TenantPageRequest, SysTenant, TenantListResponse>(tenantRepository, mapper)
 {
     /// <inheritdoc />
-    protected override async Task<PagedResult<TenantListVO>> HandleAsync(GetTenantPageQuery query, CancellationToken cancellationToken)
+    protected override Expression<Func<SysTenant, bool>>? BuildPredicate(TenantPageRequest request)
     {
-        var request = query.Request;
-        var keyword = string.IsNullOrWhiteSpace(request.Keyword) ? null : request.Keyword.Trim();
-        Expression<Func<SysTenant, bool>> predicate = t =>
+        var keyword = NormalizeFilter(request.Keyword);
+        return t =>
             (keyword == null || t.TenantName.Contains(keyword) || t.TenantKey.Contains(keyword))
             && (request.Status == null || t.Status == request.Status.Value);
-
-        var page = await tenantRepository.GetPagedAsync(request, [predicate], cancellationToken: cancellationToken);
-
-        // 开放泛型映射（CommonProfile）：PagedResult<实体> → PagedResult<VO>，元数据自动复制、Items 按元素映射转换
-        return mapper.Map<PagedResult<TenantListVO>>(page);
     }
 }

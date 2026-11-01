@@ -3,16 +3,14 @@ using Application.Contracts.Commands;
 using Application.Contracts.Users;
 using Application.Validators.Common;
 using Domain.Shared.Enums;
-using Domain.Shared.Exceptions;
-using Domain.Shared.Results;
 using FluentValidation;
 
 namespace Application.Validators;
 /// <summary>修改用户状态命令验证器：状态仅允许 1 启用 / 0 停用（错误码与原处理器文案一致）。</summary>
-public sealed class UpdateUserStatusCommandValidator : AbstractValidator<UpdateUserStatusCommand>
+public sealed class UserUpdateStatusCommandValidator : AbstractValidator<UserUpdateStatusCommand>
 {
     /// <summary>构造函数。</summary>
-    public UpdateUserStatusCommandValidator()
+    public UserUpdateStatusCommandValidator()
     {
         RuleFor(command => command.Request.Status)
             .Must(status => status is CommonStatus.Enabled or CommonStatus.Disabled)
@@ -22,11 +20,11 @@ public sealed class UpdateUserStatusCommandValidator : AbstractValidator<UpdateU
 
 /// <summary>用户写入请求验证器：昵称非空、状态取值合法（承接自实体 setter 迁移的规则；创建 / 更新共用，消除重复定义）。</summary>
 /// <typeparam name="TRequest">用户写入请求类型。</typeparam>
-public class UserWriteRequestValidator<TRequest> : AbstractValidator<TRequest>
-    where TRequest : UserWriteRequest
+public class UserRequestValidator<TRequest> : AbstractValidator<TRequest>
+    where TRequest : UserRequest
 {
     /// <summary>构造函数。</summary>
-    public UserWriteRequestValidator()
+    public UserRequestValidator()
     {
         RuleFor(request => request.NickName).NotBlankRule("用户昵称不能为空");
 
@@ -34,24 +32,17 @@ public class UserWriteRequestValidator<TRequest> : AbstractValidator<TRequest>
     }
 }
 
-/// <summary>创建用户命令验证器：用户名非空（唯一性与部门存在性由处理器校验）。</summary>
-public sealed class CreateUserCommandValidator : AbstractValidator<CreateUserCommand>
+/// <summary>创建用户命令验证器（桥接请求验证器，补充仅创建可用的用户名规则）；
+/// 用户名唯一性、密码缺省与部门存在性由处理器校验。</summary>
+public sealed class UserCreateCommandValidator : WriteCommandValidator<UserCreateCommand, UserCreateRequest>
 {
     /// <summary>构造函数。</summary>
-    public CreateUserCommandValidator()
+    public UserCreateCommandValidator() : base(new UserRequestValidator<UserCreateRequest>())
     {
         RuleFor(command => command.Request.UserName).NotBlankRule("用户名不能为空");
-
-        RuleFor(command => command.Request).SetValidator(new UserWriteRequestValidator<UserCreateRequest>());
     }
 }
 
-/// <summary>更新用户命令验证器：昵称非空、状态取值合法（内置 admin 编辑拒绝与角色存在性由处理器校验）。</summary>
-public sealed class UpdateUserCommandValidator : AbstractValidator<UpdateUserCommand>
-{
-    /// <summary>构造函数。</summary>
-    public UpdateUserCommandValidator()
-    {
-        RuleFor(command => command.Request).SetValidator(new UserWriteRequestValidator<UserUpdateRequest>());
-    }
-}
+/// <summary>更新用户命令验证器（桥接请求验证器）；内置 admin 编辑拒绝与角色存在性由处理器校验。</summary>
+public sealed class UserUpdateCommandValidator() :
+    WriteCommandValidator<UserUpdateCommand, UserUpdateRequest>(new UserRequestValidator<UserUpdateRequest>());

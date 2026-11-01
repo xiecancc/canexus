@@ -1,4 +1,5 @@
 
+using Application.Contracts.Common;
 using Application.Contracts.Configs;
 using AutoMapper;
 using Domain.Entities;
@@ -10,11 +11,14 @@ public sealed class SysConfigProfile : Profile
     /// <summary>构造函数。</summary>
     public SysConfigProfile()
     {
-        // 实体 → 视图对象
-        CreateMap<SysConfig, ConfigListVO>();
+        // 实体 → 响应模型（IncludeBase 挂接基类映射链，补齐 Id / Version / 审计字段）
+        CreateMap<SysConfig, ConfigListResponse>()
+            .IncludeBase<AggregateBase, AggregatePagedResponse>();
 
-        // 请求 → 实体
-        CreateMap<ConfigCreateRequest, SysConfig>();
-        CreateMap<ConfigUpdateRequest, SysConfig>();
+        // 请求 → 实体（IncludeBase 挂接基类映射链）
+        CreateMap<ConfigCreateRequest, SysConfig>()
+            .IncludeBase<AggregateChangeRequest, AggregateBase>();
+        CreateMap<ConfigUpdateRequest, SysConfig>()
+            .IncludeBase<AggregateChangeRequest, AggregateBase>();
     }
 }

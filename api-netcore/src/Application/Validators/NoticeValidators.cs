@@ -1,21 +1,28 @@
 
 using Application.Contracts.Commands;
+using Application.Contracts.Notices;
+using Application.Validators.Common;
 using Domain.Shared.Enums;
 using Domain.Shared.Exceptions;
 using Domain.Shared.Results;
 using FluentValidation;
 
 namespace Application.Validators;
-/// <summary>通知公告命令验证器：标题（非空白且 ≤200）、类型（1 通知 / 2 公告）、状态（1 正常 / 0 关闭）、内容非空白。
-/// 错误码保持 NoticeRuleInvalid（401002）与原服务层文案一致；创建 / 更新共用同一校验方法消除重复。</summary>
-public static class NoticeValidation
+/// <summary>通知公告写入请求验证器：标题（非空白且 ≤200）、类型（1 通知 / 2 公告）、状态（1 正常 / 0 关闭）、内容非空白。
+/// 错误码保持 NoticeRuleInvalid（401002）与原服务层文案一致；创建 / 更新共用（消除重复定义）。</summary>
+public class NoticeRequestValidator<TRequest> : AbstractValidator<TRequest>
+    where TRequest : NoticeRequest
 {
-    /// <summary>公告字段校验（创建 / 更新共用）。</summary>
-    /// <param name="title">公告标题。</param>
-    /// <param name="noticeType">公告类型。</param>
-    /// <param name="status">公告状态。</param>
-    /// <param name="content">公告内容。</param>
-    public static void ValidateNoticeFields(string title, NoticeType noticeType, CommonStatus status, string content)
+    /// <summary>构造函数。</summary>
+    public NoticeRequestValidator()
+    {
+        RuleFor(request => request)
+            .Custom((request, context) => ValidateNoticeFields(
+                request.Title, request.NoticeType, request.Status, request.Content));
+    }
+
+    /// <summary>公告字段校验（错误码与文案逐字保持原服务层语义）。</summary>
+    private static void ValidateNoticeFields(string title, NoticeType noticeType, CommonStatus status, string content)
     {
         if (string.IsNullOrWhiteSpace(title) || title.Trim().Length > 200)
         {
@@ -39,26 +46,10 @@ public static class NoticeValidation
     }
 }
 
-/// <summary>创建通知公告命令验证器（Custom 规则抛模块错误码）。</summary>
-public sealed class CreateNoticeCommandValidator : AbstractValidator<CreateNoticeCommand>
-{
-    /// <summary>构造函数。</summary>
-    public CreateNoticeCommandValidator()
-    {
-        RuleFor(command => command.Request)
-            .Custom((request, context) => NoticeValidation.ValidateNoticeFields(
-                request.Title, request.NoticeType, request.Status, request.Content));
-    }
-}
+/// <summary>创建通知公告命令验证器（桥接请求验证器）。</summary>
+public sealed class NoticeCreateCommandValidator() :
+    WriteCommandValidator<NoticeCreateCommand, NoticeCreateRequest>(new NoticeRequestValidator<NoticeCreateRequest>());
 
-/// <summary>更新通知公告命令验证器（Custom 规则抛模块错误码）。</summary>
-public sealed class UpdateNoticeCommandValidator : AbstractValidator<UpdateNoticeCommand>
-{
-    /// <summary>构造函数。</summary>
-    public UpdateNoticeCommandValidator()
-    {
-        RuleFor(command => command.Request)
-            .Custom((request, context) => NoticeValidation.ValidateNoticeFields(
-                request.Title, request.NoticeType, request.Status, request.Content));
-    }
-}
+/// <summary>更新通知公告命令验证器（桥接请求验证器）。</summary>
+public sealed class NoticeUpdateCommandValidator() :
+    WriteCommandValidator<NoticeUpdateCommand, NoticeUpdateRequest>(new NoticeRequestValidator<NoticeUpdateRequest>());

@@ -1,4 +1,5 @@
 
+using System.Linq.Expressions;
 using Application.Abstractions;
 using Application.Contracts.Commands;
 using Application.Contracts.Dicts;
@@ -7,37 +8,15 @@ using Domain.Entities;
 using Domain.Events;
 using Domain.Repositories;
 using Domain.Services.Events;
-using Domain.Shared.Enums;
 using Domain.Shared.Exceptions;
 using Domain.Shared.Results;
 
 namespace Application.Commands;
-/// <summary>创建字典数据命令处理器。</summary>
-/// <remarks>构造函数。</remarks>
-public sealed class CreateDictDataCommandHandler(
-    IAggregateRepository<SysDictData> dictDataRepository,
-    IAggregateRepository<SysDictType> dictTypeRepository,
-    IDomainEventPublisher domainEventPublisher,
-    IMapper mapper) : CommandHandler<CreateDictDataCommand, Guid>
+/// <summary>字典数据命令的共享校验逻辑（字典类型存在性与同类型下标签 / 键值唯一性）。</summary>
+internal static class DictDataRules
 {
-    /// <inheritdoc />
-    protected override async Task<Guid> HandleAsync(CreateDictDataCommand command, CancellationToken cancellationToken)
-    {
-        var request = command.Request;
-        var dictType = request.DictType.Trim();
-        await EnsureTypeExistsAsync(dictType, cancellationToken);
-        await EnsureNotDuplicateAsync(dictType, request.DictLabel.Trim(), request.DictValue.Trim(), excludeId: null, cancellationToken);
-
-        var entity = mapper.Map<SysDictData>(request);
-        var inserted = await dictDataRepository.InsertAsync(entity, cancellationToken);
-
-        // 关键节点发布字典数据创建领域事件（缓存清理等响应动作由监听器处理）
-        await domainEventPublisher.PublishAsync(new DictDataCreatedEvent(inserted), cancellationToken);
-        return inserted.Id;
-    }
-
     /// <summary>校验所属字典类型存在。</summary>
-    private async Task EnsureTypeExistsAsync(string dictType, CancellationToken cancellationToken)
+    public static async Task EnsureTypeExistsAsync(IAggregateRepository<SysDictType> dictTypeRepository, string dictType, CancellationToken cancellationToken)
     {
         if (await dictTypeRepository.CountAsync([t => t.DictType == dictType], cancellationToken) == 0)
         {
@@ -45,187 +24,230 @@ public sealed class CreateDictDataCommandHandler(
         }
     }
 
-    /// <summary>校验同字典类型下标签 / 键值未被占用（更新时排除自身）。</summary>
-    private async Task EnsureNotDuplicateAsync(string dictType, string label, string value, Guid? excludeId, CancellationToken cancellationToken)
+    /// <summary>校验同字典类型下标签 / 键值未被占用（excludeId 非空时排除自身，用于更新场景）。</summary>
+    public static async Task EnsureNotDuplicateAsync(IAggregateRepository<SysDictData> dictDataRepository, string dictType, string label, string value, Guid? excludeId, CancellationToken cancellationToken)
     {
-        System.Linq.Expressions.Expression<Func<SysDictData, bool>> labelPredicate = excludeId is null
+        Expression<Func<SysDictData, bool>> labelPredicate = excludeId is null
             ? d => d.DictType == dictType && d.DictLabel == label
             : d => d.DictType == dictType && d.DictLabel == label && d.Id != excludeId.Value;
-        if (await dictDataRepository.CountAsync([labelPredicate], cancellationToken) > 0)
-        {
-            throw new BusinessException(ErrorCodes.DictDataDuplicate, $"字典类型「{dictType}」下标签「{label}」已存在");
-        }
+        await dictDataRepository.EnsureNotDuplicateAsync(
+            labelPredicate, ErrorCodes.DictDataDuplicate, $"字典类型「{dictType}」下标签「{label}」已存在", cancellationToken);
 
-        System.Linq.Expressions.Expression<Func<SysDictData, bool>> valuePredicate = excludeId is null
+        Expression<Func<SysDictData, bool>> valuePredicate = excludeId is null
             ? d => d.DictType == dictType && d.DictValue == value
             : d => d.DictType == dictType && d.DictValue == value && d.Id != excludeId.Value;
-        if (await dictDataRepository.CountAsync([valuePredicate], cancellationToken) > 0)
-        {
-            throw new BusinessException(ErrorCodes.DictDataDuplicate, $"字典类型「{dictType}」下键值「{value}」已存在");
-        }
+        await dictDataRepository.EnsureNotDuplicateAsync(
+            valuePredicate, ErrorCodes.DictDataDuplicate, $"字典类型「{dictType}」下键值「{value}」已存在", cancellationToken);
     }
 }
 
-/// <summary>创建字典类型命令处理器。</summary>
+/// <summary>创建字典数据命令处理器（校验类型存在与同类型下标签 / 键值唯一）。</summary>
 /// <remarks>构造函数。</remarks>
-public sealed class CreateDictTypeCommandHandler(
+public sealed class DictDataCreateCommandHandler(
+    IAggregateRepository<SysDictData> dictDataRepository,
     IAggregateRepository<SysDictType> dictTypeRepository,
     IDomainEventPublisher domainEventPublisher,
-    IMapper mapper) : CommandHandler<CreateDictTypeCommand, Guid>
+    IMapper mapper) : DomainCreateCommandHandler<DictDataCreateCommand, DictDataCreateRequest, SysDictData>(dictDataRepository, domainEventPublisher)
 {
+    /// <summary>字典类型仓储（类型存在性校验）。</summary>
+    private IAggregateRepository<SysDictType> DictTypeRepository { get; } = dictTypeRepository;
+
+    /// <summary>AutoMapper 映射器。</summary>
+    private IMapper Mapper { get; } = mapper;
+
     /// <inheritdoc />
-    protected override async Task<Guid> HandleAsync(CreateDictTypeCommand command, CancellationToken cancellationToken)
+    protected override async Task ValidateAsync(DictDataCreateRequest request, CancellationToken cancellationToken)
     {
-        var request = command.Request;
         var dictType = request.DictType.Trim();
-        if (await dictTypeRepository.CountAsync([t => t.DictType == dictType], cancellationToken) > 0)
-        {
-            throw new BusinessException(ErrorCodes.DictTypeDuplicate, $"字典类型「{dictType}」已存在");
-        }
+        await DictDataRules.EnsureTypeExistsAsync(DictTypeRepository, dictType, cancellationToken);
+        await DictDataRules.EnsureNotDuplicateAsync(
+            Repository, dictType, request.DictLabel.Trim(), request.DictValue.Trim(), excludeId: null, cancellationToken);
+    }
 
-        var entity = mapper.Map<SysDictType>(request);
-        var inserted = await dictTypeRepository.InsertAsync(entity, cancellationToken);
+    /// <inheritdoc />
+    protected override SysDictData MapToEntity(DictDataCreateRequest request)
+    {
+        return Mapper.Map<SysDictData>(request);
+    }
 
-        // 关键节点发布字典类型创建领域事件（清理等响应动作由监听器处理）
-        await domainEventPublisher.PublishAsync(new DictTypeCreatedEvent(inserted), cancellationToken);
-        return inserted.Id;
+    /// <inheritdoc />
+    protected override DomainEvent CreateEvent(SysDictData inserted)
+    {
+        return new DictDataCreatedEvent(inserted);
     }
 }
 
-/// <summary>删除字典数据命令处理器。</summary>
+/// <summary>创建字典类型命令处理器（校验 dictType 全局唯一）。</summary>
 /// <remarks>构造函数。</remarks>
-public sealed class DeleteDictDataCommandHandler(
+public sealed class DictTypeCreateCommandHandler(
+    IAggregateRepository<SysDictType> dictTypeRepository,
+    IDomainEventPublisher domainEventPublisher,
+    IMapper mapper) : DomainCreateCommandHandler<DictTypeCreateCommand, DictTypeCreateRequest, SysDictType>(dictTypeRepository, domainEventPublisher)
+{
+    /// <summary>AutoMapper 映射器。</summary>
+    private IMapper Mapper { get; } = mapper;
+
+    /// <inheritdoc />
+    protected override async Task ValidateAsync(DictTypeCreateRequest request, CancellationToken cancellationToken)
+    {
+        var dictType = request.DictType.Trim();
+        await Repository.EnsureNotDuplicateAsync(
+            t => t.DictType == dictType, ErrorCodes.DictTypeDuplicate,
+            $"字典类型「{dictType}」已存在", cancellationToken);
+    }
+
+    /// <inheritdoc />
+    protected override SysDictType MapToEntity(DictTypeCreateRequest request)
+    {
+        return Mapper.Map<SysDictType>(request);
+    }
+
+    /// <inheritdoc />
+    protected override DomainEvent CreateEvent(SysDictType inserted)
+    {
+        return new DictTypeCreatedEvent(inserted);
+    }
+}
+
+/// <summary>删除字典数据命令处理器（标准软删除流程，失效所属类型缓存由监听器处理）。</summary>
+/// <remarks>构造函数。</remarks>
+public sealed class DictDataDeleteCommandHandler(
     IAggregateRepository<SysDictData> dictDataRepository,
-    IDomainEventPublisher domainEventPublisher) : CommandHandler<DeleteDictDataCommand>
+    IDomainEventPublisher domainEventPublisher) : AggregateDeleteCommandHandler<DictDataDeleteCommand, SysDictData>(dictDataRepository, domainEventPublisher)
 {
     /// <inheritdoc />
-    protected override async Task HandleAsync(DeleteDictDataCommand command, CancellationToken cancellationToken)
+    protected override int NotFoundErrorCode => ErrorCodes.DictDataNotFound;
+
+    /// <inheritdoc />
+    protected override string EntityDisplayName => "字典数据";
+
+    /// <inheritdoc />
+    protected override DomainEvent CreateEvent(SysDictData deleted)
     {
-        var entity = await dictDataRepository.GetAsync([it => it.Id == command.Id], cancellationToken)
-            ?? throw new BusinessException(ErrorCodes.DictDataNotFound, $"字典数据 {command.Id} 不存在");
-
-        // 变更前捕获字典数据状态快照（软删除可能回填墓碑字段）
-        var snapshot = entity.Snapshot<SysDictData>();
-
-        await dictDataRepository.DeleteAsync(command.Id, cancellationToken);
-
-        // 关键节点发布字典数据删除领域事件（携带删除前的字典数据状态）
-        await domainEventPublisher.PublishAsync(new DictDataDeletedEvent(snapshot), cancellationToken);
+        return new DictDataDeletedEvent(deleted);
     }
 }
 
-/// <summary>删除字典类型命令处理器。</summary>
+/// <summary>删除字典类型命令处理器（存在字典数据时拒绝删除，保证不留孤儿数据）。</summary>
 /// <remarks>构造函数。</remarks>
-public sealed class DeleteDictTypeCommandHandler(
+public sealed class DictTypeDeleteCommandHandler(
     IAggregateRepository<SysDictType> dictTypeRepository,
     IAggregateRepository<SysDictData> dictDataRepository,
-    IDomainEventPublisher domainEventPublisher) : CommandHandler<DeleteDictTypeCommand>
+    IDomainEventPublisher domainEventPublisher) : AggregateDeleteCommandHandler<DictTypeDeleteCommand, SysDictType>(dictTypeRepository, domainEventPublisher)
 {
-    /// <inheritdoc />
-    protected override async Task HandleAsync(DeleteDictTypeCommand command, CancellationToken cancellationToken)
-    {
-        var entity = await dictTypeRepository.GetAsync([it => it.Id == command.Id], cancellationToken)
-            ?? throw new BusinessException(ErrorCodes.DictTypeNotFound, $"字典类型 {command.Id} 不存在");
+    /// <summary>字典数据仓储（子数据占用校验）。</summary>
+    private IAggregateRepository<SysDictData> DictDataRepository { get; } = dictDataRepository;
 
-        if (await dictDataRepository.CountAsync([d => d.DictType == entity.DictType], cancellationToken) > 0)
+    /// <inheritdoc />
+    protected override int NotFoundErrorCode => ErrorCodes.DictTypeNotFound;
+
+    /// <inheritdoc />
+    protected override string EntityDisplayName => "字典类型";
+
+    /// <inheritdoc />
+    protected override async Task ValidateBeforeDeleteAsync(SysDictType entity, CancellationToken cancellationToken)
+    {
+        if (await DictDataRepository.CountAsync([d => d.DictType == entity.DictType], cancellationToken) > 0)
         {
             throw new BusinessException(ErrorCodes.DictTypeHasData, "该字典类型下存在字典数据，不允许删除");
         }
+    }
 
-        // 变更前捕获字典类型状态快照（软删除可能回填墓碑字段）
-        var snapshot = entity.Snapshot<SysDictType>();
-
-        await dictTypeRepository.DeleteAsync(command.Id, cancellationToken);
-
-        // 关键节点发布字典类型删除领域事件（携带删除前的字典类型状态）
-        await domainEventPublisher.PublishAsync(new DictTypeDeletedEvent(snapshot), cancellationToken);
+    /// <inheritdoc />
+    protected override DomainEvent CreateEvent(SysDictType deleted)
+    {
+        return new DictTypeDeletedEvent(deleted);
     }
 }
 
-/// <summary>更新字典数据命令处理器。</summary>
+/// <summary>更新字典数据命令处理器（类型可迁移，迁移后新旧类型缓存均由监听器失效）。</summary>
 /// <remarks>构造函数。</remarks>
-public sealed class UpdateDictDataCommandHandler(
+public sealed class DictDataUpdateCommandHandler(
     IAggregateRepository<SysDictData> dictDataRepository,
     IAggregateRepository<SysDictType> dictTypeRepository,
     IDomainEventPublisher domainEventPublisher,
-    IMapper mapper) : CommandHandler<UpdateDictDataCommand>
+    IMapper mapper) : AggregateUpdateCommandHandler<DictDataUpdateCommand, DictDataUpdateRequest, SysDictData>(dictDataRepository, domainEventPublisher)
 {
-    /// <inheritdoc />
-    protected override async Task HandleAsync(UpdateDictDataCommand command, CancellationToken cancellationToken)
-    {
-        var request = command.Request;
-        var entity = await dictDataRepository.GetAsync([it => it.Id == command.Id], cancellationToken)
-            ?? throw new BusinessException(ErrorCodes.DictDataNotFound, $"字典数据 {command.Id} 不存在");
+    /// <summary>字典类型仓储（迁移目标类型存在性校验）。</summary>
+    private IAggregateRepository<SysDictType> DictTypeRepository { get; } = dictTypeRepository;
 
+    /// <summary>AutoMapper 映射器。</summary>
+    private IMapper Mapper { get; } = mapper;
+
+    /// <inheritdoc />
+    protected override int NotFoundErrorCode => ErrorCodes.DictDataNotFound;
+
+    /// <inheritdoc />
+    protected override string EntityDisplayName => "字典数据";
+
+    /// <inheritdoc />
+    protected override async Task ValidateAsync(DictDataUpdateRequest request, SysDictData entity, CancellationToken cancellationToken)
+    {
         var dictType = request.DictType.Trim();
         if (!string.Equals(dictType, entity.DictType, StringComparison.Ordinal))
         {
-            if (await dictTypeRepository.CountAsync([t => t.DictType == dictType], cancellationToken) == 0)
-            {
-                throw new BusinessException(ErrorCodes.DictTypeNotFound, $"字典类型「{dictType}」不存在");
-            }
+            await DictDataRules.EnsureTypeExistsAsync(DictTypeRepository, dictType, cancellationToken);
         }
 
-        await EnsureNotDuplicateAsync(dictType, request.DictLabel.Trim(), request.DictValue.Trim(), excludeId: command.Id, cancellationToken);
+        await DictDataRules.EnsureNotDuplicateAsync(
+            Repository, dictType, request.DictLabel.Trim(), request.DictValue.Trim(), excludeId: entity.Id, cancellationToken);
 
-        // 变更前捕获字典数据状态快照（类型迁移时旧类型由 OldEntity.DictType 表达）
-        var before = entity.Snapshot<SysDictData>();
-
-        mapper.Map(request, entity);
-        await dictDataRepository.UpdateAsync(entity, cancellationToken);
-
-        // 关键节点发布字典数据修改领域事件（携带变更前后状态，新旧类型缓存均由监听器失效）
-        await domainEventPublisher.PublishAsync(new DictDataUpdatedEvent(before, entity), cancellationToken);
+        // 乐观锁校验：业务守卫通过后比对客户端回传版本
+        EnsureVersionMatches(entity, request.Version);
     }
 
-    /// <summary>校验同字典类型下标签 / 键值未被占用（更新时排除自身）。</summary>
-    private async Task EnsureNotDuplicateAsync(string dictType, string label, string value, Guid? excludeId, CancellationToken cancellationToken)
+    /// <inheritdoc />
+    protected override void MapToEntity(DictDataUpdateRequest request, SysDictData entity)
     {
-        System.Linq.Expressions.Expression<Func<SysDictData, bool>> labelPredicate = excludeId is null
-            ? d => d.DictType == dictType && d.DictLabel == label
-            : d => d.DictType == dictType && d.DictLabel == label && d.Id != excludeId.Value;
-        if (await dictDataRepository.CountAsync([labelPredicate], cancellationToken) > 0)
-        {
-            throw new BusinessException(ErrorCodes.DictDataDuplicate, $"字典类型「{dictType}」下标签「{label}」已存在");
-        }
+        Mapper.Map(request, entity);
+    }
 
-        System.Linq.Expressions.Expression<Func<SysDictData, bool>> valuePredicate = excludeId is null
-            ? d => d.DictType == dictType && d.DictValue == value
-            : d => d.DictType == dictType && d.DictValue == value && d.Id != excludeId.Value;
-        if (await dictDataRepository.CountAsync([valuePredicate], cancellationToken) > 0)
-        {
-            throw new BusinessException(ErrorCodes.DictDataDuplicate, $"字典类型「{dictType}」下键值「{value}」已存在");
-        }
+    /// <inheritdoc />
+    protected override DomainEvent CreateEvent(SysDictData before, SysDictData after)
+    {
+        return new DictDataUpdatedEvent(before, after);
     }
 }
 
-/// <summary>更新字典类型命令处理器。</summary>
+/// <summary>更新字典类型命令处理器（dictType 不可变更）。</summary>
 /// <remarks>构造函数。</remarks>
-public sealed class UpdateDictTypeCommandHandler(
+public sealed class DictTypeUpdateCommandHandler(
     IAggregateRepository<SysDictType> dictTypeRepository,
     IDomainEventPublisher domainEventPublisher,
-    IMapper mapper) : CommandHandler<UpdateDictTypeCommand>
+    IMapper mapper) : AggregateUpdateCommandHandler<DictTypeUpdateCommand, DictTypeUpdateRequest, SysDictType>(dictTypeRepository, domainEventPublisher)
 {
-    /// <inheritdoc />
-    protected override async Task HandleAsync(UpdateDictTypeCommand command, CancellationToken cancellationToken)
-    {
-        var request = command.Request;
-        var entity = await dictTypeRepository.GetAsync([it => it.Id == command.Id], cancellationToken)
-            ?? throw new BusinessException(ErrorCodes.DictTypeNotFound, $"字典类型 {command.Id} 不存在");
+    /// <summary>AutoMapper 映射器。</summary>
+    private IMapper Mapper { get; } = mapper;
 
+    /// <inheritdoc />
+    protected override int NotFoundErrorCode => ErrorCodes.DictTypeNotFound;
+
+    /// <inheritdoc />
+    protected override string EntityDisplayName => "字典类型";
+
+    /// <inheritdoc />
+    protected override Task ValidateAsync(DictTypeUpdateRequest request, SysDictType entity, CancellationToken cancellationToken)
+    {
         var dictType = request.DictType.Trim();
         if (!string.Equals(dictType, entity.DictType, StringComparison.Ordinal))
         {
             throw new BusinessException(ErrorCodes.DictTypeImmutable, "字典类型（dictType）不可变更");
         }
 
-        // 变更前捕获字典类型状态快照（实体即将被原位修改）
-        var before = entity.Snapshot<SysDictType>();
+        // 乐观锁校验：业务守卫通过后比对客户端回传版本
+        EnsureVersionMatches(entity, request.Version);
+        return Task.CompletedTask;
+    }
 
-        mapper.Map(request, entity);
-        await dictTypeRepository.UpdateAsync(entity, cancellationToken);
+    /// <inheritdoc />
+    protected override void MapToEntity(DictTypeUpdateRequest request, SysDictType entity)
+    {
+        Mapper.Map(request, entity);
+    }
 
-        // 关键节点发布字典类型修改领域事件（携带变更前后状态）
-        await domainEventPublisher.PublishAsync(new DictTypeUpdatedEvent(before, entity), cancellationToken);
+    /// <inheritdoc />
+    protected override DomainEvent CreateEvent(SysDictType before, SysDictType after)
+    {
+        return new DictTypeUpdatedEvent(before, after);
     }
 }

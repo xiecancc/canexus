@@ -17,10 +17,10 @@ namespace Application.Queries;
 /// <summary>获取图形验证码查询处理器。</summary>
 /// <remarks>构造函数。</remarks>
 /// <param name="captchaService">图形验证码服务。</param>
-public sealed class GetCaptchaQueryHandler(ICaptchaService captchaService) : QueryHandler<GetCaptchaQuery, CaptchaResult>
+public sealed class AuthQueryCaptchaHandler(ICaptchaService captchaService) : QueryHandler<AuthQueryCaptcha, CaptchaResult>
 {
     /// <inheritdoc />
-    protected override async Task<CaptchaResult> HandleAsync(GetCaptchaQuery query, CancellationToken cancellationToken)
+    protected override async Task<CaptchaResult> HandleAsync(AuthQueryCaptcha query, CancellationToken cancellationToken)
     {
         var image = await captchaService.GenerateAsync(cancellationToken);
         return new CaptchaResult { CaptchaId = image.CaptchaId, ImageBase64 = image.ImageBase64 };
@@ -36,17 +36,17 @@ public sealed class GetCaptchaQueryHandler(ICaptchaService captchaService) : Que
 /// </list>
 /// </summary>
 /// <remarks>构造函数。</remarks>
-public sealed class GetRoutesQueryHandler(
+public sealed class UserQueryRoutesHandler(
     IAggregateTreeRepository<SysMenu> menuRepository,
     IDomainRepository<SysUserRole> userRoleRepository,
     IDomainRepository<SysRoleMenu> roleMenuRepository,
-    IUserContext currentUser) : QueryHandler<GetRoutesQuery, List<RouteVO>>
+    IUserContext currentUser) : QueryHandler<UserQueryRoutes, List<RouteResponse>>
 {
     /// <summary>根节点父 Id（Guid.Empty 表示无父级）。</summary>
     private static readonly Guid RootParentId = Guid.Empty;
 
     /// <inheritdoc />
-    protected override async Task<List<RouteVO>> HandleAsync(GetRoutesQuery query, CancellationToken cancellationToken)
+    protected override async Task<List<RouteResponse>> HandleAsync(UserQueryRoutes query, CancellationToken cancellationToken)
     {
         var userId = currentUser.UserId
             ?? throw new BusinessException(ErrorCodes.AuthUnauthorized, "未登录或令牌无效");
@@ -94,10 +94,10 @@ public sealed class GetRoutesQueryHandler(
     /// <param name="menus">参与构建的菜单集合。</param>
     /// <param name="parentId">当前父菜单 Id。</param>
     /// <param name="parentPath">父级完整路径（顶层为 null）。</param>
-    private List<RouteVO> BuildTree(List<SysMenu> menus, Guid parentId, string? parentPath = null)
+    private List<RouteResponse> BuildTree(List<SysMenu> menus, Guid parentId, string? parentPath = null)
     {
         var children = menus.Where(m => m.ParentId == parentId).ToList();
-        var result = new List<RouteVO>(children.Count);
+        var result = new List<RouteResponse>(children.Count);
 
         foreach (var menu in children)
         {
@@ -106,7 +106,7 @@ public sealed class GetRoutesQueryHandler(
                 ? (menu.Path.StartsWith('/') ? menu.Path : $"/{menu.Path}")
                 : $"{parentPath}/{menu.Path}";
             var subTree = BuildTree(menus, menu.Id, fullPath);
-            var route = ToRouteVO(menu, subTree, fullPath, parentPath is null);
+            var route = ToRouteResponse(menu, subTree, fullPath, parentPath is null);
             result.Add(route);
         }
 
@@ -118,9 +118,9 @@ public sealed class GetRoutesQueryHandler(
     /// <param name="children">已构建的子路由。</param>
     /// <param name="fullPath">完整路径（用于生成路由 name）。</param>
     /// <param name="isTopLevel">是否顶层节点（path 补 / 前缀）。</param>
-    private static RouteVO ToRouteVO(SysMenu menu, List<RouteVO> children, string fullPath, bool isTopLevel)
+    private static RouteResponse ToRouteResponse(SysMenu menu, List<RouteResponse> children, string fullPath, bool isTopLevel)
     {
-        return new RouteVO
+        return new RouteResponse
         {
             Name = BuildRouteName(fullPath),
             Path = isTopLevel ? fullPath : menu.Path,
@@ -149,15 +149,15 @@ public sealed class GetRoutesQueryHandler(
 
 /// <summary>获取当前登录用户信息查询处理器。</summary>
 /// <remarks>构造函数。</remarks>
-public sealed class GetUserInfoQueryHandler(
+public sealed class UserQueryInfoHandler(
     IAggregateRepository<SysUser> userRepository,
     IAggregateRepository<SysRole> roleRepository,
     IDomainRepository<SysUserRole> userRoleRepository,
     IPermissionChecker permissionChecker,
-    IUserContext currentUser) : QueryHandler<GetUserInfoQuery, UserInfoResult>
+    IUserContext currentUser) : QueryHandler<UserQueryInfo, UserInfoResult>
 {
     /// <inheritdoc />
-    protected override async Task<UserInfoResult> HandleAsync(GetUserInfoQuery query, CancellationToken cancellationToken)
+    protected override async Task<UserInfoResult> HandleAsync(UserQueryInfo query, CancellationToken cancellationToken)
     {
         var userId = currentUser.UserId
             ?? throw new BusinessException(ErrorCodes.AuthUnauthorized, "未登录或令牌无效");

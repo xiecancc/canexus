@@ -65,7 +65,7 @@ public interface IDomainRepository<TEntity>
     /// key 为排序字段表达式，value 为 true 升序、false 或 null 降序；null 或空集合时默认按创建时间倒序，主键升序作平局裁决保证分页稳定。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>分页结果。</returns>
-    public Task<PagedResult<TEntity>> GetPagedAsync(
+    public Task<PagedResponse<TEntity>> GetPagedAsync(
         PagedRequest request,
         IEnumerable<Expression<Func<TEntity, bool>>>? predicates = null,
         IDictionary<Expression<Func<TEntity, object>>, bool?>? orders = null,
@@ -80,7 +80,7 @@ public interface IDomainRepository<TEntity>
     /// key 为排序字段表达式，value 为 true 升序、false 或 null 降序；null 或空集合时默认按创建时间倒序，主键升序作平局裁决保证分页稳定。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>分页结果（元素为投影类型）。</returns>
-    public Task<PagedResult<TDto>> GetPagedAsync<TDto>(
+    public Task<PagedResponse<TDto>> GetPagedAsync<TDto>(
         PagedRequest request,
         IEnumerable<Expression<Func<TEntity, bool>>>? predicates = null,
         IDictionary<Expression<Func<TEntity, object>>, bool?>? orders = null,
@@ -104,24 +104,25 @@ public interface IDomainRepository<TEntity>
         CancellationToken cancellationToken = default);
 
     /// <summary>插入实体；创建审计（创建时间 / 创建人）与租户归属由数据访问层自动填充，
-    /// 聚合根的空主键与软删除标记亦由数据访问层自动初始化。</summary>
+    /// 聚合根的空主键与软删除标记亦由数据访问层自动初始化。
+    /// 主键与审计字段就地填充到传入实体（返回 bool，调用方继续持有原实体引用即可获得插入后状态）。</summary>
     /// <param name="entity">实体。</param>
     /// <param name="cancellationToken">取消令牌。</param>
-    /// <returns>插入后的实体。</returns>
-    public Task<TEntity> InsertAsync(TEntity entity, CancellationToken cancellationToken = default);
+    /// <returns>插入成功返回 true。</returns>
+    public Task<bool> InsertAsync(TEntity entity, CancellationToken cancellationToken = default);
 
     /// <summary>批量插入（单条 SQL 多值插入，避免循环逐条插入的 N+1 往返）。
     /// 审计填充等 Aop.DataExecuting 行为对每个实体同样生效。</summary>
     /// <param name="entities">实体集合。</param>
     /// <param name="cancellationToken">取消令牌。</param>
-    /// <returns>表示异步操作的任务。</returns>
-    public Task InsertAsync(IEnumerable<TEntity> entities, CancellationToken cancellationToken = default);
+    /// <returns>插入成功（受影响行数 &gt; 0）返回 true。</returns>
+    public Task<bool> InsertAsync(IEnumerable<TEntity> entities, CancellationToken cancellationToken = default);
 
     /// <summary>按条件删除（单条 SQL）。
     /// 语义说明：本方法对关联表等普通实体为物理删除；聚合根仓储（<see cref="IAggregateRepository{TEntity}"/>）
     /// 的实现类在类层面将其重写为软删除（虚分派对两种引用类型一致生效；聚合侧为按列更新，不填更新审计、不轮换版本令牌）。</summary>
     /// <param name="predicate">删除条件。</param>
     /// <param name="cancellationToken">取消令牌。</param>
-    /// <returns>受影响的行数。</returns>
-    public Task<int> DeleteAsync(Expression<Func<TEntity, bool>> predicate, CancellationToken cancellationToken = default);
+    /// <returns>受影响行数 &gt; 0 返回 true。</returns>
+    public Task<bool> DeleteAsync(Expression<Func<TEntity, bool>> predicate, CancellationToken cancellationToken = default);
 }

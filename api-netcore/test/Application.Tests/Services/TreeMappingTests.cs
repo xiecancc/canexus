@@ -10,14 +10,14 @@ using Microsoft.Extensions.Logging;
 using NUnit.Framework;
 
 namespace Application.Tests.Services;
-/// <summary>实体树（BuildTree 装配）→ 契约 VO 的递归映射单元测试（端到端覆盖查询处理器的建树管线）。</summary>
+/// <summary>实体树（BuildTree 装配）→ 契约 Response 的递归映射单元测试（端到端覆盖查询处理器的建树管线）。</summary>
 [TestFixture]
 public class TreeMappingTests
 {
     /// <summary>由序号生成测试用确定性 Guid。</summary>
     private static Guid Id(long n) => Guid.Parse($"00000000-0000-0000-0000-{n:D12}");
 
-    /// <summary>实体 → 视图对象映射器（SysMenuProfile / SysDeptProfile，与应用同一 AddAutoMapper 构建方式）。</summary>
+    /// <summary>实体 → 响应模型映射器（CommonProfile 基类链 + SysMenuProfile / SysDeptProfile，与应用同一 AddAutoMapper 构建方式）。</summary>
     private readonly IMapper _mapper = CreateMapper();
 
     /// <summary>构建 AutoMapper 映射器。</summary>
@@ -27,6 +27,7 @@ public class TreeMappingTests
         services.AddLogging();
         services.AddAutoMapper(expression =>
         {
+            expression.AddProfile<CommonProfile>();
             expression.AddProfile<SysMenuProfile>();
             expression.AddProfile<SysDeptProfile>();
         });
@@ -43,7 +44,7 @@ public class TreeMappingTests
             new() { Id = Id(1001), ParentId = Id(101), MenuType = MenuType.Button, MenuName = "用户查询", Path = "#", Perms = "system:user:query", OrderNum = 1 }
         ];
 
-        var tree = _mapper.Map<List<MenuTreeVO>>(SysMenu.BuildTree(menus));
+        var tree = _mapper.Map<List<MenuTreeResponse>>(SysMenu.BuildTree(menus));
 
         Assert.Multiple(() =>
         {
@@ -71,7 +72,7 @@ public class TreeMappingTests
             new() { Id = Id(100), ParentId = Guid.Empty, DeptName = "总公司", OrderNum = 1 }
         ];
 
-        var tree = _mapper.Map<List<DeptTreeVO>>(SysDept.BuildTree(depts));
+        var tree = _mapper.Map<List<DeptTreeResponse>>(SysDept.BuildTree(depts));
 
         var node = tree.Single(n => n.DeptName == "总公司");
         var child = node.Children.Single();

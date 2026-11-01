@@ -138,8 +138,7 @@ public class SystemManagementApiTests
             description = "B5 流程测试",
             roleIds = new Guid[] { roleId }
         }, _adminToken);
-        var userId = createBody.RootElement.GetProperty("data").GetGuid();
-        Assert.That(userId, Is.Not.EqualTo(Guid.Empty), "创建应返回用户 Id");
+        var userId = await ApiTestSupport.GetEntityIdAsync<SysUser>(_db, it => it.UserName == userName);
 
         // 详情：字段与角色回显
         var detail = await GetJsonAsync($"/api/system/user/{userId}");
@@ -152,9 +151,11 @@ public class SystemManagementApiTests
                 Is.True, "详情应回显角色 Id");
         });
 
-        // 更新（角色清空、昵称变更）
+        // 更新（角色清空、昵称变更；乐观锁：先回读版本号）
+        var userVersion = await ApiTestSupport.GetVersionAsync<SysUser>(_db, userId);
         await SendForJsonAsync(HttpMethod.Put, $"/api/system/user/{userId}", new
         {
+            version = userVersion,
             nickName = "流程测试用户V2",
             deptId = SeedId(102),
             email = "flow2@example.com",
@@ -173,7 +174,7 @@ public class SystemManagementApiTests
         });
 
         // 删除后再查：用户不存在
-        var deleteResponse = await SendAsync(HttpMethod.Delete, $"/api/system/user/{userId}", null, _adminToken);
+        var deleteResponse = await SendAsync(HttpMethod.Delete, $"/api/system/user/{userId}", new { version = await ApiTestSupport.GetVersionAsync<SysUser>(_db, userId) }, _adminToken);
         Assert.That(deleteResponse.StatusCode, Is.EqualTo(HttpStatusCode.OK));
 
         var missing = await SendAsync(HttpMethod.Get, $"/api/system/user/{userId}", null, _adminToken);
@@ -185,7 +186,7 @@ public class SystemManagementApiTests
         });
 
         // 清理角色
-        await SendAsync(HttpMethod.Delete, $"/api/system/role/{roleId}", null, _adminToken);
+        await SendAsync(HttpMethod.Delete, $"/api/system/role/{roleId}", new { version = await ApiTestSupport.GetVersionAsync<SysRole>(_db, roleId) }, _adminToken);
     }
 
     [Test]
@@ -218,6 +219,7 @@ public class SystemManagementApiTests
         var user = (await _db.Queryable<SysUser>().Where(u => u.UserName == userName).ToListAsync()).Single();
         var resetResponse = await SendAsync(HttpMethod.Put, $"/api/system/user/{user.Id}/password", new
         {
+            version = await ApiTestSupport.GetVersionAsync<SysUser>(_db, user.Id),
             password = "newPwd@456"
         }, _adminToken);
         Assert.That(resetResponse.StatusCode, Is.EqualTo(HttpStatusCode.OK));
@@ -261,7 +263,7 @@ public class SystemManagementApiTests
         var status = await SendAsync(HttpMethod.Put, $"/api/system/user/{SeedId(1)}/status", new { status = 0 }, _adminToken);
         var statusBody = await ReadBodyAsync(status);
 
-        var delete = await SendAsync(HttpMethod.Delete, $"/api/system/user/{SeedId(1)}", null, _adminToken);
+        var delete = await SendAsync(HttpMethod.Delete, $"/api/system/user/{SeedId(1)}", new { version = Guid.Empty }, _adminToken);
         var deleteBody = await ReadBodyAsync(delete);
 
         Assert.Multiple(() =>
@@ -326,15 +328,16 @@ public class SystemManagementApiTests
     [Test]
     public async Task Dept_CreateTreeDetail()
     {
-        var createBody = await SendForJsonAsync(HttpMethod.Post, "/api/system/dept", new
+        var deptName = "研发一组" + Guid.NewGuid().ToString("N")[..4];
+        await SendForJsonAsync(HttpMethod.Post, "/api/system/dept", new
         {
             parentId = SeedId(101),
-            deptName = "研发一组" + Guid.NewGuid().ToString("N")[..4],
+            deptName,
             orderNum = 1,
             leader = "组长",
             status = 1
         }, _adminToken);
-        var deptId = createBody.RootElement.GetProperty("data").GetGuid();
+        var deptId = await ApiTestSupport.GetEntityIdAsync<SysDept>(_db, it => it.DeptName == deptName);
 
         var detail = (await GetJsonAsync($"/api/system/dept/{deptId}")).RootElement.GetProperty("data");
         Assert.Multiple(() =>
@@ -352,30 +355,36 @@ public class SystemManagementApiTests
             .Any(c => c.GetProperty("id").GetGuid() == deptId), Is.True, "部门树应包含新建子部门");
 
         // 清理（无子级无用户，可直接删除）
-        await SendAsync(HttpMethod.Delete, $"/api/system/dept/{deptId}", null, _adminToken);
+        await SendAsync(HttpMethod.Delete, $"/api/system/dept/{deptId}", new { version = await ApiTestSupport.GetVersionAsync<SysDept>(_db, deptId) }, _adminToken);
     }
 
     [Test]
     public async Task Dept_Update_ParentAsOwnDescendant_Returns400504()
     {
         // 构造 D1（研发部下）与 D2（D1 下），尝试把 D1 的父级设为 D2
-        var d1 = (await SendForJsonAsync(HttpMethod.Post, "/api/system/dept", new
+        var d1Name = "层级校验A" + Guid.NewGuid().ToString("N")[..4];
+        var d2Name = "层级校验B" + Guid.NewGuid().ToString("N")[..4];
+        await SendForJsonAsync(HttpMethod.Post, "/api/system/dept", new
         {
             parentId = SeedId(101),
-            deptName = "层级校验A" + Guid.NewGuid().ToString("N")[..4],
+            deptName = d1Name,
             orderNum = 9,
             status = 1
-        }, _adminToken)).RootElement.GetProperty("data").GetGuid();
-        var d2 = (await SendForJsonAsync(HttpMethod.Post, "/api/system/dept", new
+        }, _adminToken);
+        var d1 = await ApiTestSupport.GetEntityIdAsync<SysDept>(_db, it => it.DeptName == d1Name);
+        await SendForJsonAsync(HttpMethod.Post, "/api/system/dept", new
         {
             parentId = d1,
-            deptName = "层级校验B" + Guid.NewGuid().ToString("N")[..4],
+            deptName = d2Name,
             orderNum = 9,
             status = 1
-        }, _adminToken)).RootElement.GetProperty("data").GetGuid();
+        }, _adminToken);
+        var d2 = await ApiTestSupport.GetEntityIdAsync<SysDept>(_db, it => it.DeptName == d2Name);
 
+        var d1Version = await ApiTestSupport.GetVersionAsync<SysDept>(_db, d1);
         var response = await SendAsync(HttpMethod.Put, $"/api/system/dept/{d1}", new
         {
+            version = d1Version,
             parentId = d2,
             deptName = "层级校验A",
             orderNum = 9,
@@ -390,15 +399,15 @@ public class SystemManagementApiTests
         });
 
         // 清理
-        await SendAsync(HttpMethod.Delete, $"/api/system/dept/{d2}", null, _adminToken);
-        await SendAsync(HttpMethod.Delete, $"/api/system/dept/{d1}", null, _adminToken);
+        await SendAsync(HttpMethod.Delete, $"/api/system/dept/{d2}", new { version = await ApiTestSupport.GetVersionAsync<SysDept>(_db, d2) }, _adminToken);
+        await SendAsync(HttpMethod.Delete, $"/api/system/dept/{d1}", new { version = await ApiTestSupport.GetVersionAsync<SysDept>(_db, d1) }, _adminToken);
     }
 
     [Test]
     public async Task Dept_Delete_WithChildrenOrUsers_Rejected()
     {
         // 有子部门：总公司（100）下存在研发部 / 市场部
-        var withChildren = await SendAsync(HttpMethod.Delete, $"/api/system/dept/{SeedId(100)}", null, _adminToken);
+        var withChildren = await SendAsync(HttpMethod.Delete, $"/api/system/dept/{SeedId(100)}", new { version = Guid.Empty }, _adminToken);
         var withChildrenBody = await ReadBodyAsync(withChildren);
         Assert.Multiple(() =>
         {
@@ -408,16 +417,17 @@ public class SystemManagementApiTests
 
         // 有用户：研发部（101）下创建一个用户后删除部门被拒；删除用户后可正常删除
         var deptName = "待删部门" + Guid.NewGuid().ToString("N")[..4];
-        var deptId = (await SendForJsonAsync(HttpMethod.Post, "/api/system/dept", new
+        await SendForJsonAsync(HttpMethod.Post, "/api/system/dept", new
         {
             parentId = SeedId(101),
             deptName,
             orderNum = 8,
             status = 1
-        }, _adminToken)).RootElement.GetProperty("data").GetGuid();
+        }, _adminToken);
+        var deptId = await ApiTestSupport.GetEntityIdAsync<SysDept>(_db, it => it.DeptName == deptName);
         var userId = await CreateUserAsync(nickName: "部门占用用户", deptId: deptId);
 
-        var withUser = await SendAsync(HttpMethod.Delete, $"/api/system/dept/{deptId}", null, _adminToken);
+        var withUser = await SendAsync(HttpMethod.Delete, $"/api/system/dept/{deptId}", new { version = Guid.Empty }, _adminToken);
         var withUserBody = await ReadBodyAsync(withUser);
         Assert.Multiple(() =>
         {
@@ -426,8 +436,8 @@ public class SystemManagementApiTests
         });
 
         // 移除占用用户（软删除）后部门可删除
-        await SendAsync(HttpMethod.Delete, $"/api/system/user/{userId}", null, _adminToken);
-        var after = await SendAsync(HttpMethod.Delete, $"/api/system/dept/{deptId}", null, _adminToken);
+        await SendAsync(HttpMethod.Delete, $"/api/system/user/{userId}", new { version = await ApiTestSupport.GetVersionAsync<SysUser>(_db, userId) }, _adminToken);
+        var after = await SendAsync(HttpMethod.Delete, $"/api/system/dept/{deptId}", new { version = await ApiTestSupport.GetVersionAsync<SysDept>(_db, deptId) }, _adminToken);
         Assert.That(after.StatusCode, Is.EqualTo(HttpStatusCode.OK), "占用解除后应可删除部门");
     }
 
@@ -448,8 +458,10 @@ public class SystemManagementApiTests
             Is.EqualTo(0), "无菜单角色用户权限应为空");
 
         // 授权菜单（目录 100 + 菜单 101 + 查询按钮 1001）→ user-info permissions 立即变化
+        var grantVersion = await ApiTestSupport.GetVersionAsync<SysRole>(_db, roleId);
         await SendForJsonAsync(HttpMethod.Put, $"/api/system/role/{roleId}", new
         {
+            version = grantVersion,
             roleName = "权限联动角色",
             roleKey,
             dataScope = 1,
@@ -478,7 +490,7 @@ public class SystemManagementApiTests
         });
 
         // 角色已被用户引用：删除被拒（400305）
-        var deleteInUse = await SendAsync(HttpMethod.Delete, $"/api/system/role/{roleId}", null, _adminToken);
+        var deleteInUse = await SendAsync(HttpMethod.Delete, $"/api/system/role/{roleId}", new { version = Guid.Empty }, _adminToken);
         var deleteInUseBody = await ReadBodyAsync(deleteInUse);
         Assert.Multiple(() =>
         {
@@ -487,8 +499,10 @@ public class SystemManagementApiTests
         });
 
         // 清空菜单 → 权限再次变化为空
+        var clearVersion = await ApiTestSupport.GetVersionAsync<SysRole>(_db, roleId);
         await SendForJsonAsync(HttpMethod.Put, $"/api/system/role/{roleId}", new
         {
+            version = clearVersion,
             roleName = "权限联动角色",
             roleKey,
             dataScope = 1,
@@ -500,8 +514,8 @@ public class SystemManagementApiTests
             Is.EqualTo(0), "清空角色菜单后权限应立即失效");
 
         // 清理：删除用户后角色可删除
-        await SendAsync(HttpMethod.Delete, $"/api/system/user/{userId}", null, _adminToken);
-        var deleteRole = await SendAsync(HttpMethod.Delete, $"/api/system/role/{roleId}", null, _adminToken);
+        await SendAsync(HttpMethod.Delete, $"/api/system/user/{userId}", new { version = await ApiTestSupport.GetVersionAsync<SysUser>(_db, userId) }, _adminToken);
+        var deleteRole = await SendAsync(HttpMethod.Delete, $"/api/system/role/{roleId}", new { version = await ApiTestSupport.GetVersionAsync<SysRole>(_db, roleId) }, _adminToken);
         Assert.That(deleteRole.StatusCode, Is.EqualTo(HttpStatusCode.OK));
     }
 
@@ -539,7 +553,7 @@ public class SystemManagementApiTests
             Assert.That(duplicateBody.RootElement.GetProperty("code").GetInt32(), Is.EqualTo(400302));
         });
 
-        await SendAsync(HttpMethod.Delete, $"/api/system/role/{roleId}", null, _adminToken);
+        await SendAsync(HttpMethod.Delete, $"/api/system/role/{roleId}", new { version = await ApiTestSupport.GetVersionAsync<SysRole>(_db, roleId) }, _adminToken);
     }
 
     [Test]
@@ -555,7 +569,7 @@ public class SystemManagementApiTests
         }, _adminToken);
         var updateBody = await ReadBodyAsync(update);
 
-        var delete = await SendAsync(HttpMethod.Delete, $"/api/system/role/{SeedId(1)}", null, _adminToken);
+        var delete = await SendAsync(HttpMethod.Delete, $"/api/system/role/{SeedId(1)}", new { version = Guid.Empty }, _adminToken);
         var deleteBody = await ReadBodyAsync(delete);
 
         Assert.Multiple(() =>
@@ -628,7 +642,7 @@ public class SystemManagementApiTests
             visible = 1,
             status = 1
         }, _adminToken);
-        var menuId = createBody.RootElement.GetProperty("data").GetGuid();
+        var menuId = await ApiTestSupport.GetEntityIdAsync<SysMenu>(_db, it => it.Perms == perms);
 
         var detail = (await GetJsonAsync($"/api/system/menu/{menuId}", _adminToken)).RootElement.GetProperty("data");
         Assert.Multiple(() =>
@@ -638,8 +652,10 @@ public class SystemManagementApiTests
         });
 
         // 父级设为自身 → 400405
+        var menuVersion = await ApiTestSupport.GetVersionAsync<SysMenu>(_db, menuId);
         var parentSelf = await SendAsync(HttpMethod.Put, $"/api/system/menu/{menuId}", new
         {
+            version = menuVersion,
             parentId = menuId,
             menuType = 3,
             menuName = "用户导出测试",
@@ -653,8 +669,10 @@ public class SystemManagementApiTests
         Assert.That(parentSelfBody.RootElement.GetProperty("code").GetInt32(), Is.EqualTo(400405));
 
         // 父级设为自己的后代（101 的子级 1001）→ 400405
+        var menu101Version = await ApiTestSupport.GetVersionAsync<SysMenu>(_db, SeedId(101));
         var parentDescendant = await SendAsync(HttpMethod.Put, $"/api/system/menu/{SeedId(101)}", new
         {
+            version = menu101Version,
             parentId = SeedId(1001),
             menuType = 2,
             menuName = "用户管理",
@@ -670,7 +688,7 @@ public class SystemManagementApiTests
         Assert.That(parentDescendantBody.RootElement.GetProperty("code").GetInt32(), Is.EqualTo(400405));
 
         // 删除有子菜单的节点 → 400402
-        var withChildren = await SendAsync(HttpMethod.Delete, $"/api/system/menu/{SeedId(100)}", null, _adminToken);
+        var withChildren = await SendAsync(HttpMethod.Delete, $"/api/system/menu/{SeedId(100)}", new { version = Guid.Empty }, _adminToken);
         var withChildrenBody = await ReadBodyAsync(withChildren);
         Assert.Multiple(() =>
         {
@@ -680,7 +698,7 @@ public class SystemManagementApiTests
 
         // 已被角色引用的菜单删除 → 400403
         var roleId = await CreateRoleAsync(menuIds: [menuId]);
-        var inUse = await SendAsync(HttpMethod.Delete, $"/api/system/menu/{menuId}", null, _adminToken);
+        var inUse = await SendAsync(HttpMethod.Delete, $"/api/system/menu/{menuId}", new { version = Guid.Empty }, _adminToken);
         var inUseBody = await ReadBodyAsync(inUse);
         Assert.Multiple(() =>
         {
@@ -689,8 +707,8 @@ public class SystemManagementApiTests
         });
 
         // 清理：删除角色后再删菜单
-        await SendAsync(HttpMethod.Delete, $"/api/system/role/{roleId}", null, _adminToken);
-        var deleted = await SendAsync(HttpMethod.Delete, $"/api/system/menu/{menuId}", null, _adminToken);
+        await SendAsync(HttpMethod.Delete, $"/api/system/role/{roleId}", new { version = await ApiTestSupport.GetVersionAsync<SysRole>(_db, roleId) }, _adminToken);
+        var deleted = await SendAsync(HttpMethod.Delete, $"/api/system/menu/{menuId}", new { version = await ApiTestSupport.GetVersionAsync<SysMenu>(_db, menuId) }, _adminToken);
         Assert.That(deleted.StatusCode, Is.EqualTo(HttpStatusCode.OK));
 
         // 菜单树应可查询且包含种子菜单
@@ -733,7 +751,7 @@ public class SystemManagementApiTests
         var body = await ReadBodyAsync(response);
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK),
             $"创建用户应成功：{body.RootElement.GetProperty("message").GetString()}");
-        return body.RootElement.GetProperty("data").GetGuid();
+        return await ApiTestSupport.GetEntityIdAsync<SysUser>(_db, it => it.UserName == userName);
     }
 
     /// <summary>以 admin 创建角色，返回角色 Id。</summary>
@@ -752,7 +770,7 @@ public class SystemManagementApiTests
         var body = await ReadBodyAsync(response);
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK),
             $"创建角色应成功：{body.RootElement.GetProperty("message").GetString()}");
-        return body.RootElement.GetProperty("data").GetGuid();
+        return await ApiTestSupport.GetEntityIdAsync<SysRole>(_db, it => it.RoleKey == roleKey);
     }
 
     /// <summary>调用验证码接口并从 IMemoryCache 读取明文验证码。</summary>
@@ -797,7 +815,7 @@ public class SystemManagementApiTests
     /// <summary>清除指定用户名的登录失败计数。</summary>
     private void ClearLoginFailState(string userName)
     {
-        _cache.RemoveAsync(LoginCommandHandler.LoginFailCacheKeyPrefix + userName).GetAwaiter().GetResult();
+        _cache.RemoveAsync(AuthLoginCommandHandler.LoginFailCacheKeyPrefix + userName).GetAwaiter().GetResult();
     }
 
     /// <summary>POST JSON 请求。</summary>

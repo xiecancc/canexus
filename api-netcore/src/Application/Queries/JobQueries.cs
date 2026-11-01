@@ -14,10 +14,10 @@ namespace Application.Queries;
 /// <remarks>构造函数。</remarks>
 /// <param name="jobLogRepository">任务执行日志仓储（倒序分页）。</param>
 /// <param name="mapper">AutoMapper 映射器。</param>
-public sealed class GetJobLogPageQueryHandler(IJobLogRepository jobLogRepository, IMapper mapper) : QueryHandler<GetJobLogPageQuery, PagedResult<JobLogListVO>>
+public sealed class JobLogQueryPagedHandler(IJobLogRepository jobLogRepository, IMapper mapper) : QueryHandler<JobLogQueryPaged, PagedResponse<JobLogListResponse>>
 {
     /// <inheritdoc />
-    protected override async Task<PagedResult<JobLogListVO>> HandleAsync(GetJobLogPageQuery query, CancellationToken cancellationToken)
+    protected override async Task<PagedResponse<JobLogListResponse>> HandleAsync(JobLogQueryPaged query, CancellationToken cancellationToken)
     {
         var request = query.Request;
         Expression<Func<SysJobLog, bool>> predicate = l =>
@@ -25,28 +25,25 @@ public sealed class GetJobLogPageQueryHandler(IJobLogRepository jobLogRepository
             && (request.Status == null || l.Status == request.Status.Value);
 
         var page = await jobLogRepository.GetPagedDescAsync(request, predicate, cancellationToken);
-        var items = page.Items.Select(l => mapper.Map<JobLogListVO>(l)).ToList();
-        return PagedResult<JobLogListVO>.Create(items, page.Total, request);
+
+        // 开放泛型映射闭合 PagedResponse<SysJobLog> → PagedResponse<JobLogListResponse>：
+        // 分页元数据同名复制，Items 元素运行期按模块映射解析
+        return mapper.Map<PagedResponse<JobLogListResponse>>(page)!;
     }
 }
 
-/// <summary>分页查询定时任务处理器。</summary>
+/// <summary>分页查询定时任务处理器（标准分页流程：关键字模糊匹配任务名 / 任务组、状态过滤）。</summary>
 /// <remarks>构造函数。</remarks>
 /// <param name="jobRepository">定时任务仓储（只读）。</param>
 /// <param name="mapper">AutoMapper 映射器。</param>
-public sealed class GetJobPageQueryHandler(IDomainRepository<SysJob> jobRepository, IMapper mapper) : QueryHandler<GetJobPageQuery, PagedResult<JobListVO>>
+public sealed class JobQueryPagedHandler(IDomainRepository<SysJob> jobRepository, IMapper mapper) : DomainQueryPagedHandler<JobQueryPaged, JobPageRequest, SysJob, JobListResponse>(jobRepository, mapper)
 {
     /// <inheritdoc />
-    protected override async Task<PagedResult<JobListVO>> HandleAsync(GetJobPageQuery query, CancellationToken cancellationToken)
+    protected override Expression<Func<SysJob, bool>>? BuildPredicate(JobPageRequest request)
     {
-        var request = query.Request;
-        var keyword = string.IsNullOrWhiteSpace(request.Keyword) ? null : request.Keyword.Trim();
-        Expression<Func<SysJob, bool>> predicate = j =>
+        var keyword = NormalizeFilter(request.Keyword);
+        return j =>
             (keyword == null || j.JobName.Contains(keyword) || j.JobGroup.Contains(keyword))
             && (request.Status == null || j.Status == request.Status.Value);
-
-        var page = await jobRepository.GetPagedAsync(request, [predicate], cancellationToken: cancellationToken);
-        var items = page.Items.Select(j => mapper.Map<JobListVO>(j)).ToList();
-        return PagedResult<JobListVO>.Create(items, page.Total, request);
     }
 }

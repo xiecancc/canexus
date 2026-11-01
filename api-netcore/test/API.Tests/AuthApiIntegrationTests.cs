@@ -506,7 +506,7 @@ public class AuthApiIntegrationTests
     /// <summary>清除指定用户名的登录失败计数（避免多次运行测试累计锁定）。</summary>
     private void ClearLoginFailState(string userName)
     {
-        _cache.RemoveAsync(LoginCommandHandler.LoginFailCacheKeyPrefix + userName).GetAwaiter().GetResult();
+        _cache.RemoveAsync(AuthLoginCommandHandler.LoginFailCacheKeyPrefix + userName).GetAwaiter().GetResult();
     }
 
     /// <summary>读取响应体为 JsonDocument。</summary>

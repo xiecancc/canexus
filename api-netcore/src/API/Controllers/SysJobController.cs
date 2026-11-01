@@ -26,7 +26,7 @@ public class SysJobController(ISender sender) : ControllerBase
     [RequirePermission("monitor:job:list")]
     public async Task<IActionResult> Page([FromQuery] JobPageRequest request)
     {
-        return Ok(Result.Ok(await sender.Send(new GetJobPageQuery(request))));
+        return Ok(Result.Ok(await sender.Send(new JobQueryPaged(request))));
     }
 
     /// <summary>创建定时任务（Cron 与任务类型校验；status=1 时创建后立即入调度）。</summary>
@@ -37,8 +37,8 @@ public class SysJobController(ISender sender) : ControllerBase
     [OperLog("定时任务", OperBusinessType.Add)]
     public async Task<IActionResult> Create([FromBody] JobCreateRequest request)
     {
-        var id = await sender.Send(new CreateJobCommand(request));
-        return Ok(Result.Ok(id, "创建成功"));
+        await sender.Send(new JobCreateCommand(request));
+        return Ok(Result.Ok(message: "创建成功"));
     }
 
     /// <summary>更新定时任务（按新定义重调度）。</summary>
@@ -50,19 +50,20 @@ public class SysJobController(ISender sender) : ControllerBase
     [OperLog("定时任务", OperBusinessType.Update)]
     public async Task<IActionResult> Update(Guid id, [FromBody] JobUpdateRequest request)
     {
-        await sender.Send(new UpdateJobCommand(id, request));
+        await sender.Send(new JobUpdateCommand(id, request));
         return Ok(Result.Ok(message: "更新成功"));
     }
 
     /// <summary>删除定时任务（同时移出调度）。</summary>
     /// <param name="id">任务 Id。</param>
     /// <returns>统一响应。</returns>
+    /// <param name="request">删除请求（含乐观锁版本号）。</param>
     [HttpDelete("{id:guid}")]
     [RequirePermission("monitor:job:remove")]
     [OperLog("定时任务", OperBusinessType.Delete)]
-    public async Task<IActionResult> Delete(Guid id)
+    public async Task<IActionResult> Delete(Guid id, [FromBody] JobDeleteRequest request)
     {
-        await sender.Send(new DeleteJobCommand(id));
+        await sender.Send(new JobDeleteCommand(id, request.Version));
         return Ok(Result.Ok(message: "删除成功"));
     }
 
@@ -75,7 +76,7 @@ public class SysJobController(ISender sender) : ControllerBase
     [OperLog("定时任务", OperBusinessType.Update)]
     public async Task<IActionResult> UpdateStatus(Guid id, [FromBody] JobStatusRequest request)
     {
-        await sender.Send(new UpdateJobStatusCommand(id, request));
+        await sender.Send(new JobUpdateStatusCommand(id, request));
         return Ok(Result.Ok(message: "状态更新成功"));
     }
 
@@ -87,7 +88,7 @@ public class SysJobController(ISender sender) : ControllerBase
     [OperLog("定时任务", OperBusinessType.Update)]
     public async Task<IActionResult> RunOnce(Guid id)
     {
-        await sender.Send(new RunJobOnceCommand(id));
+        await sender.Send(new JobRunOnceCommand(id));
         return Ok(Result.Ok(message: "执行成功，执行结果请在执行日志中查看"));
     }
 }

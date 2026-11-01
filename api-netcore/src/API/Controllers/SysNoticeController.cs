@@ -26,7 +26,7 @@ public class SysNoticeController(ISender sender) : ControllerBase
     [RequirePermission("system:notice:list")]
     public async Task<IActionResult> Page([FromQuery] NoticePageRequest request)
     {
-        return Ok(Result.Ok(await sender.Send(new GetNoticePageQuery(request))));
+        return Ok(Result.Ok(await sender.Send(new NoticeQueryPaged(request))));
     }
 
     /// <summary>按 Id 查询通知公告详情（含正文，供编辑回显与查看全文）。</summary>
@@ -36,7 +36,7 @@ public class SysNoticeController(ISender sender) : ControllerBase
     [RequirePermission("system:notice:query")]
     public async Task<IActionResult> GetById(Guid id)
     {
-        return Ok(Result.Ok(await sender.Send(new GetNoticeByIdQuery(id))));
+        return Ok(Result.Ok(await sender.Send(new NoticeQueryById(id))));
     }
 
     /// <summary>创建通知公告。</summary>
@@ -47,8 +47,8 @@ public class SysNoticeController(ISender sender) : ControllerBase
     [OperLog("通知公告", OperBusinessType.Add)]
     public async Task<IActionResult> Create([FromBody] NoticeCreateRequest request)
     {
-        var id = await sender.Send(new CreateNoticeCommand(request));
-        return Ok(Result.Ok(id, "创建成功"));
+        await sender.Send(new NoticeCreateCommand(request));
+        return Ok(Result.Ok(message: "创建成功"));
     }
 
     /// <summary>更新通知公告（校验规则与创建一致）。</summary>
@@ -60,19 +60,20 @@ public class SysNoticeController(ISender sender) : ControllerBase
     [OperLog("通知公告", OperBusinessType.Update)]
     public async Task<IActionResult> Update(Guid id, [FromBody] NoticeUpdateRequest request)
     {
-        await sender.Send(new UpdateNoticeCommand(id, request));
+        await sender.Send(new NoticeUpdateCommand(id, request));
         return Ok(Result.Ok(message: "更新成功"));
     }
 
     /// <summary>删除通知公告。</summary>
     /// <param name="id">公告 Id。</param>
     /// <returns>统一响应。</returns>
+    /// <param name="request">删除请求（含乐观锁版本号）。</param>
     [HttpDelete("{id:guid}")]
     [RequirePermission("system:notice:remove")]
     [OperLog("通知公告", OperBusinessType.Delete)]
-    public async Task<IActionResult> Delete(Guid id)
+    public async Task<IActionResult> Delete(Guid id, [FromBody] NoticeDeleteRequest request)
     {
-        await sender.Send(new DeleteNoticeCommand(id));
+        await sender.Send(new NoticeDeleteCommand(id, request.Version));
         return Ok(Result.Ok(message: "删除成功"));
     }
 
@@ -82,6 +83,6 @@ public class SysNoticeController(ISender sender) : ControllerBase
     [HttpGet("latest")]
     public async Task<IActionResult> Latest([FromQuery] int count = 5)
     {
-        return Ok(Result.Ok(await sender.Send(new GetLatestNoticesQuery(count))));
+        return Ok(Result.Ok(await sender.Send(new NoticeQueryLatest(count))));
     }
 }

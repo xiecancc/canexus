@@ -4,6 +4,7 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
 using API;
+using Domain.Entities;
 using Domain.Services.Security;
 using Infrastructure.Shared.Caching;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -100,8 +101,7 @@ public class NoticeApiTests
             status = 1,
             description = "B12 集成测试"
         });
-        var noticeId = createBody.RootElement.GetProperty("data").GetGuid();
-        Assert.That(noticeId, Is.Not.EqualTo(Guid.Empty), "创建应返回公告 Id");
+        var noticeId = await ApiTestSupport.GetEntityIdAsync<SysNotice>(_db, it => it.Title == title);
 
         // 分页可见：列表行不含正文（content 为 null 以减小载荷）
         var page = await GetJsonAsync($"/api/system/notice/page?title={Uri.EscapeDataString(title)}");
@@ -127,9 +127,11 @@ public class NoticeApiTests
                 Is.EqualTo("<p>B12 集成测试正文</p>"), "详情应返回正文");
         });
 
-        // 更新（标题 / 类型 / 内容 / 状态 / 备注）→ 详情同步变化
+        // 更新（标题 / 类型 / 内容 / 状态 / 备注）→ 详情同步变化（乐观锁：先回读版本号）
+        var noticeVersion = await ApiTestSupport.GetVersionAsync<SysNotice>(_db, noticeId);
         await SendForJsonAsync(HttpMethod.Put, $"/api/system/notice/{noticeId}", new
         {
+            version = noticeVersion,
             title = title + "V2",
             noticeType = 2,
             content = "<p>更新后的正文</p>",
@@ -147,7 +149,7 @@ public class NoticeApiTests
         });
 
         // 删除 → 分页不可见
-        await SendForJsonAsync(HttpMethod.Delete, $"/api/system/notice/{noticeId}", null!);
+        await SendForJsonAsync(HttpMethod.Delete, $"/api/system/notice/{noticeId}", new { version = await ApiTestSupport.GetVersionAsync<SysNotice>(_db, noticeId) });
         var afterDelete = await GetJsonAsync($"/api/system/notice/page?title={Uri.EscapeDataString(title)}");
         Assert.That(afterDelete.RootElement.GetProperty("data").GetProperty("total").GetInt64(), Is.EqualTo(0), "删除后分页应不可见");
     }
@@ -210,7 +212,7 @@ public class NoticeApiTests
             status = 1
         });
         var missingUpdateBody = await ReadBodyAsync(missingUpdate);
-        var missingDelete = await SendAsync(HttpMethod.Delete, "/api/system/notice/00000000-0000-0000-0000-000000009999", null);
+        var missingDelete = await SendAsync(HttpMethod.Delete, "/api/system/notice/00000000-0000-0000-0000-000000009999", new { version = Guid.Empty });
         var missingDeleteBody = await ReadBodyAsync(missingDelete);
 
         Assert.Multiple(() =>
@@ -253,14 +255,15 @@ public class NoticeApiTests
         List<Guid> createdIds = [];
         for (var i = 1; i <= 21; i++)
         {
-            var id = (await SendForJsonAsync(HttpMethod.Post, "/api/system/notice", new
+            var title = NewNoticeTitle();
+            await SendForJsonAsync(HttpMethod.Post, "/api/system/notice", new
             {
-                title = NewNoticeTitle(),
+                title,
                 noticeType = 1,
                 content = $"B12 数量收敛测试 {i}",
                 status = 1
-            })).RootElement.GetProperty("data").GetGuid();
-            createdIds.Add(id);
+            });
+            createdIds.Add(await ApiTestSupport.GetEntityIdAsync<SysNotice>(_db, it => it.Title == title));
         }
 
         try
@@ -289,7 +292,7 @@ public class NoticeApiTests
             // 清理测试公告，避免污染其他用例与重复运行
             foreach (var id in createdIds)
             {
-                await SendAsync(HttpMethod.Delete, $"/api/system/notice/{id}", null);
+                await SendAsync(HttpMethod.Delete, $"/api/system/notice/{id}", new { version = await ApiTestSupport.GetVersionAsync<SysNotice>(_db, id) });
             }
         }
     }

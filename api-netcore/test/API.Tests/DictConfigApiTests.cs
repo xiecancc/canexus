@@ -4,6 +4,7 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
 using API;
+using Domain.Entities;
 using Domain.Services.Security;
 using Infrastructure.Shared.Caching;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -97,8 +98,7 @@ public class DictConfigApiTests
             dictType,
             description = "B7 集成测试"
         });
-        var typeId = createBody.RootElement.GetProperty("data").GetGuid();
-        Assert.That(typeId, Is.Not.EqualTo(Guid.Empty), "创建应返回字典类型 Id");
+        var typeId = await ApiTestSupport.GetEntityIdAsync<SysDictType>(_db, it => it.DictType == dictType);
 
         var page = await GetJsonAsync($"/api/system/dict-type/page?keyword={dictType}");
         var items = page.RootElement.GetProperty("data").GetProperty("items");
@@ -126,9 +126,11 @@ public class DictConfigApiTests
             Assert.That(duplicateBody.RootElement.GetProperty("code").GetInt32(), Is.EqualTo(400602));
         });
 
-        // 更新（dictType 不变）→ 成功
+        // 更新（dictType 不变）→ 成功（乐观锁：先回读版本号）
+        var typeVersion = await ApiTestSupport.GetVersionAsync<SysDictType>(_db, typeId);
         await SendForJsonAsync(HttpMethod.Put, $"/api/system/dict-type/{typeId}", new
         {
+            version = typeVersion,
             dictName = "B7 流程字典V2",
             dictType,
             description = "更新后"
@@ -153,7 +155,7 @@ public class DictConfigApiTests
 
         // 插入一条字典数据后删除类型 → 400604（非空拒绝）
         var dataId = await CreateDictDataAsync(dictType, label: "选项A", value: "A");
-        var nonEmpty = await SendAsync(HttpMethod.Delete, $"/api/system/dict-type/{typeId}", null);
+        var nonEmpty = await SendAsync(HttpMethod.Delete, $"/api/system/dict-type/{typeId}", new { version = Guid.Empty });
         var nonEmptyBody = await ReadBodyAsync(nonEmpty);
         Assert.Multiple(() =>
         {
@@ -162,8 +164,8 @@ public class DictConfigApiTests
         });
 
         // 清空数据后类型可删除
-        await SendAsync(HttpMethod.Delete, $"/api/system/dict-data/{dataId}", null);
-        var deleted = await SendAsync(HttpMethod.Delete, $"/api/system/dict-type/{typeId}", null);
+        await SendAsync(HttpMethod.Delete, $"/api/system/dict-data/{dataId}", new { version = await ApiTestSupport.GetVersionAsync<SysDictData>(_db, dataId) });
+        var deleted = await SendAsync(HttpMethod.Delete, $"/api/system/dict-type/{typeId}", new { version = await ApiTestSupport.GetVersionAsync<SysDictType>(_db, typeId) });
         Assert.That(deleted.StatusCode, Is.EqualTo(HttpStatusCode.OK), "无数据的字典类型应可删除");
     }
 
@@ -173,11 +175,12 @@ public class DictConfigApiTests
     public async Task DictData_TypeList_CacheRefreshedImmediatelyAfterWrite()
     {
         var dictType = NewDictType();
-        var typeId = (await SendForJsonAsync(HttpMethod.Post, "/api/system/dict-type", new
+        await SendForJsonAsync(HttpMethod.Post, "/api/system/dict-type", new
         {
             dictName = "B7 缓存字典",
             dictType
-        })).RootElement.GetProperty("data").GetGuid();
+        });
+        var typeId = await ApiTestSupport.GetEntityIdAsync<SysDictType>(_db, it => it.DictType == dictType);
 
         var dataId = await CreateDictDataAsync(dictType, label: "选项B", value: "B");
 
@@ -192,9 +195,11 @@ public class DictConfigApiTests
             Assert.That(firstItems[0].GetProperty("tagType").GetInt32(), Is.EqualTo(1));
         });
 
-        // 更新后立即可见（缓存已失效）
+        // 更新后立即可见（缓存已失效；乐观锁：先回读版本号）
+        var dataVersion = await ApiTestSupport.GetVersionAsync<SysDictData>(_db, dataId);
         await SendForJsonAsync(HttpMethod.Put, $"/api/system/dict-data/{dataId}", new
         {
+            version = dataVersion,
             dictType,
             dictLabel = "选项B2",
             dictValue = "B",
@@ -207,22 +212,23 @@ public class DictConfigApiTests
             Is.EqualTo("选项B2"), "更新后按类型查询应立即返回新标签");
 
         // 删除后立即为空
-        await SendAsync(HttpMethod.Delete, $"/api/system/dict-data/{dataId}", null);
+        await SendAsync(HttpMethod.Delete, $"/api/system/dict-data/{dataId}", new { version = await ApiTestSupport.GetVersionAsync<SysDictData>(_db, dataId) });
         var afterDelete = await GetJsonAsync($"/api/system/dict-data/type/{dictType}");
         Assert.That(afterDelete.RootElement.GetProperty("data").GetArrayLength(), Is.EqualTo(0), "删除后按类型查询应为空");
 
-        await SendAsync(HttpMethod.Delete, $"/api/system/dict-type/{typeId}", null);
+        await SendAsync(HttpMethod.Delete, $"/api/system/dict-type/{typeId}", new { version = await ApiTestSupport.GetVersionAsync<SysDictType>(_db, typeId) });
     }
 
     [Test]
     public async Task DictData_DuplicateLabelOrValue_Rejected400606()
     {
         var dictType = NewDictType();
-        var typeId = (await SendForJsonAsync(HttpMethod.Post, "/api/system/dict-type", new
+        await SendForJsonAsync(HttpMethod.Post, "/api/system/dict-type", new
         {
             dictName = "B7 唯一字典",
             dictType
-        })).RootElement.GetProperty("data").GetGuid();
+        });
+        var typeId = await ApiTestSupport.GetEntityIdAsync<SysDictType>(_db, it => it.DictType == dictType);
         await CreateDictDataAsync(dictType, label: "选项C", value: "C");
 
         // 同类型下重复标签
@@ -271,7 +277,7 @@ public class DictConfigApiTests
             Assert.That(missingTypeBody.RootElement.GetProperty("code").GetInt32(), Is.EqualTo(400601));
         });
 
-        await SendAsync(HttpMethod.Delete, $"/api/system/dict-type/{typeId}", null);
+        await SendAsync(HttpMethod.Delete, $"/api/system/dict-type/{typeId}", new { version = await ApiTestSupport.GetVersionAsync<SysDictType>(_db, typeId) });
     }
 
     // —— 参数配置 ——
@@ -289,7 +295,7 @@ public class DictConfigApiTests
             configValue = "v1",
             description = "B7 集成测试"
         });
-        var configId = createBody.RootElement.GetProperty("data").GetGuid();
+        var configId = await ApiTestSupport.GetEntityIdAsync<SysConfig>(_db, it => it.ConfigKey == configKey);
 
         var page = await GetJsonAsync($"/api/system/config/page?keyword={configKey}");
         var row = page.RootElement.GetProperty("data").GetProperty("items")[0];
@@ -318,9 +324,11 @@ public class DictConfigApiTests
         var first = await GetJsonAsync($"/api/system/config/key/{configKey}");
         Assert.That(first.RootElement.GetProperty("data").GetString(), Is.EqualTo("v1"));
 
-        // 更新后立即可见（缓存已失效）
+        // 更新后立即可见（缓存已失效；乐观锁：先回读版本号）
+        var configVersion = await ApiTestSupport.GetVersionAsync<SysConfig>(_db, configId);
         await SendForJsonAsync(HttpMethod.Put, $"/api/system/config/{configId}", new
         {
+            version = configVersion,
             configName = "B7 测试参数",
             configKey,
             configValue = "v2",
@@ -330,7 +338,7 @@ public class DictConfigApiTests
         Assert.That(afterUpdate.RootElement.GetProperty("data").GetString(), Is.EqualTo("v2"), "更新后按键取值应立即返回新值");
 
         // 非内置可删除；删除后按键取值报不存在
-        await SendAsync(HttpMethod.Delete, $"/api/system/config/{configId}", null);
+        await SendAsync(HttpMethod.Delete, $"/api/system/config/{configId}", new { version = await ApiTestSupport.GetVersionAsync<SysConfig>(_db, configId) });
         var missing = await SendAsync(HttpMethod.Get, $"/api/system/config/key/{configKey}", null);
         var missingBody = await ReadBodyAsync(missing);
         Assert.Multiple(() =>
@@ -350,7 +358,7 @@ public class DictConfigApiTests
         // 种子内置参数删除 → 400703
         var page = await GetJsonAsync("/api/system/config/page?keyword=sys.user.initPassword");
         var builtinId = page.RootElement.GetProperty("data").GetProperty("items")[0].GetProperty("id").GetGuid();
-        var delete = await SendAsync(HttpMethod.Delete, $"/api/system/config/{builtinId}", null);
+        var delete = await SendAsync(HttpMethod.Delete, $"/api/system/config/{builtinId}", new { version = Guid.Empty });
         var deleteBody = await ReadBodyAsync(delete);
         Assert.Multiple(() =>
         {
@@ -385,7 +393,7 @@ public class DictConfigApiTests
         var body = await ReadBodyAsync(response);
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK),
             $"创建字典数据应成功：{body.RootElement.GetProperty("message").GetString()}");
-        return body.RootElement.GetProperty("data").GetGuid();
+        return await ApiTestSupport.GetEntityIdAsync<SysDictData>(_db, it => it.DictType == dictType && it.DictValue == value);
     }
 
     /// <summary>发送 JSON 请求（POST / PUT / DELETE 等）。</summary>

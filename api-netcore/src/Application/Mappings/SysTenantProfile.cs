@@ -1,4 +1,5 @@
 
+using Application.Contracts.Common;
 using Application.Contracts.Tenants;
 using AutoMapper;
 using Domain.Entities;
@@ -10,12 +11,16 @@ public sealed class SysTenantProfile : Profile
     /// <summary>构造函数。</summary>
     public SysTenantProfile()
     {
-        // 实体 → 视图对象
-        CreateMap<SysTenant, TenantListVO>();
-        CreateMap<SysTenant, TenantSimpleVO>();
+        // 实体 → 响应模型（IncludeBase 挂接基类映射链，补齐 Id / Version / 审计字段）
+        CreateMap<SysTenant, TenantListResponse>()
+            .IncludeBase<AggregateBase, AggregatePagedResponse>();
+        CreateMap<SysTenant, TenantSimpleResponse>()
+            .IncludeBase<AggregateBase, AggregateListResponse>();
 
-        // 请求 → 实体
-        CreateMap<TenantCreateRequest, SysTenant>();
-        CreateMap<TenantUpdateRequest, SysTenant>();
+        // 请求 → 实体（IncludeBase 挂接基类映射链）
+        CreateMap<TenantCreateRequest, SysTenant>()
+            .IncludeBase<AggregateChangeRequest, AggregateBase>();
+        CreateMap<TenantUpdateRequest, SysTenant>()
+            .IncludeBase<AggregateChangeRequest, AggregateBase>();
     }
 }

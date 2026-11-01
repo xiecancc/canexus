@@ -78,11 +78,12 @@ public class LogApiTests
     public async Task OperLog_CreateDictType_WrittenAndQueryable()
     {
         var dictType = "b8_log_" + Guid.NewGuid().ToString("N")[..10];
-        var typeId = (await SendForJsonAsync(HttpMethod.Post, "/api/system/dict-type", new
+        await SendForJsonAsync(HttpMethod.Post, "/api/system/dict-type", new
         {
             dictName = "B8 日志字典",
             dictType
-        })).RootElement.GetProperty("data").GetGuid();
+        });
+        var typeId = await ApiTestSupport.GetEntityIdAsync<SysDictType>(_db, it => it.DictType == dictType);
 
         var page = await GetJsonAsync("/api/system/oper-log/page?title=字典类型&operUserName=admin&pageSize=100");
         var items = page.RootElement.GetProperty("data").GetProperty("items").EnumerateArray()
@@ -105,7 +106,7 @@ public class LogApiTests
             Assert.That(log.TryGetProperty("operTime", out _), Is.True, "应记录操作时间");
         });
 
-        await SendAsync(HttpMethod.Delete, $"/api/system/dict-type/{typeId}", null);
+        await SendAsync(HttpMethod.Delete, $"/api/system/dict-type/{typeId}", new { version = await ApiTestSupport.GetVersionAsync<SysDictType>(_db, typeId) });
     }
 
     [Test]
@@ -117,6 +118,7 @@ public class LogApiTests
         // 重置密码（明文出现在请求体中，日志必须脱敏）
         await SendForJsonAsync(HttpMethod.Put, $"/api/system/user/{userId}/password", new
         {
+            version = await ApiTestSupport.GetVersionAsync<SysUser>(_db, userId),
             password = "New@Secret456"
         });
 
@@ -148,18 +150,19 @@ public class LogApiTests
             Assert.That(createParam, Does.Not.Contain("Init@Mask123"), "初始密码明文不得出现在日志中");
         });
 
-        await SendAsync(HttpMethod.Delete, $"/api/system/user/{userId}", null);
+        await SendAsync(HttpMethod.Delete, $"/api/system/user/{userId}", new { version = await ApiTestSupport.GetVersionAsync<SysUser>(_db, userId) });
     }
 
     [Test]
     public async Task OperLog_FailedRequest_RecordsErrorAndStatus0()
     {
         var dictType = "b8_fail_" + Guid.NewGuid().ToString("N")[..10];
-        var typeId = (await SendForJsonAsync(HttpMethod.Post, "/api/system/dict-type", new
+        await SendForJsonAsync(HttpMethod.Post, "/api/system/dict-type", new
         {
             dictName = "B8 失败字典",
             dictType
-        })).RootElement.GetProperty("data").GetGuid();
+        });
+        var typeId = await ApiTestSupport.GetEntityIdAsync<SysDictType>(_db, it => it.DictType == dictType);
 
         // 重复创建（业务异常路径）→ 400602
         var duplicate = await SendAsync(HttpMethod.Post, "/api/system/dict-type", new
@@ -183,7 +186,7 @@ public class LogApiTests
             Assert.That(log.TryGetProperty("costMs", out _), Is.True);
         });
 
-        await SendAsync(HttpMethod.Delete, $"/api/system/dict-type/{typeId}", null);
+        await SendAsync(HttpMethod.Delete, $"/api/system/dict-type/{typeId}", new { version = await ApiTestSupport.GetVersionAsync<SysDictType>(_db, typeId) });
     }
 
     [Test]
@@ -278,7 +281,7 @@ public class LogApiTests
         var body = await ReadBodyAsync(response);
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK),
             $"创建用户应成功：{body.RootElement.GetProperty("message").GetString()}");
-        return body.RootElement.GetProperty("data").GetGuid();
+        return await ApiTestSupport.GetEntityIdAsync<SysUser>(_db, it => it.UserName == userName);
     }
 
     /// <summary>发送 JSON 请求（POST / PUT / DELETE 等，携带 admin 令牌）。</summary>

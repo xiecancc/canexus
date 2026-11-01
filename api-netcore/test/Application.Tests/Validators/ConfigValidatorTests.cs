@@ -10,9 +10,9 @@ namespace Application.Tests.Validators;
 [TestFixture]
 public class ConfigValidatorTests
 {
-    private static CreateConfigCommand BuildCommand(string configKey)
+    private static ConfigCreateCommand BuildCommand(string configKey)
     {
-        return new CreateConfigCommand(new ConfigCreateRequest
+        return new ConfigCreateCommand(new ConfigCreateRequest
         {
             ConfigName = "测试参数",
             ConfigKey = configKey,
@@ -23,21 +23,21 @@ public class ConfigValidatorTests
     [Test]
     public void Validate_BlankKey_HasFailure()
     {
-        var result = new CreateConfigCommandValidator().TestValidate(BuildCommand("  "));
+        var result = new ConfigCreateCommandValidator().TestValidate(BuildCommand("  "));
         result.ShouldHaveValidationErrorFor(command => command.Request.ConfigKey);
     }
 
     [Test]
     public void Validate_TooLongKey_HasFailure()
     {
-        var result = new CreateConfigCommandValidator().TestValidate(BuildCommand(new string('k', 101)));
+        var result = new ConfigCreateCommandValidator().TestValidate(BuildCommand(new string('k', 101)));
         result.ShouldHaveValidationErrorFor(command => command.Request.ConfigKey);
     }
 
     [Test]
     public void Validate_ValidKey_NoFailures()
     {
-        var result = new CreateConfigCommandValidator().TestValidate(BuildCommand("sys.user.initPassword"));
+        var result = new ConfigCreateCommandValidator().TestValidate(BuildCommand("sys.user.initPassword"));
         result.ShouldNotHaveAnyValidationErrors();
     }
 }

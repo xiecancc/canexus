@@ -7,66 +7,90 @@ using Domain.Entities;
 using Domain.Events;
 using Domain.Repositories;
 using Domain.Services.Events;
-using Domain.Shared.Enums;
-using Domain.Shared.Exceptions;
 using Domain.Shared.Results;
 
 namespace Application.Commands;
-/// <summary>创建通知公告命令处理器。</summary>
+/// <summary>创建通知公告命令处理器（标准创建流程，无前置业务校验——字段规则由验证器承接）。</summary>
 /// <remarks>构造函数。</remarks>
-public sealed class CreateNoticeCommandHandler(IAggregateRepository<SysNotice> noticeRepository, IDomainEventPublisher domainEventPublisher, IMapper mapper) : CommandHandler<CreateNoticeCommand, Guid>
+public sealed class NoticeCreateCommandHandler(
+    IAggregateRepository<SysNotice> noticeRepository,
+    IDomainEventPublisher domainEventPublisher,
+    IMapper mapper) : DomainCreateCommandHandler<NoticeCreateCommand, NoticeCreateRequest, SysNotice>(noticeRepository, domainEventPublisher)
 {
-    /// <inheritdoc />
-    protected override async Task<Guid> HandleAsync(CreateNoticeCommand command, CancellationToken cancellationToken)
-    {
-        var request = command.Request;
-        var entity = mapper.Map<SysNotice>(request);
-        var inserted = await noticeRepository.InsertAsync(entity, cancellationToken);
+    /// <summary>AutoMapper 映射器。</summary>
+    private IMapper Mapper { get; } = mapper;
 
-        // 关键节点发布通知公告创建领域事件（消息推送等响应动作可由监听器扩展处理）
-        await domainEventPublisher.PublishAsync(new NoticeCreatedEvent(inserted), cancellationToken);
-        return inserted.Id;
+    /// <inheritdoc />
+    protected override Task ValidateAsync(NoticeCreateRequest request, CancellationToken cancellationToken)
+    {
+        return Task.CompletedTask;
+    }
+
+    /// <inheritdoc />
+    protected override SysNotice MapToEntity(NoticeCreateRequest request)
+    {
+        return Mapper.Map<SysNotice>(request);
+    }
+
+    /// <inheritdoc />
+    protected override DomainEvent CreateEvent(SysNotice inserted)
+    {
+        return new NoticeCreatedEvent(inserted);
     }
 }
 
-/// <summary>删除通知公告命令处理器。</summary>
+/// <summary>删除通知公告命令处理器（标准软删除流程，无删除前守卫）。</summary>
 /// <remarks>构造函数。</remarks>
-public sealed class DeleteNoticeCommandHandler(IAggregateRepository<SysNotice> noticeRepository, IDomainEventPublisher domainEventPublisher) : CommandHandler<DeleteNoticeCommand>
+public sealed class NoticeDeleteCommandHandler(
+    IAggregateRepository<SysNotice> noticeRepository,
+    IDomainEventPublisher domainEventPublisher) : AggregateDeleteCommandHandler<NoticeDeleteCommand, SysNotice>(noticeRepository, domainEventPublisher)
 {
     /// <inheritdoc />
-    protected override async Task HandleAsync(DeleteNoticeCommand command, CancellationToken cancellationToken)
+    protected override int NotFoundErrorCode => ErrorCodes.NoticeNotFound;
+
+    /// <inheritdoc />
+    protected override string EntityDisplayName => "通知公告";
+
+    /// <inheritdoc />
+    protected override DomainEvent CreateEvent(SysNotice deleted)
     {
-        var entity = await noticeRepository.GetAsync([it => it.Id == command.Id], cancellationToken)
-            ?? throw new BusinessException(ErrorCodes.NoticeNotFound, $"通知公告 {command.Id} 不存在");
-
-        // 变更前捕获公告状态快照（软删除可能回填墓碑字段）
-        var snapshot = entity.Snapshot<SysNotice>();
-
-        await noticeRepository.DeleteAsync(command.Id, cancellationToken);
-
-        // 关键节点发布通知公告删除领域事件（响应动作由监听器处理）
-        await domainEventPublisher.PublishAsync(new NoticeDeletedEvent(snapshot), cancellationToken);
+        return new NoticeDeletedEvent(deleted);
     }
 }
 
-/// <summary>更新通知公告命令处理器。</summary>
+/// <summary>更新通知公告命令处理器（标准原位更新流程，无前置业务校验——字段规则由验证器承接）。</summary>
 /// <remarks>构造函数。</remarks>
-public sealed class UpdateNoticeCommandHandler(IAggregateRepository<SysNotice> noticeRepository, IDomainEventPublisher domainEventPublisher, IMapper mapper) : CommandHandler<UpdateNoticeCommand>
+public sealed class NoticeUpdateCommandHandler(
+    IAggregateRepository<SysNotice> noticeRepository,
+    IDomainEventPublisher domainEventPublisher,
+    IMapper mapper) : AggregateUpdateCommandHandler<NoticeUpdateCommand, NoticeUpdateRequest, SysNotice>(noticeRepository, domainEventPublisher)
 {
+    /// <summary>AutoMapper 映射器。</summary>
+    private IMapper Mapper { get; } = mapper;
+
     /// <inheritdoc />
-    protected override async Task HandleAsync(UpdateNoticeCommand command, CancellationToken cancellationToken)
+    protected override int NotFoundErrorCode => ErrorCodes.NoticeNotFound;
+
+    /// <inheritdoc />
+    protected override string EntityDisplayName => "通知公告";
+
+    /// <inheritdoc />
+    protected override Task ValidateAsync(NoticeUpdateRequest request, SysNotice entity, CancellationToken cancellationToken)
     {
-        var request = command.Request;
-        var entity = await noticeRepository.GetAsync([it => it.Id == command.Id], cancellationToken)
-            ?? throw new BusinessException(ErrorCodes.NoticeNotFound, $"通知公告 {command.Id} 不存在");
+        // 乐观锁校验：业务守卫通过后比对客户端回传版本
+        EnsureVersionMatches(entity, request.Version);
+        return Task.CompletedTask;
+    }
 
-        // 变更前捕获公告状态快照（实体即将被原位修改）
-        var before = entity.Snapshot<SysNotice>();
+    /// <inheritdoc />
+    protected override void MapToEntity(NoticeUpdateRequest request, SysNotice entity)
+    {
+        Mapper.Map(request, entity);
+    }
 
-        mapper.Map(request, entity);
-        await noticeRepository.UpdateAsync(entity, cancellationToken);
-
-        // 关键节点发布通知公告修改领域事件（携带变更前后状态）
-        await domainEventPublisher.PublishAsync(new NoticeUpdatedEvent(before, entity), cancellationToken);
+    /// <inheritdoc />
+    protected override DomainEvent CreateEvent(SysNotice before, SysNotice after)
+    {
+        return new NoticeUpdatedEvent(before, after);
     }
 }
