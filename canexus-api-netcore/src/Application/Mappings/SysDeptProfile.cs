@@ -18,9 +18,9 @@ public sealed class SysDeptProfile : Profile
             .IncludeBase<AggregateBase, AggregatePagedResponse>();
 
         // 请求 → 实体（IncludeBase 挂接基类映射链）
-        CreateMap<DeptCreateRequest, SysDept>()
+        CreateMap<DeptCreateRequest, SysDept>(MemberList.None)
             .IncludeBase<AggregateChangeRequest, AggregateBase>();
-        CreateMap<DeptUpdateRequest, SysDept>()
+        CreateMap<DeptUpdateRequest, SysDept>(MemberList.None)
             .IncludeBase<AggregateChangeRequest, AggregateBase>();
     }
 }

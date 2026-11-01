@@ -16,9 +16,9 @@ public sealed class SysConfigProfile : Profile
             .IncludeBase<AggregateBase, AggregatePagedResponse>();
 
         // 请求 → 实体（IncludeBase 挂接基类映射链）
-        CreateMap<ConfigCreateRequest, SysConfig>()
+        CreateMap<ConfigCreateRequest, SysConfig>(MemberList.None)
             .IncludeBase<AggregateChangeRequest, AggregateBase>();
-        CreateMap<ConfigUpdateRequest, SysConfig>()
+        CreateMap<ConfigUpdateRequest, SysConfig>(MemberList.None)
             .IncludeBase<AggregateChangeRequest, AggregateBase>();
     }
 }

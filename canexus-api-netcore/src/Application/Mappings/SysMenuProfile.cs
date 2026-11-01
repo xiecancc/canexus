@@ -18,9 +18,9 @@ public sealed class SysMenuProfile : Profile
             .IncludeBase<AggregateBase, AggregatePagedResponse>();
 
         // 请求 → 实体（IncludeBase 挂接基类映射链）
-        CreateMap<MenuCreateRequest, SysMenu>()
+        CreateMap<MenuCreateRequest, SysMenu>(MemberList.None)
             .IncludeBase<AggregateChangeRequest, AggregateBase>();
-        CreateMap<MenuUpdateRequest, SysMenu>()
+        CreateMap<MenuUpdateRequest, SysMenu>(MemberList.None)
             .IncludeBase<AggregateChangeRequest, AggregateBase>();
     }
 }

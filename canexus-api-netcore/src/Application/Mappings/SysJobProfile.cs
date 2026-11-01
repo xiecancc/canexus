@@ -18,9 +18,9 @@ public sealed class SysJobProfile : Profile
             .IncludeBase<AggregateBase, AggregatePagedResponse>();
 
         // 请求 → 实体（IncludeBase 挂接基类映射链）
-        CreateMap<JobCreateRequest, SysJob>()
+        CreateMap<JobCreateRequest, SysJob>(MemberList.None)
             .IncludeBase<AggregateChangeRequest, AggregateBase>();
-        CreateMap<JobUpdateRequest, SysJob>()
+        CreateMap<JobUpdateRequest, SysJob>(MemberList.None)
             .IncludeBase<AggregateChangeRequest, AggregateBase>();
     }
 }

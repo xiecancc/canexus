@@ -18,9 +18,9 @@ public sealed class SysTenantProfile : Profile
             .IncludeBase<AggregateBase, AggregateListResponse>();
 
         // 请求 → 实体（IncludeBase 挂接基类映射链）
-        CreateMap<TenantCreateRequest, SysTenant>()
+        CreateMap<TenantCreateRequest, SysTenant>(MemberList.None)
             .IncludeBase<AggregateChangeRequest, AggregateBase>();
-        CreateMap<TenantUpdateRequest, SysTenant>()
+        CreateMap<TenantUpdateRequest, SysTenant>(MemberList.None)
             .IncludeBase<AggregateChangeRequest, AggregateBase>();
     }
 }

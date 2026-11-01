@@ -42,10 +42,12 @@ public sealed class CommonProfile : Profile
         // IncludeBase 派生映射提供基类承载，审计字段（CreatedAt / CreatedBy 等）
         // 由仓储 / 应用层在持久化时统一填充，此处仅承担同名业务属性的对齐。
         // —— 领域层 ——
-        CreateMap<DomainChangeRequest, DomainBase>();
+        // MemberList.None：写方向不做目标成员校验 —— 实体持久层字段（Id / 审计 / 软删 / 导航）
+        // 由数据访问层管理而非请求映射；字段对账由 FluentValidation 与编译期保证
+        CreateMap<DomainChangeRequest, DomainBase>(MemberList.None);
         // —— 聚合根层 ——
         // 实体 Version 由数据访问层生成并在更新时轮换，请求侧 Version 仅用于乐观锁比对，禁止映射回实体
-        CreateMap<AggregateChangeRequest, AggregateBase>()
+        CreateMap<AggregateChangeRequest, AggregateBase>(MemberList.None)
             .IncludeBase<DomainChangeRequest, DomainBase>()
             .ForMember(dest => dest.Version, opt => opt.Ignore());
 

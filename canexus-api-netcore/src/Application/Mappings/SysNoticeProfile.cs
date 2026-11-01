@@ -19,9 +19,9 @@ public sealed class SysNoticeProfile : Profile
             .IncludeBase<AggregateBase, AggregatePagedResponse>();
 
         // 请求 → 实体（IncludeBase 挂接基类映射链）
-        CreateMap<NoticeCreateRequest, SysNotice>()
+        CreateMap<NoticeCreateRequest, SysNotice>(MemberList.None)
             .IncludeBase<AggregateChangeRequest, AggregateBase>();
-        CreateMap<NoticeUpdateRequest, SysNotice>()
+        CreateMap<NoticeUpdateRequest, SysNotice>(MemberList.None)
             .IncludeBase<AggregateChangeRequest, AggregateBase>();
     }
 }

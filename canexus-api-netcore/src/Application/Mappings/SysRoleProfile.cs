@@ -16,13 +16,15 @@ public sealed class SysRoleProfile : Profile
             .IncludeBase<AggregateBase, AggregatePagedResponse>();
         CreateMap<SysRole, RoleSimpleResponse>()
             .IncludeBase<AggregateBase, AggregateListResponse>();
+        // MenuIds 由处理器经关联查询组装，映射显式忽略（AssertConfigurationIsValid 兜底口径）
         CreateMap<SysRole, RoleDetailResponse>()
-            .IncludeBase<AggregateBase, AggregatePagedResponse>();
+            .IncludeBase<AggregateBase, AggregatePagedResponse>()
+            .ForMember(dest => dest.MenuIds, opt => opt.Ignore());
 
         // 请求 → 实体（IncludeBase 挂接基类映射链）
-        CreateMap<RoleCreateRequest, SysRole>()
+        CreateMap<RoleCreateRequest, SysRole>(MemberList.None)
             .IncludeBase<AggregateChangeRequest, AggregateBase>();
-        CreateMap<RoleUpdateRequest, SysRole>()
+        CreateMap<RoleUpdateRequest, SysRole>(MemberList.None)
             .IncludeBase<AggregateChangeRequest, AggregateBase>();
     }
 }

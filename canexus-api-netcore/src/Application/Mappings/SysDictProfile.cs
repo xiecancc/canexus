@@ -20,13 +20,13 @@ public sealed class SysDictProfile : Profile
             .IncludeBase<AggregateBase, AggregateListResponse>();
 
         // 请求 → 实体（IncludeBase 挂接基类映射链）
-        CreateMap<DictTypeCreateRequest, SysDictType>()
+        CreateMap<DictTypeCreateRequest, SysDictType>(MemberList.None)
             .IncludeBase<AggregateChangeRequest, AggregateBase>();
-        CreateMap<DictTypeUpdateRequest, SysDictType>()
+        CreateMap<DictTypeUpdateRequest, SysDictType>(MemberList.None)
             .IncludeBase<AggregateChangeRequest, AggregateBase>();
-        CreateMap<DictDataCreateRequest, SysDictData>()
+        CreateMap<DictDataCreateRequest, SysDictData>(MemberList.None)
             .IncludeBase<AggregateChangeRequest, AggregateBase>();
-        CreateMap<DictDataUpdateRequest, SysDictData>()
+        CreateMap<DictDataUpdateRequest, SysDictData>(MemberList.None)
             .IncludeBase<AggregateChangeRequest, AggregateBase>();
     }
 }
