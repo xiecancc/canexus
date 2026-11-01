@@ -50,6 +50,41 @@ public abstract class CommandHandler<TCommand, TResponse> : RequestHandler<TComm
 }
 
 /// <summary>
+/// 聚合写命令处理器基类：响应统一为 bool（写操作成功与否，不返回聚合 Id），
+/// 承载各聚合写命令（创建 / 更新 / 删除 / 恢复）共用的只读聚合仓储。
+/// </summary>
+/// <typeparam name="TCommand">聚合写命令类型。</typeparam>
+/// <typeparam name="TEntity">目标聚合类型。</typeparam>
+/// <param name="repository">目标聚合仓储。</param>
+public abstract class AggregateCommandHandler<TCommand, TEntity>(
+    IAggregateRepository<TEntity> repository) : CommandHandler<TCommand, bool>
+    where TCommand : MediatR.IRequest<bool>
+    where TEntity : AggregateBase
+{
+    /// <summary>目标聚合仓储。</summary>
+    protected IAggregateRepository<TEntity> Repository { get; } = repository;
+}
+
+/// <summary>
+/// 聚合变更写命令处理器基类：在 <see cref="AggregateCommandHandler{TCommand, TEntity}"/> 之上
+/// 承载发布领域事件的变更类写命令（创建 / 更新 / 删除）共用的领域事件发布器；
+/// 恢复为幂等修复操作不发布事件，直接继承上层基类。
+/// </summary>
+/// <typeparam name="TCommand">聚合变更写命令类型。</typeparam>
+/// <typeparam name="TEntity">目标聚合类型。</typeparam>
+/// <param name="repository">目标聚合仓储。</param>
+/// <param name="eventPublisher">领域事件发布器。</param>
+public abstract class AggregateChangeCommandHandler<TCommand, TEntity>(
+    IAggregateRepository<TEntity> repository,
+    IDomainEventPublisher eventPublisher) : AggregateCommandHandler<TCommand, TEntity>(repository)
+    where TCommand : MediatR.IRequest<bool>
+    where TEntity : AggregateBase
+{
+    /// <summary>领域事件发布器。</summary>
+    protected IDomainEventPublisher EventPublisher { get; } = eventPublisher;
+}
+
+/// <summary>
 /// 聚合创建命令处理器基类（对应 <see cref="AggregateCreateCommand{TRequest}"/>）：封装
 /// 「业务校验 → 请求映射 → 插入（主键 / 版本号 / 审计字段由数据访问层生成，不对外返回）→ 发布创建事件 → 返回 bool」
 /// 的标准创建流程。适用于单聚合、无事务与关联表编排的简单创建场景；复杂创建（工作单元事务、关联全删全插、
@@ -62,17 +97,11 @@ public abstract class CommandHandler<TCommand, TResponse> : RequestHandler<TComm
 /// <param name="eventPublisher">领域事件发布器。</param>
 public abstract class AggregateCreateCommandHandler<TCommand, TRequest, TEntity>(
     IAggregateRepository<TEntity> repository,
-    IDomainEventPublisher eventPublisher) : CommandHandler<TCommand, bool>
+    IDomainEventPublisher eventPublisher) : AggregateChangeCommandHandler<TCommand, TEntity>(repository, eventPublisher)
     where TCommand : AggregateCreateCommand<TRequest>
     where TRequest : AggregateChangeRequest
     where TEntity : AggregateBase
 {
-    /// <summary>目标聚合仓储。</summary>
-    protected IAggregateRepository<TEntity> Repository { get; } = repository;
-
-    /// <summary>领域事件发布器。</summary>
-    protected IDomainEventPublisher EventPublisher { get; } = eventPublisher;
-
     /// <summary>业务校验钩子：唯一性、关联存在性等前置校验（无校验时实现为空操作）。</summary>
     /// <param name="request">创建请求。</param>
     /// <param name="cancellationToken">取消令牌。</param>
@@ -117,17 +146,11 @@ public abstract class AggregateCreateCommandHandler<TCommand, TRequest, TEntity>
 /// <param name="eventPublisher">领域事件发布器。</param>
 public abstract class AggregateUpdateCommandHandler<TCommand, TRequest, TEntity>(
     IAggregateRepository<TEntity> repository,
-    IDomainEventPublisher eventPublisher) : CommandHandler<TCommand, bool>
+    IDomainEventPublisher eventPublisher) : AggregateChangeCommandHandler<TCommand, TEntity>(repository, eventPublisher)
     where TCommand : AggregateUpdateCommand<TRequest>
     where TRequest : AggregateChangeRequest
     where TEntity : AggregateBase
 {
-    /// <summary>目标聚合仓储。</summary>
-    protected IAggregateRepository<TEntity> Repository { get; } = repository;
-
-    /// <summary>领域事件发布器。</summary>
-    protected IDomainEventPublisher EventPublisher { get; } = eventPublisher;
-
     /// <summary>模块 NotFound 错误码（ErrorCodes 常量）。</summary>
     protected abstract int NotFoundErrorCode { get; }
 
@@ -185,16 +208,10 @@ public abstract class AggregateUpdateCommandHandler<TCommand, TRequest, TEntity>
 /// <param name="eventPublisher">领域事件发布器。</param>
 public abstract class AggregateDeleteCommandHandler<TCommand, TEntity>(
     IAggregateRepository<TEntity> repository,
-    IDomainEventPublisher eventPublisher) : CommandHandler<TCommand, bool>
+    IDomainEventPublisher eventPublisher) : AggregateChangeCommandHandler<TCommand, TEntity>(repository, eventPublisher)
     where TCommand : AggregateDeleteCommand
     where TEntity : AggregateBase
 {
-    /// <summary>目标聚合仓储。</summary>
-    protected IAggregateRepository<TEntity> Repository { get; } = repository;
-
-    /// <summary>领域事件发布器。</summary>
-    protected IDomainEventPublisher EventPublisher { get; } = eventPublisher;
-
     /// <summary>模块 NotFound 错误码（ErrorCodes 常量）。</summary>
     protected abstract int NotFoundErrorCode { get; }
 
@@ -294,13 +311,10 @@ internal static class CommandGuards
 /// <typeparam name="TEntity">目标聚合类型。</typeparam>
 /// <param name="repository">目标聚合仓储。</param>
 public abstract class AggregateRestoreCommandHandler<TCommand, TEntity>(
-    IAggregateRepository<TEntity> repository) : CommandHandler<TCommand, bool>
+    IAggregateRepository<TEntity> repository) : AggregateCommandHandler<TCommand, TEntity>(repository)
     where TCommand : AggregateRestoreCommand
     where TEntity : AggregateBase
 {
-    /// <summary>目标聚合仓储。</summary>
-    protected IAggregateRepository<TEntity> Repository { get; } = repository;
-
     /// <inheritdoc />
     protected sealed override async Task<bool> HandleAsync(TCommand command, CancellationToken cancellationToken)
     {
