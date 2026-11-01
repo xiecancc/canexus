@@ -51,7 +51,7 @@ public sealed class UserCreateCommandHandler(
     IDomainRepository<SysUserRole> userRoleRepository,
     IPasswordHasher passwordHasher,
     IDomainEventPublisher domainEventPublisher,
-    IUnitOfWork unitOfWork) : CommandHandler<UserCreateCommand, bool>
+    IUnitOfWork unitOfWork) : RequestHandler<UserCreateCommand, bool>
 {
     /// <summary>内置超管账号用户名。</summary>
     public const string AdminUserName = "admin";
@@ -108,7 +108,7 @@ public sealed class UserDeleteCommandHandler(
     IDomainRepository<SysUserRole> userRoleRepository,
     IDomainEventPublisher domainEventPublisher,
     IUserContext currentUser,
-    IUnitOfWork unitOfWork) : CommandHandler<UserDeleteCommand, bool>
+    IUnitOfWork unitOfWork) : RequestHandler<UserDeleteCommand, bool>
 {
     /// <summary>内置超管账号用户名。</summary>
     private const string AdminUserName = "admin";
@@ -127,9 +127,6 @@ public sealed class UserDeleteCommandHandler(
         {
             throw new BusinessException(ErrorCodes.UserDeleteSelfForbidden, "不能删除当前登录账号自己");
         }
-
-        // 乐观锁校验：守卫通过后比对客户端回传版本
-        EnsureVersionMatches(user, command.Version);
 
         // 变更前捕获用户状态快照（软删除可能回填墓碑字段）
         var snapshot = user.Snapshot<SysUser>();
@@ -194,7 +191,7 @@ public sealed class UserUpdateCommandHandler(
     IAggregateTreeRepository<SysDept> deptRepository,
     IDomainRepository<SysUserRole> userRoleRepository,
     IDomainEventPublisher domainEventPublisher,
-    IUnitOfWork unitOfWork) : CommandHandler<UserUpdateCommand, bool>
+    IUnitOfWork unitOfWork) : RequestHandler<UserUpdateCommand, bool>
 {
     /// <summary>内置超管账号用户名。</summary>
     private const string AdminUserName = "admin";
@@ -210,9 +207,6 @@ public sealed class UserUpdateCommandHandler(
         {
             throw new BusinessException(ErrorCodes.CommonDataNotFound, "所属部门不存在");
         }
-
-        // 乐观锁校验：守卫通过后比对客户端回传版本
-        EnsureVersionMatches(user, request.Version);
 
         // 变更前捕获用户状态快照（实体在事务内被原位修改）
         var before = user.Snapshot<SysUser>();
@@ -258,7 +252,7 @@ public sealed class UserUpdateRolesCommandHandler(
     IAggregateRepository<SysRole> roleRepository,
     IDomainRepository<SysUserRole> userRoleRepository,
     IDomainEventPublisher domainEventPublisher,
-    IUnitOfWork unitOfWork) : CommandHandler<UserUpdateRolesCommand, bool>
+    IUnitOfWork unitOfWork) : RequestHandler<UserUpdateRolesCommand, bool>
 {
     /// <inheritdoc />
     protected override async Task<bool> HandleAsync(UserUpdateRolesCommand command, CancellationToken cancellationToken)
@@ -266,9 +260,6 @@ public sealed class UserUpdateRolesCommandHandler(
         var user = await userRepository.GetAsync([it => it.Id == command.Id], cancellationToken)
             ?? throw new BusinessException(ErrorCodes.UserNotFound, $"用户 {command.Id} 不存在");
         await UserRoleSupport.ValidateRolesAsync(roleRepository, command.Request.RoleIds, cancellationToken);
-
-        // 乐观锁校验：角色分配同为聚合修改操作，比对客户端回传版本
-        EnsureVersionMatches(user, command.Request.Version);
 
         // 变更前查询既有角色 Id 集合（全量替换在事务内执行）
         var beforeRoleIds = (await userRoleRepository.GetListAsync([ur => ur.UserId == command.Id], cancellationToken: cancellationToken))

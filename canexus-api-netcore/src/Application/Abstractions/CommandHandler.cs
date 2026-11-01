@@ -10,48 +10,12 @@ using Domain.Shared.Results;
 
 namespace Application.Abstractions;
 /// <summary>
-/// 命令处理器基类（无返回值）：继承 <see cref="RequestHandler{TRequest}"/>，
-/// 仅接受 <see cref="Request"/> 标记的写命令请求；命令特有的公共逻辑在此层扩展。
-/// <para>按约定本基类只应承载命令（Command 侧），查询请使用 <see cref="QueryHandler{TQuery, TResponse}"/>；
-/// 标记约束无法在类型层面区分读 / 写，由命名与 Pipeline Behaviors（验证 / 日志 / 性能监控）共同保证。</para>
-/// </summary>
-/// <typeparam name="TCommand">命令类型。</typeparam>
-public abstract class CommandHandler<TCommand> : RequestHandler<TCommand>
-    where TCommand : Request
-{
-}
-
-/// <summary>
-/// 命令处理器基类（带返回值）：继承 <see cref="RequestHandler{TRequest, TResponse}"/>，
-/// 仅接受带返回值的写命令请求；命令特有的公共逻辑在此层扩展。
-/// <para>约束到 <c>MediatR.IRequest&lt;TResponse&gt;</c> 而非专用命令基类：C# 单继承下，
-/// 「标记基类 + 挂接响应接口」的命令形态（如 <c>AggregateCreateCommand : Command&lt;TRequest&gt;, IRequest&lt;Guid&gt;</c>、
-/// <c>AuthLoginCommand : Request&lt;TokenPairDto&gt;</c>）无法同时继承响应 record 基类，故以接口约束受理。</para>
-/// </summary>
-/// <typeparam name="TCommand">命令类型。</typeparam>
-/// <typeparam name="TResponse">响应类型。</typeparam>
-public abstract class CommandHandler<TCommand, TResponse> : RequestHandler<TCommand, TResponse>
-    where TCommand : MediatR.IRequest<TResponse>
-{
-    /// <summary>乐观锁校验：客户端回传版本号与聚合当前版本不一致时抛出并发冲突业务异常。</summary>
-    /// <remarks>在业务守卫（NotFound / 保护规则 / 引用占用等）之后、任何写操作之前调用，
-    /// 保证并发冲突与业务拒绝两种失败互不遮蔽。</remarks>
-    /// <param name="entity">已加载的目标聚合。</param>
-    /// <param name="expectedVersion">客户端回传的乐观锁版本号。</param>
-    protected static void EnsureVersionMatches(AggregateBase entity, Guid expectedVersion)
-    {
-        if (entity.Version != expectedVersion)
-        {
-            throw new BusinessException(
-                ErrorCodes.CommonConcurrencyConflict,
-                "数据已被他人修改（版本号不一致），请刷新后重试");
-        }
-    }
-}
-
-/// <summary>
-/// 聚合写命令处理器基类：响应统一为 bool（写操作成功与否，不返回聚合 Id），
-/// 承载各聚合写命令（创建 / 更新 / 删除 / 恢复）共用的只读聚合仓储与领域事件发布器。
+/// 聚合写命令处理器基类：命令侧的根抽象，继承 <see cref="RequestHandler{TRequest, TResponse}"/>；
+/// 响应统一为 bool（写操作成功与否，不返回聚合 Id），承载各聚合写命令（创建 / 更新 / 删除 / 恢复）
+/// 共用的只读聚合仓储与领域事件发布器。
+/// <para>乐观并发控制不在此层显式比对：实体更新由数据访问层经 SqlSugar ExecuteCommandWithOptLock
+/// 做框架级版本比对（UPDATE ... WHERE Version = 传入值，受影响 0 行即冲突抛并发异常），
+/// 软删除 / 恢复按仓储语义幂等执行并轮换版本令牌（使旧令牌持有的更新失效）。</para>
 /// </summary>
 /// <typeparam name="TCommand">聚合写命令类型。</typeparam>
 /// <typeparam name="TEntity">目标聚合类型。</typeparam>
@@ -59,7 +23,7 @@ public abstract class CommandHandler<TCommand, TResponse> : RequestHandler<TComm
 /// <param name="eventPublisher">领域事件发布器。</param>
 public abstract class AggregateCommandHandler<TCommand, TEntity>(
     IAggregateRepository<TEntity> repository,
-    IDomainEventPublisher eventPublisher) : CommandHandler<TCommand, bool>
+    IDomainEventPublisher eventPublisher) : RequestHandler<TCommand, bool>
     where TCommand : MediatR.IRequest<bool>
     where TEntity : AggregateBase
 {
@@ -74,7 +38,7 @@ public abstract class AggregateCommandHandler<TCommand, TEntity>(
 /// 聚合创建命令处理器基类（对应 <see cref="AggregateCreateCommand{TRequest}"/>）：封装
 /// 「业务校验 → 请求映射 → 插入（主键 / 版本号 / 审计字段由数据访问层生成，不对外返回）→ 发布创建事件 → 返回 bool」
 /// 的标准创建流程。适用于单聚合、无事务与关联表编排的简单创建场景；复杂创建（工作单元事务、关联全删全插、
-/// 密码哈希等旁路逻辑）应直接继承 <see cref="CommandHandler{TCommand, TResponse}"/> 显式实现。
+/// 密码哈希等旁路逻辑）应直接继承 <see cref="RequestHandler{TRequest, TResponse}"/> 显式实现。
 /// </summary>
 /// <typeparam name="TCommand">创建命令类型。</typeparam>
 /// <typeparam name="TRequest">创建请求类型。</typeparam>
@@ -120,13 +84,13 @@ public abstract class AggregateCreateCommandHandler<TCommand, TRequest, TEntity>
 
 /// <summary>
 /// 聚合更新命令处理器基类（对应 <see cref="AggregateUpdateCommand{TRequest}"/>）：封装
-/// 「按 Id 取值兜底 → 业务校验 → 乐观锁版本比对（基类在 <see cref="ValidateAsync"/> 后统一执行
-/// <see cref="EnsureVersionMatches"/>）→ 捕获变更前快照 → 请求原位映射 → 乐观并发更新 → 发布修改事件」
+/// 「按 Id 取值兜底 → 业务校验 → 捕获变更前快照 → 请求原位映射 → 乐观并发更新（SqlSugar 框架级
+/// 版本比对，冲突抛并发异常）→ 发布修改事件」
 /// 的标准更新流程。适用于单聚合原位更新；涉及关联表替换或事务编排的更新应直接继承
-/// <see cref="CommandHandler{TCommand, TResponse}"/> 显式实现。
+/// <see cref="RequestHandler{TRequest, TResponse}"/> 显式实现。
 /// </summary>
 /// <typeparam name="TCommand">更新命令类型。</typeparam>
-/// <typeparam name="TRequest">更新请求类型（乐观锁版本号 Version 由基类统一比对）。</typeparam>
+/// <typeparam name="TRequest">更新请求类型（乐观锁版本号 Version 由数据访问层框架级比对）。</typeparam>
 /// <typeparam name="TEntity">目标聚合类型。</typeparam>
 /// <param name="repository">目标聚合仓储。</param>
 /// <param name="eventPublisher">领域事件发布器。</param>
@@ -167,9 +131,6 @@ public abstract class AggregateUpdateCommandHandler<TCommand, TRequest, TEntity>
         var entity = await Repository.GetOrThrowAsync(command.Id, NotFoundErrorCode, EntityDisplayName, cancellationToken);
         await ValidateAsync(command.Request, entity, cancellationToken);
 
-        // 乐观锁校验：业务守卫通过后、任何写操作之前，由基类统一比对客户端回传版本（模块钩子不再重复调用）
-        EnsureVersionMatches(entity, command.Request.Version);
-
         // 变更前捕获聚合快照（供修改事件携带变更前状态）
         var before = entity.Snapshot<TEntity>();
 
@@ -184,9 +145,9 @@ public abstract class AggregateUpdateCommandHandler<TCommand, TRequest, TEntity>
 
 /// <summary>
 /// 聚合删除命令处理器基类（对应 <see cref="AggregateDeleteCommand"/>）：封装
-/// 「按 Id 取值兜底 → 删除前守卫 → 乐观锁版本比对 → 捕获删除前快照 → 软删除 → 发布删除事件」
+/// 「按 Id 取值兜底 → 删除前守卫 → 捕获删除前快照 → 软删除（幂等执行并轮换版本令牌）→ 发布删除事件」
 /// 的标准删除流程（Id 与乐观锁版本号由删除命令直接携带）。适用于单聚合软删除；
-/// 需级联清理关联表（事务）的删除应直接继承 <see cref="CommandHandler{TCommand, TResponse}"/> 显式实现。
+/// 需级联清理关联表（事务）的删除应直接继承 <see cref="RequestHandler{TRequest, TResponse}"/> 显式实现。
 /// </summary>
 /// <typeparam name="TCommand">删除命令类型。</typeparam>
 /// <typeparam name="TEntity">目标聚合类型。</typeparam>
@@ -223,9 +184,6 @@ public abstract class AggregateDeleteCommandHandler<TCommand, TEntity>(
     {
         var entity = await Repository.GetOrThrowAsync(command.Id, NotFoundErrorCode, EntityDisplayName, cancellationToken);
         await ValidateBeforeDeleteAsync(entity, cancellationToken);
-
-        // 乐观锁校验：业务守卫通过后、任何写操作之前比对客户端回传版本（并发冲突与业务拒绝互不遮蔽）
-        EnsureVersionMatches(entity, command.Version);
 
         // 变更前捕获聚合快照（软删除可能回填墓碑字段，事件携带删除前状态）
         var snapshot = entity.Snapshot<TEntity>();

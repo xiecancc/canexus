@@ -24,7 +24,7 @@ public sealed class AuthLoginCommandHandler(
     ITokenService tokenService,
     IPasswordHasher passwordHasher,
     IUnitOfWork unitOfWork,
-    ICache cache) : CommandHandler<AuthLoginCommand, TokenPairDto>
+    ICache cache) : RequestHandler<AuthLoginCommand, TokenPairDto>
 {
     /// <summary>登录失败计数缓存 key 前缀（key 格式：{prefix}{userName}）。</summary>
     public const string LoginFailCacheKeyPrefix = "auth:login-fail:";
@@ -158,7 +158,7 @@ public sealed class AuthLoginCommandHandler(
 public sealed class AuthLogoutCommandHandler(
     ISysRefreshTokenRepository refreshTokenRepository,
     ITokenService tokenService,
-    IUserContext currentUser) : CommandHandler<AuthLogoutCommand>
+    IUserContext currentUser) : RequestHandler<AuthLogoutCommand>
 {
     /// <inheritdoc />
     protected override async Task HandleAsync(AuthLogoutCommand command, CancellationToken cancellationToken)
@@ -185,7 +185,7 @@ public sealed class AuthRefreshTokenCommandHandler(
     IAggregateRepository<SysRole> roleRepository,
     IDomainRepository<SysUserRole> userRoleRepository,
     ITokenService tokenService,
-    IUnitOfWork unitOfWork) : CommandHandler<AuthRefreshTokenCommand, TokenPairDto>
+    IUnitOfWork unitOfWork) : RequestHandler<AuthRefreshTokenCommand, TokenPairDto>
 {
     /// <inheritdoc />
     protected override async Task<TokenPairDto> HandleAsync(AuthRefreshTokenCommand command, CancellationToken cancellationToken)

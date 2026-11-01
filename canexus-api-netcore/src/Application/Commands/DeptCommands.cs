@@ -102,7 +102,7 @@ public sealed class DeptDeleteCommandHandler(
 public sealed class DeptUpdateCommandHandler(
     IAggregateTreeRepository<SysDept> deptRepository,
     IDomainEventPublisher domainEventPublisher,
-    IUnitOfWork unitOfWork) : CommandHandler<DeptUpdateCommand, bool>
+    IUnitOfWork unitOfWork) : RequestHandler<DeptUpdateCommand, bool>
 {
     /// <inheritdoc />
     protected override async Task<bool> HandleAsync(DeptUpdateCommand command, CancellationToken cancellationToken)
@@ -110,9 +110,6 @@ public sealed class DeptUpdateCommandHandler(
         var request = command.Request;
         var dept = await deptRepository.GetAsync([it => it.Id == command.Id], cancellationToken)
             ?? throw new BusinessException(ErrorCodes.DeptNotFound, $"部门 {command.Id} 不存在");
-
-        // 乐观锁校验：比对客户端回传版本（父级合法性由 MoveAsync 环检测兜底）
-        EnsureVersionMatches(dept, request.Version);
 
         var parentChanged = dept.ParentId != request.ParentId;
 

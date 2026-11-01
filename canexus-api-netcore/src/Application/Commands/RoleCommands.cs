@@ -51,7 +51,7 @@ public sealed class RoleCreateCommandHandler(
     IAggregateRepository<SysMenu> menuRepository,
     IDomainEventPublisher domainEventPublisher,
     IUnitOfWork unitOfWork,
-    IMapper mapper) : CommandHandler<RoleCreateCommand, bool>
+    IMapper mapper) : RequestHandler<RoleCreateCommand, bool>
 {
     /// <inheritdoc />
     protected override async Task<bool> HandleAsync(RoleCreateCommand command, CancellationToken cancellationToken)
@@ -99,7 +99,7 @@ public sealed class RoleDeleteCommandHandler(
     IDomainRepository<SysUserRole> userRoleRepository,
     IDomainRepository<SysRoleMenu> roleMenuRepository,
     IDomainEventPublisher domainEventPublisher,
-    IUnitOfWork unitOfWork) : CommandHandler<RoleDeleteCommand, bool>
+    IUnitOfWork unitOfWork) : RequestHandler<RoleDeleteCommand, bool>
 {
     /// <summary>内置超管角色权限字符（保留值）。</summary>
     private const string SuperAdminRoleKey = "super_admin";
@@ -118,9 +118,6 @@ public sealed class RoleDeleteCommandHandler(
         {
             throw new BusinessException(ErrorCodes.RoleInUse, $"角色「{role.RoleName}」已被用户引用，不允许删除");
         }
-
-        // 乐观锁校验：守卫通过后比对客户端回传版本
-        EnsureVersionMatches(role, command.Version);
 
         // 变更前捕获角色状态快照（软删除可能回填墓碑字段）
         var snapshot = role.Snapshot<SysRole>();
@@ -145,7 +142,7 @@ public sealed class RoleUpdateCommandHandler(
     IAggregateRepository<SysMenu> menuRepository,
     IDomainEventPublisher domainEventPublisher,
     IUnitOfWork unitOfWork,
-    IMapper mapper) : CommandHandler<RoleUpdateCommand, bool>
+    IMapper mapper) : RequestHandler<RoleUpdateCommand, bool>
 {
     /// <summary>内置超管角色权限字符（保留值）。</summary>
     private const string SuperAdminRoleKey = "super_admin";
@@ -164,9 +161,6 @@ public sealed class RoleUpdateCommandHandler(
         var roleKey = request.RoleKey.Trim();
         await EnsureRoleKeyAvailableAsync(roleKey, excludeId: command.Id, cancellationToken);
         await RoleMenuSupport.ValidateMenusAsync(menuRepository, request.MenuIds, cancellationToken);
-
-        // 乐观锁校验：守卫通过后比对客户端回传版本
-        EnsureVersionMatches(role, request.Version);
 
         // 变更前捕获角色状态快照（实体在事务内被原位修改）
         var before = role.Snapshot<SysRole>();

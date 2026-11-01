@@ -10,7 +10,7 @@ namespace Application.Commands;
 /// <remarks>构造函数。</remarks>
 /// <param name="loginLogRepository">登录日志仓储（物理清空）。</param>
 /// <param name="domainEventPublisher">领域事件发布端口。</param>
-public sealed class LoginLogCleanCommandHandler(ILoginLogRepository loginLogRepository, IDomainEventPublisher domainEventPublisher) : CommandHandler<LoginLogCleanCommand>
+public sealed class LoginLogCleanCommandHandler(ILoginLogRepository loginLogRepository, IDomainEventPublisher domainEventPublisher) : RequestHandler<LoginLogCleanCommand>
 {
     /// <inheritdoc />
     protected override async Task HandleAsync(LoginLogCleanCommand command, CancellationToken cancellationToken)
@@ -26,7 +26,7 @@ public sealed class LoginLogCleanCommandHandler(ILoginLogRepository loginLogRepo
 /// <remarks>构造函数。</remarks>
 /// <param name="operLogRepository">操作日志仓储（物理清空）。</param>
 /// <param name="domainEventPublisher">领域事件发布端口。</param>
-public sealed class OperLogCleanCommandHandler(IOperLogRepository operLogRepository, IDomainEventPublisher domainEventPublisher) : CommandHandler<OperLogCleanCommand>
+public sealed class OperLogCleanCommandHandler(IOperLogRepository operLogRepository, IDomainEventPublisher domainEventPublisher) : RequestHandler<OperLogCleanCommand>
 {
     /// <inheritdoc />
     protected override async Task HandleAsync(OperLogCleanCommand command, CancellationToken cancellationToken)
@@ -42,7 +42,7 @@ public sealed class OperLogCleanCommandHandler(IOperLogRepository operLogReposit
 /// <remarks>构造函数。</remarks>
 /// <param name="loginLogRepository">登录日志仓储（物理删除）。</param>
 /// <param name="domainEventPublisher">领域事件发布端口。</param>
-public sealed class LoginLogDeleteCommandHandler(ILoginLogRepository loginLogRepository, IDomainEventPublisher domainEventPublisher) : CommandHandler<LoginLogDeleteCommand, bool>
+public sealed class LoginLogDeleteCommandHandler(ILoginLogRepository loginLogRepository, IDomainEventPublisher domainEventPublisher) : RequestHandler<LoginLogDeleteCommand, bool>
 {
     /// <inheritdoc />
     protected override async Task<bool> HandleAsync(LoginLogDeleteCommand command, CancellationToken cancellationToken)
@@ -60,7 +60,7 @@ public sealed class LoginLogDeleteCommandHandler(ILoginLogRepository loginLogRep
 /// <remarks>构造函数。</remarks>
 /// <param name="operLogRepository">操作日志仓储（物理删除）。</param>
 /// <param name="domainEventPublisher">领域事件发布端口。</param>
-public sealed class OperLogDeleteCommandHandler(IOperLogRepository operLogRepository, IDomainEventPublisher domainEventPublisher) : CommandHandler<OperLogDeleteCommand, bool>
+public sealed class OperLogDeleteCommandHandler(IOperLogRepository operLogRepository, IDomainEventPublisher domainEventPublisher) : RequestHandler<OperLogDeleteCommand, bool>
 {
     /// <inheritdoc />
     protected override async Task<bool> HandleAsync(OperLogDeleteCommand command, CancellationToken cancellationToken)

@@ -102,7 +102,7 @@ public sealed class MenuUpdateCommandHandler(
     IAggregateTreeRepository<SysMenu> menuRepository,
     IUnitOfWork unitOfWork,
     IDomainEventPublisher domainEventPublisher,
-    IMapper mapper) : CommandHandler<MenuUpdateCommand, bool>
+    IMapper mapper) : RequestHandler<MenuUpdateCommand, bool>
 {
     /// <inheritdoc />
     protected override async Task<bool> HandleAsync(MenuUpdateCommand command, CancellationToken cancellationToken)
@@ -110,9 +110,6 @@ public sealed class MenuUpdateCommandHandler(
         var request = command.Request;
         var menu = await menuRepository.GetAsync([it => it.Id == command.Id], cancellationToken)
             ?? throw new BusinessException(ErrorCodes.MenuNotFound, $"菜单 {command.Id} 不存在");
-
-        // 乐观锁校验：比对客户端回传版本（父级合法性由 MoveAsync 环检测兜底）
-        EnsureVersionMatches(menu, request.Version);
 
         var parentChanged = menu.ParentId != request.ParentId;
         var oldParentId = menu.ParentId;
