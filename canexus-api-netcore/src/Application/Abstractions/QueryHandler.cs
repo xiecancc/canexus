@@ -1,7 +1,7 @@
 
 using System.Linq.Expressions;
 using Application.Contracts.Abstractions;
-using Application.Contracts.Common;
+using Application.Contracts.Dtos.Common;
 using AutoMapper;
 using Domain.Entities;
 using Domain.Repositories;

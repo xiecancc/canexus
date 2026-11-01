@@ -1,6 +1,6 @@
 
 using Application.Contracts.Abstractions;
-using Application.Contracts.Common;
+using Application.Contracts.Dtos.Common;
 using Domain.Entities;
 using Domain.Events;
 using Domain.Repositories;

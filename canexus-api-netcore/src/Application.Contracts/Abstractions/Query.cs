@@ -1,4 +1,4 @@
-using Application.Contracts.Common;
+using Application.Contracts.Dtos.Common;
 using Domain.Shared.Paging;
 using MediatR;
 

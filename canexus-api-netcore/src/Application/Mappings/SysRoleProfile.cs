@@ -1,5 +1,4 @@
-
-using Application.Contracts.Common;
+using Application.Contracts.Dtos.Common;
 using Application.Contracts.Roles;
 using AutoMapper;
 using Domain.Entities;
