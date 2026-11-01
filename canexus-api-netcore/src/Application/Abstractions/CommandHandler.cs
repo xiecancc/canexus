@@ -51,36 +51,22 @@ public abstract class CommandHandler<TCommand, TResponse> : RequestHandler<TComm
 
 /// <summary>
 /// 聚合写命令处理器基类：响应统一为 bool（写操作成功与否，不返回聚合 Id），
-/// 承载各聚合写命令（创建 / 更新 / 删除 / 恢复）共用的只读聚合仓储。
+/// 承载各聚合写命令（创建 / 更新 / 删除 / 恢复）共用的只读聚合仓储与领域事件发布器。
 /// </summary>
 /// <typeparam name="TCommand">聚合写命令类型。</typeparam>
 /// <typeparam name="TEntity">目标聚合类型。</typeparam>
 /// <param name="repository">目标聚合仓储。</param>
+/// <param name="eventPublisher">领域事件发布器。</param>
 public abstract class AggregateCommandHandler<TCommand, TEntity>(
-    IAggregateRepository<TEntity> repository) : CommandHandler<TCommand, bool>
+    IAggregateRepository<TEntity> repository,
+    IDomainEventPublisher eventPublisher) : CommandHandler<TCommand, bool>
     where TCommand : MediatR.IRequest<bool>
     where TEntity : AggregateBase
 {
     /// <summary>目标聚合仓储。</summary>
     protected IAggregateRepository<TEntity> Repository { get; } = repository;
-}
 
-/// <summary>
-/// 聚合变更写命令处理器基类：在 <see cref="AggregateCommandHandler{TCommand, TEntity}"/> 之上
-/// 承载发布领域事件的变更类写命令（创建 / 更新 / 删除）共用的领域事件发布器；
-/// 恢复为幂等修复操作不发布事件，直接继承上层基类。
-/// </summary>
-/// <typeparam name="TCommand">聚合变更写命令类型。</typeparam>
-/// <typeparam name="TEntity">目标聚合类型。</typeparam>
-/// <param name="repository">目标聚合仓储。</param>
-/// <param name="eventPublisher">领域事件发布器。</param>
-public abstract class AggregateChangeCommandHandler<TCommand, TEntity>(
-    IAggregateRepository<TEntity> repository,
-    IDomainEventPublisher eventPublisher) : AggregateCommandHandler<TCommand, TEntity>(repository)
-    where TCommand : MediatR.IRequest<bool>
-    where TEntity : AggregateBase
-{
-    /// <summary>领域事件发布器。</summary>
+    /// <summary>领域事件发布器（创建 / 更新 / 删除 / 恢复的关键节点事件均经此发布）。</summary>
     protected IDomainEventPublisher EventPublisher { get; } = eventPublisher;
 }
 
@@ -97,7 +83,7 @@ public abstract class AggregateChangeCommandHandler<TCommand, TEntity>(
 /// <param name="eventPublisher">领域事件发布器。</param>
 public abstract class AggregateCreateCommandHandler<TCommand, TRequest, TEntity>(
     IAggregateRepository<TEntity> repository,
-    IDomainEventPublisher eventPublisher) : AggregateChangeCommandHandler<TCommand, TEntity>(repository, eventPublisher)
+    IDomainEventPublisher eventPublisher) : AggregateCommandHandler<TCommand, TEntity>(repository, eventPublisher)
     where TCommand : AggregateCreateCommand<TRequest>
     where TRequest : AggregateChangeRequest
     where TEntity : AggregateBase
@@ -146,7 +132,7 @@ public abstract class AggregateCreateCommandHandler<TCommand, TRequest, TEntity>
 /// <param name="eventPublisher">领域事件发布器。</param>
 public abstract class AggregateUpdateCommandHandler<TCommand, TRequest, TEntity>(
     IAggregateRepository<TEntity> repository,
-    IDomainEventPublisher eventPublisher) : AggregateChangeCommandHandler<TCommand, TEntity>(repository, eventPublisher)
+    IDomainEventPublisher eventPublisher) : AggregateCommandHandler<TCommand, TEntity>(repository, eventPublisher)
     where TCommand : AggregateUpdateCommand<TRequest>
     where TRequest : AggregateChangeRequest
     where TEntity : AggregateBase
@@ -208,7 +194,7 @@ public abstract class AggregateUpdateCommandHandler<TCommand, TRequest, TEntity>
 /// <param name="eventPublisher">领域事件发布器。</param>
 public abstract class AggregateDeleteCommandHandler<TCommand, TEntity>(
     IAggregateRepository<TEntity> repository,
-    IDomainEventPublisher eventPublisher) : AggregateChangeCommandHandler<TCommand, TEntity>(repository, eventPublisher)
+    IDomainEventPublisher eventPublisher) : AggregateCommandHandler<TCommand, TEntity>(repository, eventPublisher)
     where TCommand : AggregateDeleteCommand
     where TEntity : AggregateBase
 {
@@ -304,21 +290,42 @@ internal static class CommandGuards
 
 /// <summary>
 /// 聚合恢复命令处理器基类（对应 <see cref="AggregateRestoreCommand"/>）：封装
-/// 「按 Id 幂等恢复（解除软删除墓碑）→ 返回 bool」的标准恢复流程。
-/// <para>恢复为幂等操作：主键不存在或未删除时静默忽略（仓储语义）；不发布领域事件。</para>
+/// 「幂等恢复（解除软删除墓碑）→ 实际恢复时取回恢复后聚合并发布恢复事件 → 返回是否恢复」
+/// 的标准恢复流程。
+/// <para>恢复为幂等操作：主键不存在或未删除时仓储静默忽略并返回 false（不发布事件）；
+/// 仅在墓碑实际解除后由 <see cref="CreateEvent"/> 构造事件发布（携带恢复后聚合状态，
+/// 供缓存失效等监听器响应）。</para>
 /// </summary>
 /// <typeparam name="TCommand">恢复命令类型。</typeparam>
 /// <typeparam name="TEntity">目标聚合类型。</typeparam>
 /// <param name="repository">目标聚合仓储。</param>
+/// <param name="eventPublisher">领域事件发布器。</param>
 public abstract class AggregateRestoreCommandHandler<TCommand, TEntity>(
-    IAggregateRepository<TEntity> repository) : AggregateCommandHandler<TCommand, TEntity>(repository)
+    IAggregateRepository<TEntity> repository,
+    IDomainEventPublisher eventPublisher) : AggregateCommandHandler<TCommand, TEntity>(repository, eventPublisher)
     where TCommand : AggregateRestoreCommand
     where TEntity : AggregateBase
 {
+    /// <summary>恢复完成事件钩子：构造携带恢复后聚合状态的领域事件。</summary>
+    /// <param name="restored">恢复后的聚合（已解除软删除墓碑）。</param>
+    /// <returns>待发布的领域事件。</returns>
+    protected abstract DomainEvent CreateEvent(TEntity restored);
+
     /// <inheritdoc />
     protected sealed override async Task<bool> HandleAsync(TCommand command, CancellationToken cancellationToken)
     {
-        await Repository.RestoreAsync(command.Id, cancellationToken);
+        // 幂等恢复：主键不存在或未删除时仓储静默忽略（返回 false），不发布事件
+        if (!await Repository.RestoreAsync(command.Id, cancellationToken))
+        {
+            return false;
+        }
+
+        // 恢复刚成功，聚合必然可常规查询（墓碑已解除）；取回恢复后状态供事件携带
+        var restored = await Repository.GetAsync([it => it.Id == command.Id], cancellationToken: cancellationToken)
+            ?? throw new InvalidOperationException($"聚合 {command.Id} 恢复成功但不可查询，疑似数据访问层软删除过滤异常");
+
+        // 关键节点发布恢复领域事件（缓存失效等响应动作由监听器处理）
+        await EventPublisher.PublishAsync(CreateEvent(restored), cancellationToken);
         return true;
     }
 }

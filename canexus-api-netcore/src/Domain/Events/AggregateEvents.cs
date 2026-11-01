@@ -41,7 +41,7 @@ public abstract class AggregateDeletedEvent<TAggregate>(TAggregate entity) : Dom
 {
 }
 
-/// <summary>恢复事件基类（预留）：携带恢复后的聚合状态（Domain），供软删除恢复（IAggregateRepository.RestoreAsync）业务流程接入。</summary>
+/// <summary>恢复事件基类：携带恢复后的聚合状态（Domain），由聚合恢复命令处理器（AggregateRestoreCommandHandler）在实际解除软删除墓碑后发布。</summary>
 /// <typeparam name="TAggregate">聚合实体类型。</typeparam>
 /// <remarks>构造函数：由派生事件传入恢复后的聚合。</remarks>
 /// <param name="entity">恢复后的聚合状态。</param>
