@@ -9,7 +9,12 @@ import { ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, Refresh, Search, View } from '@element-plus/icons-vue'
 import type { NoticeVO } from '@/api/system/notice'
-import { deleteNoticeApi, getNoticeApi, getNoticePageApi, updateNoticeApi } from '@/api/system/notice'
+import {
+  deleteNoticeApi,
+  getNoticeApi,
+  getNoticePageApi,
+  updateNoticeApi,
+} from '@/api/system/notice'
 import { usePage } from '@/composables/usePage'
 import { usePermission } from '@/composables/usePermission'
 import { commitStatusToggle } from '@/composables/useStatusToggle'

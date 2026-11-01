@@ -1,5 +1,5 @@
 # 提交门禁（仓库根，覆盖全部子项目）：lint-staged 声明式分类检查
-# - 前端 *.{js,mjs,cjs,ts,vue}：oxlint --fix + oxfmt（经 pnpm -C admin-vue 以正确 cwd 运行）
+# - 前端 *.{js,mjs,cjs,ts,vue}：oxlint --fix + oxfmt（经 pnpm -C canexus-admin-vue 以正确 cwd 运行）
 # - 后端 *.cs：dotnet format api.slnx --include
 # 自动修复后由 lint-staged 重新暂存；存在无法自动修复的问题则提交失败
 HOOK_DIR=$(cd "$(dirname "$0")" && pwd)

@@ -1,5 +1,5 @@
 # CI 流水线：前端（lint / 类型检查 / 单测 / 构建）+ 后端（构建 / 集成测试）
-# 前端：Node 26 + pnpm（与 admin-vue/package.json engines 约定一致）
+# 前端：Node 26 + pnpm（与 canexus-admin-vue/package.json engines 约定一致）
 # 后端：.NET 10 + MySQL 8 服务容器（集成测试经 SUPER_ADMIN_TEST_CONN 指向容器）
 name: CI
 
@@ -19,7 +19,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: admin-vue
+        working-directory: canexus-admin-vue
     steps:
       - uses: actions/checkout@v4
 
@@ -33,7 +33,7 @@ jobs:
         with:
           node-version: 26
           cache: pnpm
-          cache-dependency-path: admin-vue/pnpm-lock.yaml
+          cache-dependency-path: canexus-admin-vue/pnpm-lock.yaml
 
       - name: 安装依赖
         run: pnpm install --frozen-lockfile
@@ -55,7 +55,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: api-netcore
+        working-directory: canexus-api-netcore
 
     services:
       mysql:

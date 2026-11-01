@@ -175,14 +175,6 @@ describe('getCheckedMenuIds 回显勾选集合', () => {
 
 describe('collectMenuIds 收集节点', () => {
   it('收集树中全部节点 ID（含父与子）', () => {
-    expect(collectMenuIds(tree)).toEqual([
-      gid(1),
-      gid(2),
-      gid(21),
-      gid(22),
-      gid(3),
-      gid(4),
-      gid(5),
-    ])
+    expect(collectMenuIds(tree)).toEqual([gid(1), gid(2), gid(21), gid(22), gid(3), gid(4), gid(5)])
   })
 })

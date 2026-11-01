@@ -56,7 +56,12 @@ function makeUser(partial: Partial<UserVO>): UserVO {
 
 const users: UserVO[] = [
   makeUser({}),
-  makeUser({ id: '00000000-0000-0000-0000-000000000002', userName: 'admin', nickName: '超级管理员', roles: [] }),
+  makeUser({
+    id: '00000000-0000-0000-0000-000000000002',
+    userName: 'admin',
+    nickName: '超级管理员',
+    roles: [],
+  }),
 ]
 
 const deptTree: DeptVO[] = [

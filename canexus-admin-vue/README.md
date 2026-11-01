@@ -1,4 +1,4 @@
-# admin-vue — 管理端前端
+# canexus-admin-vue — 管理端前端
 
 中后台管理系统的 Web 前端，基于 Vue 3 + Vite + Element Plus，内置动态路由（按后端菜单动态生成）、RBAC 按钮级权限指令、Pinia 状态管理与完整的工作区工程化配置（类型检查 / 单测 / E2E / Lint / Format）。
 
@@ -36,7 +36,7 @@
 ## 目录结构
 
 ```
-admin-vue/
+canexus-admin-vue/
 ├── index.html                      # 入口 HTML
 ├── vite.config.ts                  # Vite 配置（/api 代理转发后端）
 ├── .env / .env.production          # VITE_API_BASE_URL、VITE_PROXY_TARGET
@@ -70,7 +70,7 @@ admin-vue/
 
 - Node.js >= 26.0.0
 - pnpm（包管理器）
-- 可访问的后端服务（默认代理到 `http://localhost:5000`，见 `api-netcore/README.md`）
+- 可访问的后端服务（默认代理到 `http://localhost:5000`，见 `canexus-api-netcore/README.md`）
 
 ## 本地运行
 
@@ -96,7 +96,7 @@ pnpm preview          # 本地预览构建产物
 
 | 钩子 | 时机 | 执行内容 |
 | --- | --- | --- |
-| `pre-commit` | `git commit` 前 | lint-staged（配置于根 `.lintstagedrc.mjs`）对暂存文件分类检查：前端文件（`*.{js,mjs,cjs,ts,vue}`）经 `pnpm -C admin-vue` 以本目录为 cwd 执行 `oxlint --fix` + `oxfmt`；后端 `.cs` 文件执行 `dotnet format --include`（路径转换为仓库相对路径后传入）。自动修复后重新暂存，无法修复的问题则提交失败 |
+| `pre-commit` | `git commit` 前 | lint-staged（配置于根 `.lintstagedrc.mjs`）对暂存文件分类检查：前端文件（`*.{js,mjs,cjs,ts,vue}`）经 `pnpm -C canexus-admin-vue` 以本目录为 cwd 执行 `oxlint --fix` + `oxfmt`；后端 `.cs` 文件执行 `dotnet format --include`（路径转换为仓库相对路径后传入）。自动修复后重新暂存，无法修复的问题则提交失败 |
 | `pre-push` | `git push` 前 | 前端全量 `pnpm type-check`（vue-tsc）+ `pnpm test:unit run`（Vitest）+ 后端 `dotnet build` 编译检查；任一失败则推送被拒绝 |
 
 配置位置：
@@ -127,7 +127,7 @@ pnpm preview          # 本地预览构建产物
 ```nginx
 server {
     listen 80;
-    root /var/www/admin-vue/dist;
+    root /var/www/canexus-admin-vue/dist;
     index index.html;
 
     # 安全响应头（CSP 按需放宽，如头像允许外链域名时在 img-src 追加）
@@ -141,7 +141,7 @@ server {
     }
 
     location /api {
-        proxy_pass http://127.0.0.1:5000;   # 后端 api-netcore
+        proxy_pass http://127.0.0.1:5000;   # 后端 canexus-api-netcore
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
     }

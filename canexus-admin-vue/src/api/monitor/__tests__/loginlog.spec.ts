@@ -44,7 +44,9 @@ describe('登录日志模块接口', () => {
 
   it('删除单条：DELETE /system/login-log/{id}', async () => {
     await deleteLoginLogApi('00000000-0000-0000-0000-000000000011')
-    expect(mockedDelete).toHaveBeenCalledWith('/system/login-log/00000000-0000-0000-0000-000000000011')
+    expect(mockedDelete).toHaveBeenCalledWith(
+      '/system/login-log/00000000-0000-0000-0000-000000000011',
+    )
   })
 
   it('清空全部：POST /system/login-log/clean', async () => {

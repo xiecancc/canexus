@@ -43,7 +43,12 @@ describe('租户管理模块接口', () => {
 
   it('查询全部租户：GET /system/tenant/all 返回简要集合', async () => {
     const all = [
-      { id: '00000000-0000-0000-0000-000000000001', tenantKey: 'super', tenantName: '总租户', status: 1 },
+      {
+        id: '00000000-0000-0000-0000-000000000001',
+        tenantKey: 'super',
+        tenantName: '总租户',
+        status: 1,
+      },
     ]
     mockedGet.mockResolvedValueOnce(all)
     await expect(getTenantAllApi()).resolves.toBe(all)
@@ -59,13 +64,14 @@ describe('租户管理模块接口', () => {
   it('更新租户：PUT /system/tenant/{id}（标识随请求体提交但不可修改）', async () => {
     const body = { tenantKey: 'acme', tenantName: 'Acme 集团', status: 0 }
     await updateTenantApi('00000000-0000-0000-0000-000000000008', body)
-    expect(mockedPut).toHaveBeenCalledWith('/system/tenant/00000000-0000-0000-0000-000000000008', body)
+    expect(mockedPut).toHaveBeenCalledWith(
+      '/system/tenant/00000000-0000-0000-0000-000000000008',
+      body,
+    )
   })
 
   it('删除租户：DELETE /system/tenant/{id}', async () => {
     await deleteTenantApi('00000000-0000-0000-0000-000000000008')
-    expect(mockedDelete).toHaveBeenCalledWith(
-      '/system/tenant/00000000-0000-0000-0000-000000000008',
-    )
+    expect(mockedDelete).toHaveBeenCalledWith('/system/tenant/00000000-0000-0000-0000-000000000008')
   })
 })

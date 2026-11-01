@@ -17,7 +17,10 @@ const ADMIN_PASSWORD = 'admin123'
 async function resolveCaptchaCode(page: Page): Promise<string> {
   const imageBase64 = await page.locator('img[alt="验证码"]').getAttribute('src')
   expect(imageBase64).toContain('data:image/svg+xml;base64,')
-  const svg = Buffer.from(imageBase64!.replace('data:image/svg+xml;base64,', ''), 'base64').toString('utf-8')
+  const svg = Buffer.from(
+    imageBase64!.replace('data:image/svg+xml;base64,', ''),
+    'base64',
+  ).toString('utf-8')
   const chars = [...svg.matchAll(/<text x="([\d.]+)"[^>]*>([^<]+)<\/text>/g)]
     .map((m) => ({ x: Number(m[1]), char: m[2] }))
     .sort((a, b) => a.x - b.x)

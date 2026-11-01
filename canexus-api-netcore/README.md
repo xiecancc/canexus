@@ -1,4 +1,4 @@
-# api-netcore — 后端服务
+# canexus-api-netcore — 后端服务
 
 基于 .NET 10 的中后台管理系统后端，采用经典分层架构（API / Application / Domain / Infrastructure），内置 RBAC 权限、多租户、乐观并发、定时任务调度与完整审计能力。数据库结构由 SqlSugar CodeFirst 自动创建并填充种子数据，开箱即用。
 
@@ -38,7 +38,7 @@
 ## 目录结构
 
 ```
-api-netcore/
+canexus-api-netcore/
 ├── api.slnx                        # 解决清单文件
 ├── src/
 │   ├── API/                        # 宿主层：Controller、过滤器/特性、中间件、Program、appsettings
@@ -116,7 +116,7 @@ api-netcore/
 - 代码风格基线由 `.editorconfig` 定义：风格类规则统一 **warning 级**，配合各项目的 `TreatWarningsAsErrors`，编译警告与代码风格违规在构建期均按**错误**处理（不合规代码无法通过构建）；格式统一经 `dotnet format api.slnx` 执行，各配置项的作用以 `.editorconfig` 内注释为准（该文件是规则与说明的唯一载体）
 - **变量声明优先 `var`**：内置类型 / 类型明显 / 其余场景均用 `var`（`csharp_style_var_*` 三项均为 `true`）
 - **类优先主构造函数 + `get` 只读属性**：依赖与构造参数经 C# 12 主构造函数承载，转存为 `{ get; }` 只读自动属性，避免传统构造函数字段回填样板（`csharp_style_prefer_primary_constructors`）
-- 提交 `.cs` 文件时，仓库级 pre-commit 钩子（husky + lint-staged，见 `admin-vue/README.md`）会自动对其运行 `dotnet format --include`；推送前执行 `dotnet build` 编译检查
+- 提交 `.cs` 文件时，仓库级 pre-commit 钩子（husky + lint-staged，见 `canexus-admin-vue/README.md`）会自动对其运行 `dotnet format --include`；推送前执行 `dotnet build` 编译检查
 - 新增警告将被构建拒绝：修复警告（或经评审后以 `#pragma` / `.editorconfig` 降级并注明原因），不要绕过
 
 ## 本地运行

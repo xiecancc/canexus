@@ -56,13 +56,14 @@ describe('参数配置模块接口', () => {
   it('更新参数：PUT /system/config/{id}', async () => {
     const body = { configName: '主框架皮肤', configKey: 'sys.index.skinName', configValue: 'light' }
     await updateConfigApi('00000000-0000-0000-0000-000000000005', body)
-    expect(mockedPut).toHaveBeenCalledWith('/system/config/00000000-0000-0000-0000-000000000005', body)
+    expect(mockedPut).toHaveBeenCalledWith(
+      '/system/config/00000000-0000-0000-0000-000000000005',
+      body,
+    )
   })
 
   it('删除参数：DELETE /system/config/{id}', async () => {
     await deleteConfigApi('00000000-0000-0000-0000-000000000005')
-    expect(mockedDelete).toHaveBeenCalledWith(
-      '/system/config/00000000-0000-0000-0000-000000000005',
-    )
+    expect(mockedDelete).toHaveBeenCalledWith('/system/config/00000000-0000-0000-0000-000000000005')
   })
 })

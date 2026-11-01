@@ -3,4 +3,4 @@
 HOOK_DIR=$(cd "$(dirname "$0")" && pwd)
 cd "$HOOK_DIR/.." || exit 1
 
-pnpm -C admin-vue type-check && pnpm -C admin-vue test:unit run && dotnet build api-netcore/api.slnx --verbosity quiet
+pnpm -C canexus-admin-vue type-check && pnpm -C canexus-admin-vue test:unit run && dotnet build canexus-api-netcore/api.slnx --verbosity quiet

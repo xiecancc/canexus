@@ -45,7 +45,9 @@ describe('操作日志模块接口', () => {
 
   it('删除单条：DELETE /system/oper-log/{id}', async () => {
     await deleteOperLogApi('00000000-0000-0000-0000-000000000009')
-    expect(mockedDelete).toHaveBeenCalledWith('/system/oper-log/00000000-0000-0000-0000-000000000009')
+    expect(mockedDelete).toHaveBeenCalledWith(
+      '/system/oper-log/00000000-0000-0000-0000-000000000009',
+    )
   })
 
   it('清空全部：POST /system/oper-log/clean', async () => {

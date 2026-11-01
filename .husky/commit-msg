@@ -1,0 +1,16 @@
+# 提交信息门禁：强制 Conventional Commits 格式（type: 描述）
+# 允许的 type：feat fix docs style refactor perf test build ci chore revert
+# 例外：Merge/Revert 开头的系统生成信息直接放行
+MSG=$(head -n1 "$1")
+
+case "$MSG" in
+  "Merge "*" "*" "*" "* | Merge\ * | Revert\ *) exit 0 ;;
+esac
+
+if ! printf '%s' "$MSG" | grep -qE '^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\([^)]+\))?: .+'; then
+  echo "❌ 提交信息不符合 Conventional Commits 规范：$MSG" >&2
+  echo "   格式：type(可选范围): 描述" >&2
+  echo "   允许的 type：feat fix docs style refactor perf test build ci chore revert" >&2
+  echo "   示例：refactor: 统一更新审计口径为可空语义" >&2
+  exit 1
+fi

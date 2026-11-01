@@ -1,22 +1,16 @@
-import { relative, sep } from 'node:path'
-
 /**
- * 将 lint-staged 传入的绝对路径转换为仓库根相对路径。
- * 原因：dotnet format 的 --include 不识别绝对路径（静默跳过，不报错）。
+ * 使用函数形式而非文件列表拼接，原因：
+ * 1. 大规模暂存（如目录更名）会把数百个文件路径拼进命令行，
+ *    超出 Windows 32767 字符上限导致钩子被杀（--include 与 argv 同理）；
+ * 2. 函数形式不追加文件参数，改为对子项目全量检查——代码库保持全绿时代价仅毫秒/秒级。
  */
-function toRepoRelative(filenames) {
-  return filenames.map((f) => relative(process.cwd(), f).split(sep).join('/'))
-}
-
 /** @type {import('lint-staged').Configuration} */
 const config = {
-  '*.{js,mjs,cjs,ts,vue}': ['pnpm -C admin-vue exec oxlint --fix', 'pnpm -C admin-vue exec oxfmt'],
-  '*.cs': (filenames) => {
-    const includes = toRepoRelative(filenames)
-      .map((f) => `"${f}"`)
-      .join(' ')
-    return [`dotnet format api-netcore/api.slnx --include ${includes}`]
-  },
+  '*.{js,mjs,cjs,ts,vue}': () => [
+    'pnpm -C canexus-admin-vue exec oxlint --fix src e2e',
+    'pnpm -C canexus-admin-vue exec oxfmt src e2e',
+  ],
+  '*.cs': () => 'dotnet format canexus-api-netcore/api.slnx --verify-no-changes',
 }
 
 export default config
