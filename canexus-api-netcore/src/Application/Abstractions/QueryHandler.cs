@@ -85,19 +85,20 @@ public abstract class DomainQueryPagedHandler<TQuery, TRequest, TEntity, TRespon
 }
 
 /// <summary>
-/// 聚合详情查询处理器基类（对应 <see cref="AggregateQueryById{TResponse}"/>）：封装
+/// 聚合详情查询处理器基类（对应 <see cref="AggregateQueryDetail{TResponse}"/>）：封装
 /// 「按 Id 取值兜底 → 投影响应 → 可选组装扩展字段」的标准详情查询流程。
 /// 扩展字段（如关联集合、正文回填）在 <see cref="EnrichAsync"/> 钩子中组装。
 /// </summary>
 /// <typeparam name="TQuery">详情查询类型。</typeparam>
 /// <typeparam name="TEntity">聚合实体类型。</typeparam>
-/// <typeparam name="TResponse">详情响应类型。</typeparam>
+/// <typeparam name="TResponse">详情响应类型（须继承 <see cref="AggregateDetailResponse"/>）。</typeparam>
 /// <param name="repository">聚合仓储（只读）。</param>
 /// <param name="mapper">AutoMapper 映射器。</param>
-public abstract class AggregateQueryByIdHandler<TQuery, TEntity, TResponse>(
+public abstract class AggregateQueryDetailHandler<TQuery, TEntity, TResponse>(
     IAggregateRepository<TEntity> repository,
     IMapper mapper) : QueryHandler<TQuery, TResponse>
-    where TQuery : AggregateQueryById<TResponse>
+    where TQuery : AggregateQueryDetail<TResponse>
+    where TResponse : AggregateDetailResponse
     where TEntity : AggregateBase
 {
     /// <summary>聚合仓储（只读）。</summary>
@@ -211,4 +212,45 @@ public abstract class AggregateQueryListHandler<TQuery, TRequest, TEntity, TResp
     where TResponse : AggregateListResponse
     where TEntity : AggregateBase
 {
+}
+
+/// <summary>
+/// 聚合下拉查询处理器基类（对应 <see cref="AggregateQueryDropdown{TResponse}"/>）：
+/// 封装「钩子过滤（模块自行决定仅启用项等条件）→ 排序下推 → 集合映射」的标准下拉流程。
+/// </summary>
+/// <typeparam name="TQuery">下拉查询类型。</typeparam>
+/// <typeparam name="TEntity">聚合实体类型。</typeparam>
+/// <typeparam name="TResponse">下拉简项响应类型（须继承 <see cref="AggregateDropdownResponse"/>）。</typeparam>
+/// <param name="repository">聚合仓储（只读）。</param>
+/// <param name="mapper">AutoMapper 映射器。</param>
+public abstract class AggregateQueryDropdownHandler<TQuery, TEntity, TResponse>(
+    IAggregateRepository<TEntity> repository,
+    IMapper mapper) : QueryHandler<TQuery, List<TResponse>>
+    where TQuery : AggregateQueryDropdown<TResponse>
+    where TResponse : AggregateDropdownResponse
+    where TEntity : AggregateBase
+{
+    /// <summary>聚合仓储（只读）。</summary>
+    protected IAggregateRepository<TEntity> Repository { get; } = repository;
+
+    /// <summary>AutoMapper 映射器。</summary>
+    protected IMapper Mapper { get; } = mapper;
+
+    /// <summary>过滤条件构造钩子：下拉项过滤（如仅启用项；返回 null 表示不过滤）。</summary>
+    /// <returns>过滤条件表达式；不过滤时为 null。</returns>
+    protected abstract Expression<Func<TEntity, bool>>? BuildDropdownPredicate();
+
+    /// <summary>排序构造钩子：多重排序（value 为 true 升序、false 或 null 降序；返回 null 时按仓储默认序）。</summary>
+    /// <returns>排序字典；默认为 null。</returns>
+    protected virtual IDictionary<Expression<Func<TEntity, object>>, bool?>? BuildDropdownOrders() => null;
+
+    /// <inheritdoc />
+    protected sealed override async Task<List<TResponse>> HandleAsync(TQuery query, CancellationToken cancellationToken)
+    {
+        var predicate = BuildDropdownPredicate();
+        var entities = await Repository.GetListAsync(predicate is null ? null : [predicate], BuildDropdownOrders(), cancellationToken);
+
+        // 下拉实体集合整体映射（元素映射运行期按各模块「实体 → Response」注册解析）
+        return Mapper.Map<List<TResponse>>(entities);
+    }
 }

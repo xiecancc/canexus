@@ -6,7 +6,7 @@ using Domain.Shared.Paging;
 namespace Application.Contracts.Queries;
 /// <summary>按字典类型查询启用状态的字典数据（走缓存，写操作后失效）。</summary>
 /// <param name="DictType">字典类型。</param>
-public sealed record DictDataQueryByType : AggregateQueryList<DictDataByTypeRequest, DictDataSimpleResponse>
+public sealed record DictDataQueryByType : AggregateQueryList<DictDataByTypeRequest, DictDataDropdownResponse>
 {
     /// <summary>构造按类型查询请求。</summary>
     /// <param name="dictType">字典类型编码。</param>

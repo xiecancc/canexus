@@ -17,10 +17,10 @@ namespace Application.Queries;
 /// <param name="dictDataRepository">字典数据仓储。</param>
 /// <param name="mapper">AutoMapper 映射器。</param>
 /// <param name="cache">内存缓存（写操作后按类型失效）。</param>
-public sealed class DictDataQueryByTypeHandler(IAggregateRepository<SysDictData> dictDataRepository, IMapper mapper, ICache cache) : QueryHandler<DictDataQueryByType, List<DictDataSimpleResponse>>
+public sealed class DictDataQueryByTypeHandler(IAggregateRepository<SysDictData> dictDataRepository, IMapper mapper, ICache cache) : QueryHandler<DictDataQueryByType, List<DictDataDropdownResponse>>
 {
     /// <inheritdoc />
-    protected override async Task<List<DictDataSimpleResponse>> HandleAsync(DictDataQueryByType query, CancellationToken cancellationToken)
+    protected override async Task<List<DictDataDropdownResponse>> HandleAsync(DictDataQueryByType query, CancellationToken cancellationToken)
     {
         var type = query.Request.DictType.Trim();
         var cacheKey = DictRules.DataTypeCacheKey(type);
@@ -32,7 +32,7 @@ public sealed class DictDataQueryByTypeHandler(IAggregateRepository<SysDictData>
                 .OrderBy(d => d.OrderNum)
                 .ThenBy(d => d.Id)
                 .ToList();
-            return mapper.Map<List<DictDataSimpleResponse>>(enabled);
+            return mapper.Map<List<DictDataDropdownResponse>>(enabled);
         }, CacheTtl.Medium, cancellationToken);
     }
 }

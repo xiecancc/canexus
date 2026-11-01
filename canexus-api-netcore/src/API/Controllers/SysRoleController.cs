@@ -35,7 +35,7 @@ public class SysRoleController(ISender sender) : ControllerBase
     [RequirePermission("system:role:list")]
     public async Task<IActionResult> All()
     {
-        return Ok(Result.Ok(await sender.Send(new RoleQueryList())));
+        return Ok(Result.Ok(await sender.Send(new RoleQueryDropdown())));
     }
 
     /// <summary>获取角色详情（含授权菜单 Id 集合，前端用作菜单授权回显）。</summary>
@@ -45,7 +45,7 @@ public class SysRoleController(ISender sender) : ControllerBase
     [RequirePermission("system:role:query")]
     public async Task<IActionResult> Get(Guid id)
     {
-        return Ok(Result.Ok(await sender.Send(new RoleQueryById(id))));
+        return Ok(Result.Ok(await sender.Send(new RoleQueryDetail(id))));
     }
 
     /// <summary>创建角色（roleKey 唯一且不可使用保留值 super_admin；菜单授权全删全插）。</summary>

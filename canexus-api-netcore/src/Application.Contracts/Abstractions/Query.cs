@@ -69,16 +69,25 @@ public abstract record AggregateQueryList<TRequest, TResponse>(TRequest Request)
     where TRequest : AggregateListRequest;
 
 /// <summary>
+/// 聚合下拉查询抽象基类（Aggregate 级）：无载荷查询全量下拉简项，
+/// 过滤条件（仅启用项等）与排序由处理器钩子决定，响应约束到下拉简项基类。
+/// </summary>
+/// <typeparam name="TResponse">下拉简项响应类型（须继承 <see cref="AggregateDropdownResponse"/>）。</typeparam>
+public abstract record AggregateQueryDropdown<TResponse>() : Query<List<TResponse>>
+    where TResponse : AggregateDropdownResponse;
+
+/// <summary>
 /// 聚合详情查询抽象基类：按 Id 查询单个聚合的公共形状（载荷即聚合 Id）。
-/// <para>由 <c>QueryByIdHandler</c> 消费（直接读取 Id，子类无需再实现取值钩子）；
+/// <para>由 <c>QueryDetailHandler</c> 消费（直接读取 Id，子类无需再实现取值钩子）；
 /// 详情查询 record 继承本基类并转发构造（<c>base(id)</c>）。</para>
 /// <para>载荷即聚合 Id，同时以位置属性 <see cref="Id"/>（主读形态）与
 /// 继承的 <c>Request</c> 属性暴露，两者等值。</para>
-/// <para>响应类型不设基类约束：详情响应的 DTO 家族由各模块自行选择
-/// （当前模块均挂在 <see cref="AggregatePagedResponse"/> 家族下）。</para>
+/// <para>响应约束到 <see cref="AggregateDetailResponse"/>：详情读模型须携带 Id / Version
+/// 等聚合标识与审计字段，支撑前端修改 / 删除的乐观锁回传闭环。</para>
 /// </summary>
-/// <typeparam name="TResponse">详情响应类型。</typeparam>
+/// <typeparam name="TResponse">详情响应类型（须继承 <see cref="AggregateDetailResponse"/>）。</typeparam>
 /// <param name="Id">目标聚合 Id。</param>
-public abstract record AggregateQueryById<TResponse>(Guid Id) : Query<Guid, TResponse>(Id)
+public abstract record AggregateQueryDetail<TResponse>(Guid Id) : Query<Guid, TResponse>(Id)
+    where TResponse : AggregateDetailResponse
 {
 }

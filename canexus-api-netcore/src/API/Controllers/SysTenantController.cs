@@ -35,7 +35,7 @@ public class SysTenantController(ISender sender) : ControllerBase
     [RequirePermission("system:tenant:list")]
     public async Task<IActionResult> All()
     {
-        return Ok(Result.Ok(await sender.Send(new TenantQueryList())));
+        return Ok(Result.Ok(await sender.Send(new TenantQueryDropdown())));
     }
 
     /// <summary>创建租户（tenantKey 唯一）。</summary>

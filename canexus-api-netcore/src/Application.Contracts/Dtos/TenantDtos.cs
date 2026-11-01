@@ -33,11 +33,8 @@ public class TenantListResponse : AggregatePagedResponse
 }
 
 /// <summary>租户下拉简项（供用户创建时选择所属租户）。</summary>
-public class TenantSimpleResponse : AggregateListResponse
+public class TenantDropdownResponse : AggregateDropdownResponse
 {
-    /// <summary>租户 Id。</summary>
-    public Guid Id { get; set; }
-
     /// <summary>租户标识。</summary>
     public string TenantKey { get; set; } = string.Empty;
 
@@ -84,7 +81,4 @@ public class TenantDeleteRequest
     public Guid Version { get; set; }
 }
 
-/// <summary>租户列表查询请求（启用状态租户下拉；预留为后续筛选条件的挂载点）。</summary>
-public class TenantListRequest : AggregateListRequest
-{
-}
+

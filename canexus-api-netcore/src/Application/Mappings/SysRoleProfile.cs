@@ -13,7 +13,7 @@ public sealed class SysRoleProfile : Profile
         // 实体 → 响应模型（IncludeBase 挂接基类映射链，补齐 Id / Version / 审计字段）
         CreateMap<SysRole, RoleListResponse>()
             .IncludeBase<AggregateBase, AggregatePagedResponse>();
-        CreateMap<SysRole, RoleSimpleResponse>()
+        CreateMap<SysRole, RoleDropdownResponse>()
             .IncludeBase<AggregateBase, AggregateListResponse>();
         // MenuIds 由处理器经关联查询组装，映射显式忽略（AssertConfigurationIsValid 兜底口径）
         CreateMap<SysRole, RoleDetailResponse>()

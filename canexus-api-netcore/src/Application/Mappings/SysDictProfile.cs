@@ -15,7 +15,7 @@ public sealed class SysDictProfile : Profile
             .IncludeBase<AggregateBase, AggregatePagedResponse>();
         CreateMap<SysDictData, DictDataListResponse>()
             .IncludeBase<AggregateBase, AggregatePagedResponse>();
-        CreateMap<SysDictData, DictDataSimpleResponse>()
+        CreateMap<SysDictData, DictDataDropdownResponse>()
             .IncludeBase<AggregateBase, AggregateListResponse>();
 
         // 请求 → 实体（IncludeBase 挂接基类映射链）

@@ -36,11 +36,8 @@ public class RoleListResponse : RoleBaseResponse
 }
 
 /// <summary>角色下拉简项（GET /api/system/role/all，用于用户分配角色）。</summary>
-public class RoleSimpleResponse : AggregateListResponse
+public class RoleDropdownResponse : AggregateDropdownResponse
 {
-    /// <summary>角色 Id。</summary>
-    public Guid Id { get; set; }
-
     /// <summary>角色名称。</summary>
     public string RoleName { get; set; } = string.Empty;
 
@@ -94,7 +91,4 @@ public class RoleDeleteRequest
     public Guid Version { get; set; }
 }
 
-/// <summary>角色列表查询请求（全量启用角色下拉；预留为后续筛选条件的挂载点）。</summary>
-public class RoleListRequest : AggregateListRequest
-{
-}
+

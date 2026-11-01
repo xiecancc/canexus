@@ -11,25 +11,25 @@ using Domain.Shared.Enums;
 using Domain.Shared.Results;
 
 namespace Application.Queries;
-/// <summary>获取全部启用角色查询处理器。</summary>
+/// <summary>获取全部启用角色查询处理器（标准下拉流程：仅启用项，按主键升序排序下推）。</summary>
 /// <remarks>构造函数。</remarks>
-public sealed class RoleQueryListHandler(IAggregateRepository<SysRole> roleRepository, IMapper mapper) : QueryHandler<RoleQueryList, List<RoleSimpleResponse>>
+public sealed class RoleQueryDropdownHandler(IAggregateRepository<SysRole> roleRepository, IMapper mapper) :
+    AggregateQueryDropdownHandler<RoleQueryDropdown, SysRole, RoleDropdownResponse>(roleRepository, mapper)
 {
     /// <inheritdoc />
-    protected override async Task<List<RoleSimpleResponse>> HandleAsync(RoleQueryList query, CancellationToken cancellationToken)
-    {
-        var roles = await roleRepository.GetListAsync([r => r.Status == CommonStatus.Enabled], cancellationToken: cancellationToken);
-        var enabled = roles.OrderBy(r => r.Id).ToList();
-        return mapper.Map<List<RoleSimpleResponse>>(enabled);
-    }
+    protected override Expression<Func<SysRole, bool>>? BuildDropdownPredicate() => r => r.Status == CommonStatus.Enabled;
+
+    /// <inheritdoc />
+    protected override IDictionary<Expression<Func<SysRole, object>>, bool?>? BuildDropdownOrders() =>
+        new Dictionary<Expression<Func<SysRole, object>>, bool?> { [r => r.Id] = true };
 }
 
 /// <summary>获取角色详情查询处理器（标准详情流程 + 组装授权菜单 Id 集合）。</summary>
 /// <remarks>构造函数。</remarks>
-public sealed class RoleQueryByIdHandler(
+public sealed class RoleQueryDetailHandler(
     IAggregateRepository<SysRole> roleRepository,
     IDomainRepository<SysRoleMenu> roleMenuRepository,
-    IMapper mapper) : AggregateQueryByIdHandler<RoleQueryById, SysRole, RoleDetailResponse>(roleRepository, mapper)
+    IMapper mapper) : AggregateQueryDetailHandler<RoleQueryDetail, SysRole, RoleDetailResponse>(roleRepository, mapper)
 {
     /// <summary>角色-菜单关联仓储（授权菜单 Id 组装）。</summary>
     private IDomainRepository<SysRoleMenu> RoleMenuRepository { get; } = roleMenuRepository;

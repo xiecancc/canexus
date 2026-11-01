@@ -51,3 +51,12 @@ public abstract class AggregatePagedRequest : DomainPagedRequest
 public abstract class AggregateListResponse : DomainListResponse
 {
 }
+
+/// <summary>聚合下拉简项响应基类：以聚合 Id 为选中值的轻量下拉项（角色 / 租户等授权选择场景）。
+/// <para>显示文本沿用模块字段命名（RoleName / TenantName 等），不强制统一以保持前端契约稳定；
+/// 以业务键为值（无聚合 Id）的下拉项（如字典数据）挂 <see cref="AggregateListResponse"/>。</para></summary>
+public abstract class AggregateDropdownResponse : AggregateListResponse
+{
+    /// <summary>聚合 Id（下拉选中值）。</summary>
+    public Guid Id { get; set; }
+}

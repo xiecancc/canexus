@@ -1,21 +1,16 @@
 
 using Application.Contracts.Abstractions;
 using Application.Contracts.Roles;
-using Domain.Shared.Paging;
 
 namespace Application.Contracts.Queries;
 /// <summary>获取全部启用角色（不分页，含超管角色，用于用户分配角色下拉）。</summary>
-public sealed record RoleQueryList : AggregateQueryList<RoleListRequest, RoleSimpleResponse>
-{
-    /// <summary>构造角色列表查询。</summary>
-    public RoleQueryList() : base(new RoleListRequest()) { }
-}
+public sealed record RoleQueryDropdown : AggregateQueryDropdown<RoleDropdownResponse>;
 
 /// <summary>获取角色详情（含授权菜单 Id 集合，前端用作菜单授权回显）。</summary>
 /// <param name="Id">角色 Id。</param>
-public sealed record RoleQueryById : AggregateQueryById<RoleDetailResponse>
+public sealed record RoleQueryDetail : AggregateQueryDetail<RoleDetailResponse>
 {
-    public RoleQueryById(Guid id) : base(id) { }
+    public RoleQueryDetail(Guid id) : base(id) { }
 }
 
 /// <summary>分页查询角色（keyword 匹配角色名称 / 角色权限字符；status 精确）。</summary>

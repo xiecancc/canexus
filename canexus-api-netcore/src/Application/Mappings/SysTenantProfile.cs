@@ -13,7 +13,7 @@ public sealed class SysTenantProfile : Profile
         // 实体 → 响应模型（IncludeBase 挂接基类映射链，补齐 Id / Version / 审计字段）
         CreateMap<SysTenant, TenantListResponse>()
             .IncludeBase<AggregateBase, AggregatePagedResponse>();
-        CreateMap<SysTenant, TenantSimpleResponse>()
+        CreateMap<SysTenant, TenantDropdownResponse>()
             .IncludeBase<AggregateBase, AggregateListResponse>();
 
         // 请求 → 实体（IncludeBase 挂接基类映射链）

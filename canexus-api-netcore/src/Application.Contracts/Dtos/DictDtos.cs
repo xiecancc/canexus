@@ -84,7 +84,7 @@ public class DictDataListResponse : AggregatePagedResponse
 }
 
 /// <summary>字典数据简项（GET /api/system/dict-data/simple/{dictType}，供前端下拉）。</summary>
-public class DictDataSimpleResponse : AggregateListResponse
+public class DictDataDropdownResponse : AggregateListResponse
 {
     /// <summary>字典标签（显示名称）。</summary>
     public string DictLabel { get; set; } = string.Empty;
