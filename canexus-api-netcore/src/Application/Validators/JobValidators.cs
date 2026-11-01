@@ -67,3 +67,13 @@ public sealed class JobCreateCommandValidator(IJobScheduleManager scheduleManage
 /// <param name="scheduleManager">调度管理端口。</param>
 public sealed class JobUpdateCommandValidator(IJobScheduleManager scheduleManager) :
     WriteCommandValidator<JobUpdateCommand, JobUpdateRequest>(new JobRequestValidator<JobUpdateRequest>(scheduleManager));
+
+/// <summary>修改定时任务状态命令验证器：状态仅允许 1 运行 / 0 暂停（乐观锁版本比对由处理器完成）。</summary>
+public sealed class JobUpdateStatusCommandValidator : AbstractValidator<JobUpdateStatusCommand>
+{
+    /// <summary>构造函数。</summary>
+    public JobUpdateStatusCommandValidator()
+    {
+        RuleFor(command => command.Request.Status).StatusRule("状态取值不合法：仅支持 1 运行 / 0 暂停");
+    }
+}

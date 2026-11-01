@@ -1,4 +1,5 @@
 
+using System.Text.RegularExpressions;
 using Domain.Shared.Enums;
 using Domain.Shared.Exceptions;
 using FluentValidation;
@@ -44,6 +45,17 @@ public static class ValidationRules
     public static IRuleBuilderOptions<T, TEnum> DefinedRule<T, TEnum>(this IRuleBuilder<T, TEnum> rule, string message)
         where TEnum : struct, Enum
         => rule.Must(value => Enum.IsDefined(value)).WithMessage(message);
+
+    /// <summary>密码强度正则：6-20 位且同时包含字母与数字，不允许空白字符（与前端重置密码对话框口径一致）。</summary>
+    private static readonly Regex PasswordPattern = new(@"^(?=.*[A-Za-z])(?=.*\d)\S{6,20}$", RegexOptions.Compiled);
+
+    /// <summary>密码强度约束：6-20 位且同时包含字母与数字（与前端重置密码对话框口径一致）。</summary>
+    /// <typeparam name="T">请求类型。</typeparam>
+    /// <param name="rule">属性规则构建器。</param>
+    /// <returns>规则选项。</returns>
+    public static IRuleBuilderOptions<T, string?> PasswordRule<T>(this IRuleBuilder<T, string?> rule)
+        => rule.Must(value => value is not null && PasswordPattern.IsMatch(value))
+            .WithMessage("密码为 6-20 位，且需同时包含字母和数字");
 
     /// <summary>参数键名格式约束（非空白且去空白后不超过 100 字符，与实体列宽一致）。</summary>
     /// <typeparam name="T">请求类型。</typeparam>

@@ -46,3 +46,25 @@ public sealed class UserCreateCommandValidator : WriteCommandValidator<UserCreat
 /// <summary>更新用户命令验证器（桥接请求验证器）；内置 admin 编辑拒绝与角色存在性由处理器校验。</summary>
 public sealed class UserUpdateCommandValidator() :
     WriteCommandValidator<UserUpdateCommand, UserUpdateRequest>(new UserRequestValidator<UserUpdateRequest>());
+
+/// <summary>重置用户密码命令验证器：新密码须满足强度约束（乐观锁版本比对由处理器完成）。</summary>
+public sealed class UserResetPasswordCommandValidator : AbstractValidator<UserResetPasswordCommand>
+{
+    /// <summary>构造函数。</summary>
+    public UserResetPasswordCommandValidator()
+    {
+        RuleFor(command => command.Request.Password).PasswordRule();
+    }
+}
+
+/// <summary>分配用户角色命令验证器：角色 Id 集合允许为空（清空全部角色），但不允许包含空 Guid（角色存在性由处理器校验）。</summary>
+public sealed class UserUpdateRolesCommandValidator : AbstractValidator<UserUpdateRolesCommand>
+{
+    /// <summary>构造函数。</summary>
+    public UserUpdateRolesCommandValidator()
+    {
+        RuleFor(command => command.Request.RoleIds)
+            .Must(roleIds => roleIds.All(id => id != Guid.Empty))
+            .WithMessage("角色 Id 集合包含无效的空 Guid");
+    }
+}
