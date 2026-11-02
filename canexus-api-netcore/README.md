@@ -11,7 +11,7 @@
 | 数据库 | MySQL（驱动 MySqlConnector） | MySqlConnector 2.6.2 |
 | 认证 | JWT（JwtBearer + System.IdentityModel.Tokens.Jwt） | 10.0.11 / 8.5.0 |
 | 密码 | BCrypt.Net-Next 哈希 | 4.0.3 |
-| 对象映射 | AutoMapper | 16.1.1 |
+| 对象映射 | AutoMapper（锁定 14.x：15.0.0 起转 Lucky Penny 商业/RPL 双许可，14.0.0 为最后的 Apache-2.0 版本） | 14.0.0 |
 | CQRS | MediatR（命令 / 查询分发 + Pipeline Behaviors） | 12.4.1 |
 | 输入验证 | FluentValidation（+ DependencyInjectionExtensions） | 12.1.1 |
 | 任务调度 | Quartz（+ Extensions.DependencyInjection / Hosting，实现在基础设施层） | 3.22.9 |
