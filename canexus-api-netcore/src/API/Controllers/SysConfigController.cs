@@ -11,7 +11,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace API.Controllers;
-/// <summary>参数配置管理接口：分页、按键名取值、增删改（configKey 唯一；内置参数不可删除）。</summary>
+/// <summary>参数配置管理接口：分页、按键名取值、增删改与恢复（configKey 唯一；内置参数不可删除）。</summary>
 /// <remarks>构造函数。</remarks>
 /// <param name="sender">MediatR 请求发送器（CQRS 分发入口）。</param>
 [ApiController]
@@ -46,7 +46,7 @@ public class SysConfigController(ISender sender) : ControllerBase
     [HttpPost]
     [RequirePermission("system:config:add")]
     [OperLog("参数配置", OperBusinessType.Add)]
-    public async Task<IActionResult> Create([FromBody] ConfigCreateRequest request)
+    public async Task<IActionResult> Create([FromBody] ConfigInputRequest request)
     {
         await sender.Send(new ConfigCreateCommand(request));
         return Ok(Result.Ok(message: "创建成功"));
@@ -56,25 +56,38 @@ public class SysConfigController(ISender sender) : ControllerBase
     /// <param name="id">参数 Id。</param>
     /// <param name="request">更新请求。</param>
     /// <returns>统一响应。</returns>
-    [HttpPut("{id:guid}")]
+    [HttpPut("{id:guid}/{version:guid}")]
     [RequirePermission("system:config:edit")]
     [OperLog("参数配置", OperBusinessType.Update)]
-    public async Task<IActionResult> Update(Guid id, [FromBody] ConfigUpdateRequest request)
+    public async Task<IActionResult> Update(Guid id, Guid version, [FromBody] ConfigInputRequest request)
     {
-        await sender.Send(new ConfigUpdateCommand(id, request));
+        await sender.Send(new ConfigUpdateCommand(id, version, request));
         return Ok(Result.Ok(message: "更新成功"));
     }
 
     /// <summary>删除参数配置（内置参数拒绝删除）。</summary>
     /// <param name="id">参数 Id。</param>
     /// <returns>统一响应。</returns>
-    /// <param name="request">删除请求（含乐观锁版本号）。</param>
-    [HttpDelete("{id:guid}")]
+    /// <param name="version">乐观锁版本号（须与聚合当前版本一致才允许删除）。</param>
+    [HttpDelete("{id:guid}/{version:guid}")]
     [RequirePermission("system:config:remove")]
     [OperLog("参数配置", OperBusinessType.Delete)]
-    public async Task<IActionResult> Delete(Guid id, [FromBody] ConfigDeleteRequest request)
+    public async Task<IActionResult> Delete(Guid id, Guid version)
     {
-        await sender.Send(new ConfigDeleteCommand(id, request.Version));
+        await sender.Send(new ConfigDeleteCommand(id, version));
         return Ok(Result.Ok(message: "删除成功"));
+    }
+
+    /// <summary>恢复参数配置（解除软删除墓碑；幂等执行，不存在或未删除时静默忽略）。</summary>
+    /// <param name="id">参数 Id。</param>
+    /// <param name="version">乐观锁版本号（与删除相同的路由参数模式）。</param>
+    /// <returns>统一响应。</returns>
+    [HttpPatch("{id:guid}/{version:guid}/restore")]
+    [RequirePermission("system:config:restore")]
+    [OperLog("参数配置", OperBusinessType.Restore)]
+    public async Task<IActionResult> Restore(Guid id, Guid version)
+    {
+        var restored = await sender.Send(new ConfigRestoreCommand(id, version));
+        return Ok(Result.Ok(message: restored ? "恢复成功" : "参数不存在或未删除，无需恢复"));
     }
 }

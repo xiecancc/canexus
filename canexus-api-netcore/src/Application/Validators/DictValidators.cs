@@ -8,7 +8,7 @@ namespace Application.Validators;
 /// <summary>字典数据请求验证器：标签样式（1~5）与状态（0/1）取值校验（消息与原服务层文案逐字一致）。</summary>
 /// <typeparam name="TRequest">字典数据写入请求类型。</typeparam>
 public class DictDataRequestValidator<TRequest> : AbstractValidator<TRequest>
-    where TRequest : DictDataRequest
+    where TRequest : DictDataInputRequest
 {
     /// <summary>构造函数。</summary>
     public DictDataRequestValidator()
@@ -28,16 +28,16 @@ public class DictDataRequestValidator<TRequest> : AbstractValidator<TRequest>
 
 /// <summary>创建字典数据命令验证器（桥接请求验证器）；类型存在性与标签 / 键值重复由处理器校验。</summary>
 public sealed class DictDataCreateCommandValidator() :
-    WriteCommandValidator<DictDataCreateCommand, DictDataCreateRequest>(new DictDataRequestValidator<DictDataCreateRequest>());
+    WriteCommandValidator<DictDataCreateCommand, DictDataInputRequest>(new DictDataRequestValidator<DictDataInputRequest>());
 
 /// <summary>更新字典数据命令验证器（桥接请求验证器）；类型存在性与标签 / 键值重复由处理器校验。</summary>
 public sealed class DictDataUpdateCommandValidator() :
-    WriteCommandValidator<DictDataUpdateCommand, DictDataUpdateRequest>(new DictDataRequestValidator<DictDataUpdateRequest>());
+    UpdateCommandValidator<DictDataUpdateCommand, DictDataInputRequest>(new DictDataRequestValidator<DictDataInputRequest>());
 
 /// <summary>字典类型请求验证器：名称 / 类型非空（DictType 不可变更与唯一性由处理器校验）。</summary>
 /// <typeparam name="TRequest">字典类型写入请求类型。</typeparam>
 public class DictTypeRequestValidator<TRequest> : AbstractValidator<TRequest>
-    where TRequest : DictTypeRequest
+    where TRequest : DictTypeInputRequest
 {
     /// <summary>构造函数。</summary>
     public DictTypeRequestValidator()
@@ -49,8 +49,12 @@ public class DictTypeRequestValidator<TRequest> : AbstractValidator<TRequest>
 
 /// <summary>创建字典类型命令验证器（桥接请求验证器）；唯一性由处理器校验。</summary>
 public sealed class DictTypeCreateCommandValidator() :
-    WriteCommandValidator<DictTypeCreateCommand, DictTypeCreateRequest>(new DictTypeRequestValidator<DictTypeCreateRequest>());
+    WriteCommandValidator<DictTypeCreateCommand, DictTypeInputRequest>(new DictTypeRequestValidator<DictTypeInputRequest>());
 
 /// <summary>更新字典类型命令验证器（桥接请求验证器）；DictType 不可变更由处理器校验。</summary>
 public sealed class DictTypeUpdateCommandValidator() :
-    WriteCommandValidator<DictTypeUpdateCommand, DictTypeUpdateRequest>(new DictTypeRequestValidator<DictTypeUpdateRequest>());
+    UpdateCommandValidator<DictTypeUpdateCommand, DictTypeInputRequest>(new DictTypeRequestValidator<DictTypeInputRequest>());
+
+/// <summary>删除字典数据 / 字典类型命令验证器（乐观锁版本号入口兜底）。</summary>
+public sealed class DictDataDeleteCommandValidator() : DeleteCommandValidator<DictDataDeleteCommand>;
+public sealed class DictTypeDeleteCommandValidator() : DeleteCommandValidator<DictTypeDeleteCommand>;

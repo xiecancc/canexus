@@ -49,10 +49,10 @@ public sealed class UserQueryPagedHandler(
     IDomainRepository<SysUserRole> userRoleRepository,
     IDataScopeFilter dataScopeFilter,
     IUserContext currentUser,
-    IMapper mapper) : QueryHandler<UserQueryPaged, PagedResponse<UserListResponse>>
+    IMapper mapper) : QueryHandler<UserQueryPaged, PagedResponse<UserPagedResponse>>
 {
     /// <inheritdoc />
-    protected override async Task<PagedResponse<UserListResponse>> HandleAsync(UserQueryPaged query, CancellationToken cancellationToken)
+    protected override async Task<PagedResponse<UserPagedResponse>> HandleAsync(UserQueryPaged query, CancellationToken cancellationToken)
     {
         var request = query.Request;
 
@@ -87,7 +87,7 @@ public sealed class UserQueryPagedHandler(
             .ToDictionary(d => d.Id, d => d);
 
         // 开放泛型映射闭合分页结果，再按实体↔响应顺序配对组装扩展字段（DeptName / Roles）
-        var result = mapper.Map<PagedResponse<UserListResponse>>(page)!;
+        var result = mapper.Map<PagedResponse<UserPagedResponse>>(page)!;
         foreach (var (user, response) in users.Zip(result.Items))
         {
             response.DeptName = user.DeptId is not null && deptMap.TryGetValue(user.DeptId.Value, out var dept)

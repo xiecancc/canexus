@@ -38,3 +38,7 @@ public sealed class UserPasswordResetEvent(Guid userId) : DomainEvent
 /// <para>安全约定：事件携带的实体状态含密码哈希，监听器不得将其写入日志或外发系统。</para>
 /// <param name="Entity">删除前的用户。</param>
 public sealed class UserDeletedEvent(SysUser entity) : AggregateDeletedEvent<SysUser>(entity);
+
+/// <summary>用户恢复领域事件：用户恢复（解除软删除墓碑）成功后发布，Domain 为恢复后的状态。</summary>
+/// <param name="Entity">恢复后的用户。</param>
+public sealed class UserRestoredEvent(SysUser entity) : AggregateRestoredEvent<SysUser>(entity);

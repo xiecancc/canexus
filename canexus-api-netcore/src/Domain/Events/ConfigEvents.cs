@@ -14,3 +14,7 @@ public sealed class ConfigUpdatedEvent(SysConfig before, SysConfig after) : Aggr
 /// <summary>参数配置删除领域事件：配置删除成功后发布，Domain 为删除前的状态（内置参数受保护不可删除）。</summary>
 /// <param name="Entity">删除前的参数配置。</param>
 public sealed class ConfigDeletedEvent(SysConfig entity) : AggregateDeletedEvent<SysConfig>(entity);
+
+/// <summary>参数配置恢复领域事件：配置恢复（解除软删除墓碑）成功后发布，Domain 为恢复后的状态。</summary>
+/// <param name="Entity">恢复后的参数配置。</param>
+public sealed class ConfigRestoredEvent(SysConfig entity) : AggregateRestoredEvent<SysConfig>(entity);

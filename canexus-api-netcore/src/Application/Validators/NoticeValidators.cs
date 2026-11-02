@@ -11,7 +11,7 @@ namespace Application.Validators;
 /// <summary>通知公告写入请求验证器：标题（非空白且 ≤200）、类型（1 通知 / 2 公告）、状态（1 正常 / 0 关闭）、内容非空白。
 /// 错误码保持 NoticeRuleInvalid（401002）与原服务层文案一致；创建 / 更新共用（消除重复定义）。</summary>
 public class NoticeRequestValidator<TRequest> : AbstractValidator<TRequest>
-    where TRequest : NoticeRequest
+    where TRequest : NoticeInputRequest
 {
     /// <summary>构造函数。</summary>
     public NoticeRequestValidator()
@@ -48,8 +48,11 @@ public class NoticeRequestValidator<TRequest> : AbstractValidator<TRequest>
 
 /// <summary>创建通知公告命令验证器（桥接请求验证器）。</summary>
 public sealed class NoticeCreateCommandValidator() :
-    WriteCommandValidator<NoticeCreateCommand, NoticeCreateRequest>(new NoticeRequestValidator<NoticeCreateRequest>());
+    WriteCommandValidator<NoticeCreateCommand, NoticeInputRequest>(new NoticeRequestValidator<NoticeInputRequest>());
 
 /// <summary>更新通知公告命令验证器（桥接请求验证器）。</summary>
 public sealed class NoticeUpdateCommandValidator() :
-    WriteCommandValidator<NoticeUpdateCommand, NoticeUpdateRequest>(new NoticeRequestValidator<NoticeUpdateRequest>());
+    UpdateCommandValidator<NoticeUpdateCommand, NoticeInputRequest>(new NoticeRequestValidator<NoticeInputRequest>());
+
+/// <summary>删除通知公告命令验证器（乐观锁版本号入口兜底）。</summary>
+public sealed class NoticeDeleteCommandValidator() : DeleteCommandValidator<NoticeDeleteCommand>;

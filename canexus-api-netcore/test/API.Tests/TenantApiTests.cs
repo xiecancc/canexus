@@ -133,6 +133,7 @@ public class TenantApiTests
         // 更新变更 tenantKey → 400803（不可变更）
         var immutable = await SendAsync(HttpMethod.Put, $"/api/system/tenant/{tenantId}", new
         {
+            version = tenantVersion,
             tenantKey = tenantKey + "x",
             tenantName = "B9 流程租户V2",
             status = 1
@@ -153,7 +154,7 @@ public class TenantApiTests
         // 存在归属用户时删除 → 400804
         var userName = NewUserName();
         await InsertTenantUserAsync(userName, tenantId);
-        var inUse = await SendAsync(HttpMethod.Delete, $"/api/system/tenant/{tenantId}", new { version = Guid.Empty });
+        var inUse = await SendAsync(HttpMethod.Delete, $"/api/system/tenant/{tenantId}/{await ApiTestSupport.GetVersionAsync<SysTenant>(_db, tenantId)}");
         var inUseBody = await ReadBodyAsync(inUse);
         Assert.Multiple(() =>
         {
@@ -163,7 +164,7 @@ public class TenantApiTests
 
         // 清理归属用户后租户可删除
         RemoveTenantUser(userName);
-        var deleted = await SendAsync(HttpMethod.Delete, $"/api/system/tenant/{tenantId}", new { version = await ApiTestSupport.GetVersionAsync<SysTenant>(_db, tenantId) });
+        var deleted = await SendAsync(HttpMethod.Delete, $"/api/system/tenant/{tenantId}/{await ApiTestSupport.GetVersionAsync<SysTenant>(_db, tenantId)}");
         Assert.That(deleted.StatusCode, Is.EqualTo(HttpStatusCode.OK), "无归属用户的租户应可删除");
     }
 

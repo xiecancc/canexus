@@ -30,10 +30,11 @@ public sealed class PermissionCacheInvalidationHandler(IPermissionChecker permis
             UserRolesUpdatedEvent userRolesUpdated => permissionChecker.InvalidateAsync(userRolesUpdated.NewEntity.Id, cancellationToken),
             UserPasswordResetEvent passwordReset => permissionChecker.InvalidateAsync(passwordReset.UserId, cancellationToken),
             UserDeletedEvent userDeleted => permissionChecker.InvalidateAsync(userDeleted.NewEntity.Id, cancellationToken),
+            UserRestoredEvent userRestored => permissionChecker.InvalidateAsync(userRestored.NewEntity.Id, cancellationToken),
 
             // 角色 / 菜单事件：影响任意持有（已授权）用户的权限，全量失效
-            RoleCreatedEvent or RoleUpdatedEvent or RoleDeletedEvent
-                or MenuCreatedEvent or MenuUpdatedEvent or MenuDeletedEvent
+            RoleCreatedEvent or RoleUpdatedEvent or RoleDeletedEvent or RoleRestoredEvent
+                or MenuCreatedEvent or MenuUpdatedEvent or MenuDeletedEvent or MenuRestoredEvent
                 => permissionChecker.InvalidateAllAsync(cancellationToken),
 
             _ => Task.CompletedTask,

@@ -16,13 +16,13 @@ namespace Application.Commands;
 /// <param name="domainEventPublisher">领域事件发布器。</param>
 public sealed class DeptCreateCommandHandler(
     IAggregateTreeRepository<SysDept> deptRepository,
-    IDomainEventPublisher domainEventPublisher) : AggregateCreateCommandHandler<DeptCreateCommand, DeptCreateRequest, SysDept>(deptRepository, domainEventPublisher)
+    IDomainEventPublisher domainEventPublisher) : AggregateCreateCommandHandler<DeptCreateCommand, DeptInputRequest, SysDept>(deptRepository, domainEventPublisher)
 {
     /// <summary>部门树形仓储（父部门存在性校验）。</summary>
     private IAggregateTreeRepository<SysDept> DeptRepository { get; } = deptRepository;
 
     /// <inheritdoc />
-    protected override async Task ValidateAsync(DeptCreateRequest request, CancellationToken cancellationToken)
+    protected override async Task ValidateAsync(DeptInputRequest request, CancellationToken cancellationToken)
     {
         // 父部门存在性校验（根部门 parentId=Guid.Empty 跳过）
         if (request.ParentId != SysDept.RootParentId
@@ -33,7 +33,7 @@ public sealed class DeptCreateCommandHandler(
     }
 
     /// <inheritdoc />
-    protected override SysDept MapToEntity(DeptCreateRequest request)
+    protected override SysDept MapToEntity(DeptInputRequest request)
     {
         return new SysDept
         {
@@ -97,6 +97,19 @@ public sealed class DeptDeleteCommandHandler(
     }
 }
 
+/// <summary>恢复部门命令处理器（解除软删除墓碑，幂等执行）。</summary>
+/// <remarks>构造函数。</remarks>
+public sealed class DeptRestoreCommandHandler(
+    IAggregateTreeRepository<SysDept> deptRepository,
+    IDomainEventPublisher domainEventPublisher) : AggregateRestoreCommandHandler<DeptRestoreCommand, SysDept>(deptRepository, domainEventPublisher)
+{
+    /// <inheritdoc />
+    protected override DomainEvent CreateEvent(SysDept restored)
+    {
+        return new DeptRestoredEvent(restored);
+    }
+}
+
 /// <summary>更新部门命令处理器。</summary>
 /// <remarks>构造函数。</remarks>
 public sealed class DeptUpdateCommandHandler(
@@ -126,6 +139,7 @@ public sealed class DeptUpdateCommandHandler(
             dept.Email = request.Email;
             dept.Status = request.Status;
             dept.Description = request.Description;
+            dept.ApplyVersion(command.Version);
             await deptRepository.UpdateAsync(dept, cancellationToken);
 
             if (parentChanged)

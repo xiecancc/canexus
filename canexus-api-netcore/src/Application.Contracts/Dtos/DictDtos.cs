@@ -11,7 +11,7 @@ public class DictTypePageRequest : AggregatePagedRequest
 }
 
 /// <summary>字典类型列表行（分页数据项）。</summary>
-public class DictTypeListResponse : AggregatePagedResponse
+public class DictTypePagedResponse : AggregatePagedResponse
 {
     /// <summary>字典名称。</summary>
     public string DictName { get; set; } = string.Empty;
@@ -21,8 +21,8 @@ public class DictTypeListResponse : AggregatePagedResponse
 
 }
 
-/// <summary>字典类型写入请求基类：创建 / 更新共同字段（对齐 SysDictType 聚合；DictType 创建后不可变更；挂接创建请求根）。</summary>
-public abstract class DictTypeRequest : AggregateChangeRequest
+/// <summary>字典类型写入请求（POST / PUT 共用载荷；对齐 SysDictType 聚合；DictType 创建后不可变更）。</summary>
+public class DictTypeInputRequest : AggregateInputRequest
 {
     /// <summary>字典名称。</summary>
     public string DictName { get; set; } = string.Empty;
@@ -32,23 +32,6 @@ public abstract class DictTypeRequest : AggregateChangeRequest
 
     /// <summary>备注。</summary>
     public string? Description { get; set; }
-}
-
-/// <summary>创建字典类型请求（POST /api/system/dict-type）。</summary>
-public class DictTypeCreateRequest : DictTypeRequest
-{
-}
-
-/// <summary>更新字典类型请求（PUT /api/system/dict-type/{id}；DictType 不可变更；Version 须回传乐观锁版本号）。</summary>
-public class DictTypeUpdateRequest : DictTypeRequest
-{
-}
-
-/// <summary>删除字典类型请求（DELETE /api/system/dict-type/{id}；Version 须回传乐观锁版本号）。</summary>
-public class DictTypeDeleteRequest
-{
-    /// <summary>乐观锁版本号（须与聚合当前版本一致才允许删除）。</summary>
-    public Guid Version { get; set; }
 }
 
 /// <summary>字典数据分页查询请求（GET /api/system/dict-data/page）。</summary>
@@ -62,7 +45,7 @@ public class DictDataPageRequest : AggregatePagedRequest
 }
 
 /// <summary>字典数据列表行（分页数据项）。</summary>
-public class DictDataListResponse : AggregatePagedResponse
+public class DictDataPagedResponse : AggregatePagedResponse
 {
     /// <summary>状态：启用（1），停用（0）。</summary>
     public CommonStatus Status { get; set; }
@@ -83,8 +66,8 @@ public class DictDataListResponse : AggregatePagedResponse
     public int OrderNum { get; set; }
 }
 
-/// <summary>字典数据简项（GET /api/system/dict-data/simple/{dictType}，供前端下拉）。</summary>
-public class DictDataDropdownResponse : AggregateListResponse
+/// <summary>字典数据简项（GET /api/system/dict-data/simple/{dictType}，供前端下拉；Id 由 <see cref="AggregateDropdownResponse"/> 承载）。</summary>
+public class DictDataDropdownResponse : AggregateDropdownResponse
 {
     /// <summary>字典标签（显示名称）。</summary>
     public string DictLabel { get; set; } = string.Empty;
@@ -96,8 +79,8 @@ public class DictDataDropdownResponse : AggregateListResponse
     public TagType TagType { get; set; }
 }
 
-/// <summary>字典数据写入请求基类：创建 / 更新共同字段（镜像 SysDictData 聚合的启停 / 备注与业务字段）。</summary>
-public abstract class DictDataRequest : AggregateChangeRequest
+/// <summary>字典数据写入请求（POST / PUT 共用载荷；镜像 SysDictData 聚合的启停 / 备注与业务字段）。</summary>
+public class DictDataInputRequest : AggregateInputRequest
 {
     /// <summary>状态：启用（1），停用（0）。</summary>
     public CommonStatus Status { get; set; } = CommonStatus.Enabled;
@@ -119,23 +102,6 @@ public abstract class DictDataRequest : AggregateChangeRequest
 
     /// <summary>显示顺序（升序）。</summary>
     public int OrderNum { get; set; }
-}
-
-/// <summary>创建字典数据请求（POST /api/system/dict-data）。</summary>
-public class DictDataCreateRequest : DictDataRequest
-{
-}
-
-/// <summary>更新字典数据请求（PUT /api/system/dict-data/{id}；类型可迁移，迁移后新旧类型缓存均失效；Version 须回传乐观锁版本号）。</summary>
-public class DictDataUpdateRequest : DictDataRequest
-{
-}
-
-/// <summary>删除字典数据请求（DELETE /api/system/dict-data/{id}；Version 须回传乐观锁版本号）。</summary>
-public class DictDataDeleteRequest
-{
-    /// <summary>乐观锁版本号（须与聚合当前版本一致才允许删除）。</summary>
-    public Guid Version { get; set; }
 }
 
 /// <summary>按字典类型查询字典数据请求（载荷即字典类型编码）。</summary>

@@ -106,7 +106,7 @@ public class LogApiTests
             Assert.That(log.TryGetProperty("operTime", out _), Is.True, "应记录操作时间");
         });
 
-        await SendAsync(HttpMethod.Delete, $"/api/system/dict-type/{typeId}", new { version = await ApiTestSupport.GetVersionAsync<SysDictType>(_db, typeId) });
+        await SendAsync(HttpMethod.Delete, $"/api/system/dict-type/{typeId}/{await ApiTestSupport.GetVersionAsync<SysDictType>(_db, typeId)}", null);
     }
 
     [Test]
@@ -116,9 +116,8 @@ public class LogApiTests
         var userId = await CreateUserAsync(userName: userName, password: "Init@Mask123");
 
         // 重置密码（明文出现在请求体中，日志必须脱敏）
-        await SendForJsonAsync(HttpMethod.Put, $"/api/system/user/{userId}/password", new
+        await SendAsync(HttpMethod.Put, $"/api/system/user/{userId}/{await ApiTestSupport.GetVersionAsync<SysUser>(_db, userId)}/password", new
         {
-            version = await ApiTestSupport.GetVersionAsync<SysUser>(_db, userId),
             password = "New@Secret456"
         });
 
@@ -150,7 +149,7 @@ public class LogApiTests
             Assert.That(createParam, Does.Not.Contain("Init@Mask123"), "初始密码明文不得出现在日志中");
         });
 
-        await SendAsync(HttpMethod.Delete, $"/api/system/user/{userId}", new { version = await ApiTestSupport.GetVersionAsync<SysUser>(_db, userId) });
+        await SendAsync(HttpMethod.Delete, $"/api/system/user/{userId}/{await ApiTestSupport.GetVersionAsync<SysUser>(_db, userId)}", null);
     }
 
     [Test]
@@ -186,7 +185,7 @@ public class LogApiTests
             Assert.That(log.TryGetProperty("costMs", out _), Is.True);
         });
 
-        await SendAsync(HttpMethod.Delete, $"/api/system/dict-type/{typeId}", new { version = await ApiTestSupport.GetVersionAsync<SysDictType>(_db, typeId) });
+        await SendAsync(HttpMethod.Delete, $"/api/system/dict-type/{typeId}/{await ApiTestSupport.GetVersionAsync<SysDictType>(_db, typeId)}", null);
     }
 
     [Test]

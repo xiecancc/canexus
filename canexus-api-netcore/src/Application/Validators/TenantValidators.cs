@@ -10,7 +10,7 @@ namespace Application.Validators;
 /// （消息与原服务层文案逐字一致；创建 / 更新共用，消除重复定义）。</summary>
 /// <typeparam name="TRequest">租户写入请求类型。</typeparam>
 public class TenantRequestValidator<TRequest> : AbstractValidator<TRequest>
-    where TRequest : TenantRequest
+    where TRequest : TenantInputRequest
 {
     /// <summary>构造函数。</summary>
     public TenantRequestValidator()
@@ -35,8 +35,11 @@ public class TenantRequestValidator<TRequest> : AbstractValidator<TRequest>
 
 /// <summary>创建租户命令验证器（桥接请求验证器）；tenantKey 唯一性由处理器校验。</summary>
 public sealed class TenantCreateCommandValidator() :
-    WriteCommandValidator<TenantCreateCommand, TenantCreateRequest>(new TenantRequestValidator<TenantCreateRequest>());
+    WriteCommandValidator<TenantCreateCommand, TenantInputRequest>(new TenantRequestValidator<TenantInputRequest>());
 
 /// <summary>更新租户命令验证器（桥接请求验证器）；tenantKey 不可变更由处理器校验。</summary>
 public sealed class TenantUpdateCommandValidator() :
-    WriteCommandValidator<TenantUpdateCommand, TenantUpdateRequest>(new TenantRequestValidator<TenantUpdateRequest>());
+    UpdateCommandValidator<TenantUpdateCommand, TenantInputRequest>(new TenantRequestValidator<TenantInputRequest>());
+
+/// <summary>删除租户命令验证器（乐观锁版本号入口兜底）。</summary>
+public sealed class TenantDeleteCommandValidator() : DeleteCommandValidator<TenantDeleteCommand>;

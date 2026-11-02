@@ -10,14 +10,13 @@ using Domain.Shared.Paging;
 namespace Application.Abstractions;
 /// <summary>
 /// 查询处理器基类：继承 <see cref="RequestHandler{TRequest, TResponse}"/>，
-/// 仅接受 <see cref="Query{TResponse}"/> 请求；查询特有的公共逻辑（如缓存、只读约束）在此层扩展。
-/// <para>带载荷查询（<see cref="Query{TRequest, TResponse}"/> 及其领域 / 聚合派生）同样满足本约束
-/// （载荷形态不影响响应类型标记）。</para>
+/// 仅接受带返回值的读请求（<see cref="Request{TResponse}"/> 派生，含无载荷查询与
+/// <see cref="AggregateQuery{TRequest, TResponse}"/> 聚合派生）；查询特有的公共逻辑（如缓存、只读约束）在此层扩展。
 /// </summary>
 /// <typeparam name="TQuery">查询类型。</typeparam>
 /// <typeparam name="TResponse">响应类型。</typeparam>
 public abstract class QueryHandler<TQuery, TResponse> : RequestHandler<TQuery, TResponse>
-    where TQuery : Query<TResponse>
+    where TQuery : Request<TResponse>
 {
     /// <summary>规整筛选文本：空白（null / 空串 / 全空白）返回 null 表示不过滤，否则返回去除首尾空白后的值。</summary>
     /// <param name="text">原始筛选文本。</param>
@@ -26,18 +25,6 @@ public abstract class QueryHandler<TQuery, TResponse> : RequestHandler<TQuery, T
     {
         return string.IsNullOrWhiteSpace(text) ? null : text.Trim();
     }
-}
-
-/// <summary>
-/// 查询处理器基类（带载荷）：继承 <see cref="QueryHandler{TQuery, TResponse}"/>，
-/// 仅接受带载荷查询（<see cref="Query{TRequest, TResponse}"/> 派生），载荷经查询的 <c>Request</c> 属性暴露。
-/// </summary>
-/// <typeparam name="TQuery">查询类型。</typeparam>
-/// <typeparam name="TRequest">载荷类型。</typeparam>
-/// <typeparam name="TResponse">响应类型。</typeparam>
-public abstract class QueryHandler<TQuery, TRequest, TResponse> : QueryHandler<TQuery, TResponse>
-    where TQuery : Query<TRequest, TResponse>
-{
 }
 
 /// <summary>
@@ -141,7 +128,7 @@ public abstract class AggregateQueryDetailHandler<TQuery, TEntity, TResponse>(
 /// <typeparam name="TQuery">列表查询类型。</typeparam>
 /// <typeparam name="TRequest">列表请求类型（须继承 <see cref="AggregateListRequest"/>）。</typeparam>
 /// <typeparam name="TEntity">聚合实体类型。</typeparam>
-/// <typeparam name="TResponse">列表数据项响应类型（须继承 <see cref="AggregateListResponse"/>）。</typeparam>
+/// <typeparam name="TResponse">列表数据项响应类型（须继承 <see cref="AggregateItemResponse"/>）。</typeparam>
 /// <param name="repository">聚合仓储（只读）。</param>
 /// <param name="mapper">AutoMapper 映射器。</param>
 public abstract class AggregateQueryListHandler<TQuery, TRequest, TEntity, TResponse>(
@@ -149,7 +136,7 @@ public abstract class AggregateQueryListHandler<TQuery, TRequest, TEntity, TResp
     IMapper mapper) : QueryHandler<TQuery, List<TResponse>>
     where TQuery : AggregateQueryList<TRequest, TResponse>
     where TRequest : AggregateListRequest
-    where TResponse : AggregateListResponse
+    where TResponse : AggregateItemResponse
     where TEntity : AggregateBase
 {
     /// <summary>聚合仓储（只读）。</summary>
@@ -175,18 +162,21 @@ public abstract class AggregateQueryListHandler<TQuery, TRequest, TEntity, TResp
 }
 
 /// <summary>
-/// 聚合下拉查询处理器基类（对应 <see cref="AggregateQueryDropdown{TResponse}"/>）：
-/// 封装「钩子过滤（模块自行决定仅启用项等条件）→ 排序下推 → 集合映射」的标准下拉流程。
+/// 聚合下拉查询处理器基类（对应 <see cref="AggregateQueryDropdown{TRequest, TResponse}"/>）：
+/// 封装「钩子过滤（模块自行决定仅启用项等条件）→ 排序下推 → 集合映射」的标准下拉流程
+/// （载荷预留为后续筛选条件的挂载点，当前过滤不消费）。
 /// </summary>
 /// <typeparam name="TQuery">下拉查询类型。</typeparam>
+/// <typeparam name="TRequest">下拉请求类型（须继承 <see cref="AggregateDropdownRequest"/>）。</typeparam>
 /// <typeparam name="TEntity">聚合实体类型。</typeparam>
 /// <typeparam name="TResponse">下拉简项响应类型（须继承 <see cref="AggregateDropdownResponse"/>）。</typeparam>
 /// <param name="repository">聚合仓储（只读）。</param>
 /// <param name="mapper">AutoMapper 映射器。</param>
-public abstract class AggregateQueryDropdownHandler<TQuery, TEntity, TResponse>(
+public abstract class AggregateQueryDropdownHandler<TQuery, TRequest, TEntity, TResponse>(
     IAggregateRepository<TEntity> repository,
     IMapper mapper) : QueryHandler<TQuery, List<TResponse>>
-    where TQuery : AggregateQueryDropdown<TResponse>
+    where TQuery : AggregateQueryDropdown<TRequest, TResponse>
+    where TRequest : AggregateDropdownRequest
     where TResponse : AggregateDropdownResponse
     where TEntity : AggregateBase
 {

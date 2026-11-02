@@ -64,4 +64,22 @@ public static class ValidationRules
     public static IRuleBuilderOptions<T, string?> ConfigKeyRule<T>(this IRuleBuilder<T, string?> rule)
         => rule.Must(key => !string.IsNullOrWhiteSpace(key) && key.Trim().Length <= 100)
             .WithMessage("参数键名不合法：不能为空且不超过 100 个字符");
+
+    /// <summary>单个 Guid 值约束：拒绝空值 <see cref="Guid.Empty"/>（值类型不存在 null；用于乐观锁版本号等
+    /// 不允许缺省的令牌字段）。</summary>
+    /// <typeparam name="T">请求类型。</typeparam>
+    /// <param name="rule">属性规则构建器。</param>
+    /// <param name="message">失败消息。</param>
+    /// <returns>规则选项。</returns>
+    public static IRuleBuilderOptions<T, Guid> NoEmptyRule<T>(this IRuleBuilder<T, Guid> rule, string message)
+        => rule.NotEmpty().WithMessage(message);
+
+    /// <summary>Guid 集合约束：集合允许为空（清空全部关联），但不允许包含空 <see cref="Guid.Empty"/> 元素
+    /// （关联存在性由处理器校验）。</summary>
+    /// <typeparam name="T">请求类型。</typeparam>
+    /// <param name="rule">属性规则构建器。</param>
+    /// <param name="message">失败消息。</param>
+    /// <returns>规则选项。</returns>
+    public static IRuleBuilderOptions<T, List<Guid>> NoEmptyRule<T>(this IRuleBuilder<T, List<Guid>> rule, string message)
+        => rule.Must(ids => ids.All(id => id != Guid.Empty)).WithMessage(message);
 }

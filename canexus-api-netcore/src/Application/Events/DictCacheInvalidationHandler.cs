@@ -37,6 +37,10 @@ public sealed class DictCacheInvalidationHandler(ICache cache) : INotificationHa
             case DictDataDeletedEvent deleted:
                 await cache.RemoveAsync(DictRules.DataTypeCacheKey(deleted.NewEntity.DictType), cancellationToken);
                 break;
+
+            case DictDataRestoredEvent restored:
+                await cache.RemoveAsync(DictRules.DataTypeCacheKey(restored.NewEntity.DictType), cancellationToken);
+                break;
         }
     }
 }

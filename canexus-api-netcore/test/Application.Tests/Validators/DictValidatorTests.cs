@@ -13,7 +13,7 @@ public class DictValidatorTests
 {
     private static DictDataCreateCommand BuildCommand(TagType tagType, CommonStatus status)
     {
-        return new DictDataCreateCommand(new DictDataCreateRequest
+        return new DictDataCreateCommand(new DictDataInputRequest
         {
             DictType = "test_dict",
             DictLabel = "测试",

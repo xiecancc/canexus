@@ -36,6 +36,10 @@ public sealed class ConfigCacheInvalidationHandler(ICache cache) : INotification
             case ConfigDeletedEvent deleted:
                 await cache.RemoveAsync(ConfigRules.ValueCacheKey(deleted.NewEntity.ConfigKey), cancellationToken);
                 break;
+
+            case ConfigRestoredEvent restored:
+                await cache.RemoveAsync(ConfigRules.ValueCacheKey(restored.NewEntity.ConfigKey), cancellationToken);
+                break;
         }
     }
 }

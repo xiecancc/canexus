@@ -13,8 +13,8 @@ public class RolePageRequest : AggregatePagedRequest
     public CommonStatus? Status { get; set; }
 }
 
-/// <summary>角色响应公共基类：对齐 SysRole 聚合的业务字段（Id / Version / CreatedAt 由 <see cref="AggregatePagedResponse"/> 承载）。</summary>
-public abstract class RoleBaseResponse : AggregatePagedResponse
+/// <summary>角色列表行（分页数据项）：直接继承聚合分页最小根，承载列表展示业务字段。</summary>
+public class RolePagedResponse : AggregatePagedResponse
 {
     /// <summary>角色名称。</summary>
     public string RoleName { get; set; } = string.Empty;
@@ -27,11 +27,10 @@ public abstract class RoleBaseResponse : AggregatePagedResponse
 
     /// <summary>状态：启用（1），停用（0）。</summary>
     public CommonStatus Status { get; set; }
-
 }
 
-/// <summary>角色列表行（分页数据项）。</summary>
-public class RoleListResponse : RoleBaseResponse
+/// <summary>角色下拉查询请求：角色下拉查询载荷（预留为后续筛选条件的挂载点）。</summary>
+public class RoleDropdownRequest : AggregateDropdownRequest
 {
 }
 
@@ -45,15 +44,27 @@ public class RoleDropdownResponse : AggregateDropdownResponse
     public string RoleKey { get; set; } = string.Empty;
 }
 
-/// <summary>角色详情（GET /api/system/role/{id}，含授权菜单 Id 集合）。</summary>
-public class RoleDetailResponse : RoleBaseResponse
+/// <summary>角色详情（GET /api/system/role/{id}）：直接继承聚合详情根，业务字段平铺；含授权菜单 Id 集合。</summary>
+public class RoleDetailResponse : AggregateDetailResponse
 {
+    /// <summary>角色名称。</summary>
+    public string RoleName { get; set; } = string.Empty;
+
+    /// <summary>角色权限字符（roleKey）。</summary>
+    public string RoleKey { get; set; } = string.Empty;
+
+    /// <summary>数据范围（见 <see cref="Domain.Shared.Enums.DataScope"/>）。</summary>
+    public DataScope DataScope { get; set; }
+
+    /// <summary>状态：启用（1），停用（0）。</summary>
+    public CommonStatus Status { get; set; }
+
     /// <summary>授权菜单 Id 集合（含目录 / 菜单 / 按钮）。</summary>
     public List<Guid> MenuIds { get; set; } = [];
 }
 
-/// <summary>角色写入请求基类：创建 / 更新共同字段（镜像 SysRole 聚合的启停 / 备注与业务字段）。</summary>
-public abstract class RoleRequest : AggregateChangeRequest
+/// <summary>角色写入请求（POST / PUT 共用载荷；镜像 SysRole 聚合的启停 / 备注与业务字段）。</summary>
+public class RoleInputRequest : AggregateInputRequest
 {
     /// <summary>状态：启用（1），停用（0）。</summary>
     public CommonStatus Status { get; set; } = CommonStatus.Enabled;
@@ -72,23 +83,6 @@ public abstract class RoleRequest : AggregateChangeRequest
 
     /// <summary>授权菜单 Id 集合（可为空，全删全插保存）。</summary>
     public List<Guid> MenuIds { get; set; } = [];
-}
-
-/// <summary>创建角色请求（POST /api/system/role）。</summary>
-public class RoleCreateRequest : RoleRequest
-{
-}
-
-/// <summary>更新角色请求（PUT /api/system/role/{id}；内置 super_admin 角色整体拒绝编辑；Version 须回传乐观锁版本号）。</summary>
-public class RoleUpdateRequest : RoleRequest
-{
-}
-
-/// <summary>删除角色请求（DELETE /api/system/role/{id}；Version 须回传乐观锁版本号）。</summary>
-public class RoleDeleteRequest
-{
-    /// <summary>乐观锁版本号（须与聚合当前版本一致才允许删除）。</summary>
-    public Guid Version { get; set; }
 }
 
 

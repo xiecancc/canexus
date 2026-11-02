@@ -14,10 +14,10 @@ namespace Application.Queries;
 /// <remarks>构造函数。</remarks>
 /// <param name="jobLogRepository">任务执行日志仓储（倒序分页）。</param>
 /// <param name="mapper">AutoMapper 映射器。</param>
-public sealed class JobLogQueryPagedHandler(IJobLogRepository jobLogRepository, IMapper mapper) : QueryHandler<JobLogQueryPaged, PagedResponse<JobLogListResponse>>
+public sealed class JobLogQueryPagedHandler(IJobLogRepository jobLogRepository, IMapper mapper) : QueryHandler<JobLogQueryPaged, PagedResponse<JobLogPagedResponse>>
 {
     /// <inheritdoc />
-    protected override async Task<PagedResponse<JobLogListResponse>> HandleAsync(JobLogQueryPaged query, CancellationToken cancellationToken)
+    protected override async Task<PagedResponse<JobLogPagedResponse>> HandleAsync(JobLogQueryPaged query, CancellationToken cancellationToken)
     {
         var request = query.Request;
         Expression<Func<SysJobLog, bool>> predicate = l =>
@@ -26,9 +26,9 @@ public sealed class JobLogQueryPagedHandler(IJobLogRepository jobLogRepository, 
 
         var page = await jobLogRepository.GetPagedDescAsync(request, predicate, cancellationToken);
 
-        // 开放泛型映射闭合 PagedResponse<SysJobLog> → PagedResponse<JobLogListResponse>：
+        // 开放泛型映射闭合 PagedResponse<SysJobLog> → PagedResponse<JobLogPagedResponse>：
         // 分页元数据同名复制，Items 元素运行期按模块映射解析
-        return mapper.Map<PagedResponse<JobLogListResponse>>(page)!;
+        return mapper.Map<PagedResponse<JobLogPagedResponse>>(page)!;
     }
 }
 
@@ -36,7 +36,7 @@ public sealed class JobLogQueryPagedHandler(IJobLogRepository jobLogRepository, 
 /// <remarks>构造函数。</remarks>
 /// <param name="jobRepository">定时任务仓储（只读）。</param>
 /// <param name="mapper">AutoMapper 映射器。</param>
-public sealed class JobQueryPagedHandler(IAggregateRepository<SysJob> jobRepository, IMapper mapper) : AggregateQueryPagedHandler<JobQueryPaged, JobPageRequest, SysJob, JobListResponse>(jobRepository, mapper)
+public sealed class JobQueryPagedHandler(IAggregateRepository<SysJob> jobRepository, IMapper mapper) : AggregateQueryPagedHandler<JobQueryPaged, JobPageRequest, SysJob, JobPagedResponse>(jobRepository, mapper)
 {
     /// <inheritdoc />
     protected override Expression<Func<SysJob, bool>>? BuildPredicate(JobPageRequest request)

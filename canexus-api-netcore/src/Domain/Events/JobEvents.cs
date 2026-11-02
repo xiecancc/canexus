@@ -14,3 +14,7 @@ public sealed class JobUpdatedEvent(SysJob before, SysJob after) : AggregateUpda
 /// <summary>定时任务删除领域事件：任务删除成功后发布，Domain 为删除前的状态。</summary>
 /// <param name="Entity">删除前的定时任务。</param>
 public sealed class JobDeletedEvent(SysJob entity) : AggregateDeletedEvent<SysJob>(entity);
+
+/// <summary>定时任务恢复领域事件：任务恢复（解除软删除墓碑）成功后发布，Domain 为恢复后的状态。</summary>
+/// <param name="Entity">恢复后的定时任务。</param>
+public sealed class JobRestoredEvent(SysJob entity) : AggregateRestoredEvent<SysJob>(entity);

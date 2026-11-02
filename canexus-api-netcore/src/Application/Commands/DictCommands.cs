@@ -47,7 +47,7 @@ public sealed class DictDataCreateCommandHandler(
     IAggregateRepository<SysDictData> dictDataRepository,
     IAggregateRepository<SysDictType> dictTypeRepository,
     IDomainEventPublisher domainEventPublisher,
-    IMapper mapper) : AggregateCreateCommandHandler<DictDataCreateCommand, DictDataCreateRequest, SysDictData>(dictDataRepository, domainEventPublisher)
+    IMapper mapper) : AggregateCreateCommandHandler<DictDataCreateCommand, DictDataInputRequest, SysDictData>(dictDataRepository, domainEventPublisher)
 {
     /// <summary>字典类型仓储（类型存在性校验）。</summary>
     private IAggregateRepository<SysDictType> DictTypeRepository { get; } = dictTypeRepository;
@@ -56,7 +56,7 @@ public sealed class DictDataCreateCommandHandler(
     private IMapper Mapper { get; } = mapper;
 
     /// <inheritdoc />
-    protected override async Task ValidateAsync(DictDataCreateRequest request, CancellationToken cancellationToken)
+    protected override async Task ValidateAsync(DictDataInputRequest request, CancellationToken cancellationToken)
     {
         var dictType = request.DictType.Trim();
         await DictDataRules.EnsureTypeExistsAsync(DictTypeRepository, dictType, cancellationToken);
@@ -65,7 +65,7 @@ public sealed class DictDataCreateCommandHandler(
     }
 
     /// <inheritdoc />
-    protected override SysDictData MapToEntity(DictDataCreateRequest request)
+    protected override SysDictData MapToEntity(DictDataInputRequest request)
     {
         return Mapper.Map<SysDictData>(request);
     }
@@ -82,13 +82,13 @@ public sealed class DictDataCreateCommandHandler(
 public sealed class DictTypeCreateCommandHandler(
     IAggregateRepository<SysDictType> dictTypeRepository,
     IDomainEventPublisher domainEventPublisher,
-    IMapper mapper) : AggregateCreateCommandHandler<DictTypeCreateCommand, DictTypeCreateRequest, SysDictType>(dictTypeRepository, domainEventPublisher)
+    IMapper mapper) : AggregateCreateCommandHandler<DictTypeCreateCommand, DictTypeInputRequest, SysDictType>(dictTypeRepository, domainEventPublisher)
 {
     /// <summary>AutoMapper 映射器。</summary>
     private IMapper Mapper { get; } = mapper;
 
     /// <inheritdoc />
-    protected override async Task ValidateAsync(DictTypeCreateRequest request, CancellationToken cancellationToken)
+    protected override async Task ValidateAsync(DictTypeInputRequest request, CancellationToken cancellationToken)
     {
         var dictType = request.DictType.Trim();
         await Repository.EnsureNotDuplicateAsync(
@@ -97,7 +97,7 @@ public sealed class DictTypeCreateCommandHandler(
     }
 
     /// <inheritdoc />
-    protected override SysDictType MapToEntity(DictTypeCreateRequest request)
+    protected override SysDictType MapToEntity(DictTypeInputRequest request)
     {
         return Mapper.Map<SysDictType>(request);
     }
@@ -125,6 +125,19 @@ public sealed class DictDataDeleteCommandHandler(
     protected override DomainEvent CreateEvent(SysDictData deleted)
     {
         return new DictDataDeletedEvent(deleted);
+    }
+}
+
+/// <summary>恢复字典数据命令处理器（解除软删除墓碑，幂等执行；所属类型缓存由监听器失效）。</summary>
+/// <remarks>构造函数。</remarks>
+public sealed class DictDataRestoreCommandHandler(
+    IAggregateRepository<SysDictData> dictDataRepository,
+    IDomainEventPublisher domainEventPublisher) : AggregateRestoreCommandHandler<DictDataRestoreCommand, SysDictData>(dictDataRepository, domainEventPublisher)
+{
+    /// <inheritdoc />
+    protected override DomainEvent CreateEvent(SysDictData restored)
+    {
+        return new DictDataRestoredEvent(restored);
     }
 }
 
@@ -160,13 +173,26 @@ public sealed class DictTypeDeleteCommandHandler(
     }
 }
 
+/// <summary>恢复字典类型命令处理器（解除软删除墓碑，幂等执行）。</summary>
+/// <remarks>构造函数。</remarks>
+public sealed class DictTypeRestoreCommandHandler(
+    IAggregateRepository<SysDictType> dictTypeRepository,
+    IDomainEventPublisher domainEventPublisher) : AggregateRestoreCommandHandler<DictTypeRestoreCommand, SysDictType>(dictTypeRepository, domainEventPublisher)
+{
+    /// <inheritdoc />
+    protected override DomainEvent CreateEvent(SysDictType restored)
+    {
+        return new DictTypeRestoredEvent(restored);
+    }
+}
+
 /// <summary>更新字典数据命令处理器（类型可迁移，迁移后新旧类型缓存均由监听器失效）。</summary>
 /// <remarks>构造函数。</remarks>
 public sealed class DictDataUpdateCommandHandler(
     IAggregateRepository<SysDictData> dictDataRepository,
     IAggregateRepository<SysDictType> dictTypeRepository,
     IDomainEventPublisher domainEventPublisher,
-    IMapper mapper) : AggregateUpdateCommandHandler<DictDataUpdateCommand, DictDataUpdateRequest, SysDictData>(dictDataRepository, domainEventPublisher)
+    IMapper mapper) : AggregateUpdateCommandHandler<DictDataUpdateCommand, DictDataInputRequest, SysDictData>(dictDataRepository, domainEventPublisher)
 {
     /// <summary>字典类型仓储（迁移目标类型存在性校验）。</summary>
     private IAggregateRepository<SysDictType> DictTypeRepository { get; } = dictTypeRepository;
@@ -181,7 +207,7 @@ public sealed class DictDataUpdateCommandHandler(
     protected override string EntityDisplayName => "字典数据";
 
     /// <inheritdoc />
-    protected override async Task ValidateAsync(DictDataUpdateRequest request, SysDictData entity, CancellationToken cancellationToken)
+    protected override async Task ValidateAsync(DictDataInputRequest request, SysDictData entity, CancellationToken cancellationToken)
     {
         var dictType = request.DictType.Trim();
         if (!string.Equals(dictType, entity.DictType, StringComparison.Ordinal))
@@ -194,7 +220,7 @@ public sealed class DictDataUpdateCommandHandler(
     }
 
     /// <inheritdoc />
-    protected override void MapToEntity(DictDataUpdateRequest request, SysDictData entity)
+    protected override void MapToEntity(DictDataInputRequest request, SysDictData entity)
     {
         Mapper.Map(request, entity);
     }
@@ -211,7 +237,7 @@ public sealed class DictDataUpdateCommandHandler(
 public sealed class DictTypeUpdateCommandHandler(
     IAggregateRepository<SysDictType> dictTypeRepository,
     IDomainEventPublisher domainEventPublisher,
-    IMapper mapper) : AggregateUpdateCommandHandler<DictTypeUpdateCommand, DictTypeUpdateRequest, SysDictType>(dictTypeRepository, domainEventPublisher)
+    IMapper mapper) : AggregateUpdateCommandHandler<DictTypeUpdateCommand, DictTypeInputRequest, SysDictType>(dictTypeRepository, domainEventPublisher)
 {
     /// <summary>AutoMapper 映射器。</summary>
     private IMapper Mapper { get; } = mapper;
@@ -223,7 +249,7 @@ public sealed class DictTypeUpdateCommandHandler(
     protected override string EntityDisplayName => "字典类型";
 
     /// <inheritdoc />
-    protected override Task ValidateAsync(DictTypeUpdateRequest request, SysDictType entity, CancellationToken cancellationToken)
+    protected override Task ValidateAsync(DictTypeInputRequest request, SysDictType entity, CancellationToken cancellationToken)
     {
         var dictType = request.DictType.Trim();
         if (!string.Equals(dictType, entity.DictType, StringComparison.Ordinal))
@@ -235,7 +261,7 @@ public sealed class DictTypeUpdateCommandHandler(
     }
 
     /// <inheritdoc />
-    protected override void MapToEntity(DictTypeUpdateRequest request, SysDictType entity)
+    protected override void MapToEntity(DictTypeInputRequest request, SysDictType entity)
     {
         Mapper.Map(request, entity);
     }

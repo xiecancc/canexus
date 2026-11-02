@@ -142,6 +142,7 @@ public class DictConfigApiTests
         // 更新变更 dictType → 400603（不可变更）
         var immutable = await SendAsync(HttpMethod.Put, $"/api/system/dict-type/{typeId}", new
         {
+            version = typeVersion,
             dictName = "B7 流程字典V2",
             dictType = dictType + "x",
             description = (string?)null
@@ -155,7 +156,7 @@ public class DictConfigApiTests
 
         // 插入一条字典数据后删除类型 → 400604（非空拒绝）
         var dataId = await CreateDictDataAsync(dictType, label: "选项A", value: "A");
-        var nonEmpty = await SendAsync(HttpMethod.Delete, $"/api/system/dict-type/{typeId}", new { version = Guid.Empty });
+        var nonEmpty = await SendAsync(HttpMethod.Delete, $"/api/system/dict-type/{typeId}/{await ApiTestSupport.GetVersionAsync<SysDictType>(_db, typeId)}");
         var nonEmptyBody = await ReadBodyAsync(nonEmpty);
         Assert.Multiple(() =>
         {
@@ -164,8 +165,8 @@ public class DictConfigApiTests
         });
 
         // 清空数据后类型可删除
-        await SendAsync(HttpMethod.Delete, $"/api/system/dict-data/{dataId}", new { version = await ApiTestSupport.GetVersionAsync<SysDictData>(_db, dataId) });
-        var deleted = await SendAsync(HttpMethod.Delete, $"/api/system/dict-type/{typeId}", new { version = await ApiTestSupport.GetVersionAsync<SysDictType>(_db, typeId) });
+        await SendAsync(HttpMethod.Delete, $"/api/system/dict-data/{dataId}/{await ApiTestSupport.GetVersionAsync<SysDictData>(_db, dataId)}");
+        var deleted = await SendAsync(HttpMethod.Delete, $"/api/system/dict-type/{typeId}/{await ApiTestSupport.GetVersionAsync<SysDictType>(_db, typeId)}");
         Assert.That(deleted.StatusCode, Is.EqualTo(HttpStatusCode.OK), "无数据的字典类型应可删除");
     }
 
@@ -212,11 +213,11 @@ public class DictConfigApiTests
             Is.EqualTo("选项B2"), "更新后按类型查询应立即返回新标签");
 
         // 删除后立即为空
-        await SendAsync(HttpMethod.Delete, $"/api/system/dict-data/{dataId}", new { version = await ApiTestSupport.GetVersionAsync<SysDictData>(_db, dataId) });
+        await SendAsync(HttpMethod.Delete, $"/api/system/dict-data/{dataId}/{await ApiTestSupport.GetVersionAsync<SysDictData>(_db, dataId)}");
         var afterDelete = await GetJsonAsync($"/api/system/dict-data/type/{dictType}");
         Assert.That(afterDelete.RootElement.GetProperty("data").GetArrayLength(), Is.EqualTo(0), "删除后按类型查询应为空");
 
-        await SendAsync(HttpMethod.Delete, $"/api/system/dict-type/{typeId}", new { version = await ApiTestSupport.GetVersionAsync<SysDictType>(_db, typeId) });
+        await SendAsync(HttpMethod.Delete, $"/api/system/dict-type/{typeId}/{await ApiTestSupport.GetVersionAsync<SysDictType>(_db, typeId)}");
     }
 
     [Test]
@@ -277,7 +278,7 @@ public class DictConfigApiTests
             Assert.That(missingTypeBody.RootElement.GetProperty("code").GetInt32(), Is.EqualTo(400601));
         });
 
-        await SendAsync(HttpMethod.Delete, $"/api/system/dict-type/{typeId}", new { version = await ApiTestSupport.GetVersionAsync<SysDictType>(_db, typeId) });
+        await SendAsync(HttpMethod.Delete, $"/api/system/dict-type/{typeId}/{await ApiTestSupport.GetVersionAsync<SysDictType>(_db, typeId)}");
     }
 
     // —— 参数配置 ——
@@ -338,7 +339,7 @@ public class DictConfigApiTests
         Assert.That(afterUpdate.RootElement.GetProperty("data").GetString(), Is.EqualTo("v2"), "更新后按键取值应立即返回新值");
 
         // 非内置可删除；删除后按键取值报不存在
-        await SendAsync(HttpMethod.Delete, $"/api/system/config/{configId}", new { version = await ApiTestSupport.GetVersionAsync<SysConfig>(_db, configId) });
+        await SendAsync(HttpMethod.Delete, $"/api/system/config/{configId}/{await ApiTestSupport.GetVersionAsync<SysConfig>(_db, configId)}");
         var missing = await SendAsync(HttpMethod.Get, $"/api/system/config/key/{configKey}", null);
         var missingBody = await ReadBodyAsync(missing);
         Assert.Multiple(() =>
@@ -358,7 +359,7 @@ public class DictConfigApiTests
         // 种子内置参数删除 → 400703
         var page = await GetJsonAsync("/api/system/config/page?keyword=sys.user.initPassword");
         var builtinId = page.RootElement.GetProperty("data").GetProperty("items")[0].GetProperty("id").GetGuid();
-        var delete = await SendAsync(HttpMethod.Delete, $"/api/system/config/{builtinId}", new { version = Guid.Empty });
+        var delete = await SendAsync(HttpMethod.Delete, $"/api/system/config/{builtinId}/{await ApiTestSupport.GetVersionAsync<SysConfig>(_db, builtinId)}");
         var deleteBody = await ReadBodyAsync(delete);
         Assert.Multiple(() =>
         {

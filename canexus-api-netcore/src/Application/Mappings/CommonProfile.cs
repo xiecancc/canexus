@@ -29,12 +29,14 @@ public sealed class CommonProfile : Profile
         // 各模块「实体 → Response」的派生映射由模块 Profile 注册，
         // 并通过 IncludeBase 挂接基类映射链，同名约定即可补齐基类承载的审计字段。
         // —— 列表向 ——
-        CreateMap<AggregateBase, AggregateListResponse>();
-        // —— 详情向（聚合读模型全量根）——
-        CreateMap<AggregateBase, AggregateDetailResponse>();
-        // —— 分页向（分页行即详情形态，挂接详情基类映射链）——
-        CreateMap<AggregateBase, AggregatePagedResponse>()
-            .IncludeBase<AggregateBase, AggregateDetailResponse>();
+        CreateMap<AggregateBase, AggregateItemResponse>();
+        // —— 下拉向（仅承载聚合 Id）——
+        CreateMap<AggregateBase, AggregateDropdownResponse>();
+        // —— 分页向（聚合读模型最小根：Id / Version / CreatedAt）——
+        CreateMap<AggregateBase, AggregatePagedResponse>();
+        // —— 详情向（在最小根之上补充租户 / 创建人 / 更新审计 / 备注，挂接分页基类映射链）——
+        CreateMap<AggregateBase, AggregateDetailResponse>()
+            .IncludeBase<AggregateBase, AggregatePagedResponse>();
 
         // DTO 写模型基类 → 聚合基类映射（模板链）：为各模块「请求 → 实体」的
         // IncludeBase 派生映射提供基类承载，审计字段（CreatedAt / CreatedBy 等）
@@ -42,7 +44,7 @@ public sealed class CommonProfile : Profile
         // MemberList.None：写方向不做目标成员校验 —— 实体持久层字段（Id / 审计 / 软删 / 导航）
         // 由数据访问层管理而非请求映射；字段对账由 FluentValidation 与编译期保证。
         // 实体 Version 由数据访问层生成并在更新时轮换，请求侧 Version 仅用于乐观锁比对，禁止映射回实体
-        CreateMap<AggregateChangeRequest, AggregateBase>(MemberList.None)
+        CreateMap<AggregateInputRequest, AggregateBase>(MemberList.None)
             .ForMember(dest => dest.Version, opt => opt.Ignore());
 
         // 开放泛型映射：闭合 PagedResponse<实体> → PagedResponse<DTO> 时按已注册的元素映射解析 Items

@@ -13,7 +13,7 @@ namespace Application.Validators;
 /// 创建 / 更新共用，消除重复定义）。</summary>
 /// <typeparam name="TRequest">定时任务写入请求类型。</typeparam>
 public class JobRequestValidator<TRequest> : AbstractValidator<TRequest>
-    where TRequest : JobRequest
+    where TRequest : JobInputRequest
 {
     /// <summary>调度管理端口（Cron / 任务类型校验经端口由底层调度器判定）。</summary>
     private IJobScheduleManager ScheduleManager { get; }
@@ -60,13 +60,13 @@ public class JobRequestValidator<TRequest> : AbstractValidator<TRequest>
 /// <remarks>构造函数。</remarks>
 /// <param name="scheduleManager">调度管理端口。</param>
 public sealed class JobCreateCommandValidator(IJobScheduleManager scheduleManager) :
-    WriteCommandValidator<JobCreateCommand, JobCreateRequest>(new JobRequestValidator<JobCreateRequest>(scheduleManager));
+    WriteCommandValidator<JobCreateCommand, JobInputRequest>(new JobRequestValidator<JobInputRequest>(scheduleManager));
 
 /// <summary>更新定时任务命令验证器（桥接请求验证器）。</summary>
 /// <remarks>构造函数。</remarks>
 /// <param name="scheduleManager">调度管理端口。</param>
 public sealed class JobUpdateCommandValidator(IJobScheduleManager scheduleManager) :
-    WriteCommandValidator<JobUpdateCommand, JobUpdateRequest>(new JobRequestValidator<JobUpdateRequest>(scheduleManager));
+    UpdateCommandValidator<JobUpdateCommand, JobInputRequest>(new JobRequestValidator<JobInputRequest>(scheduleManager));
 
 /// <summary>修改定时任务状态命令验证器：状态仅允许 1 运行 / 0 暂停（乐观锁版本比对由处理器完成）。</summary>
 public sealed class JobUpdateStatusCommandValidator : AbstractValidator<JobUpdateStatusCommand>
@@ -75,5 +75,10 @@ public sealed class JobUpdateStatusCommandValidator : AbstractValidator<JobUpdat
     public JobUpdateStatusCommandValidator()
     {
         RuleFor(command => command.Request.Status).StatusRule("状态取值不合法：仅支持 1 运行 / 0 暂停");
+
+        RuleFor(command => command.Version).NoEmptyRule("乐观锁版本号不能为空，请回传详情 / 列表接口返回的 Version");
     }
 }
+
+/// <summary>删除定时任务命令验证器（乐观锁版本号入口兜底）。</summary>
+public sealed class JobDeleteCommandValidator() : DeleteCommandValidator<JobDeleteCommand>;

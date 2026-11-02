@@ -32,35 +32,27 @@ public sealed class NoticeQueryLatestHandler(IAggregateRepository<SysNotice> not
     }
 }
 
-/// <summary>查询通知公告详情处理器（标准详情流程 + 回填映射忽略的正文）。</summary>
+/// <summary>查询通知公告详情处理器（标准详情流程；正文经详情映射直通，无需回填钩子）。</summary>
 /// <remarks>构造函数。</remarks>
 /// <param name="noticeRepository">通知公告仓储。</param>
 /// <param name="mapper">AutoMapper 映射器。</param>
-public sealed class NoticeQueryDetailHandler(IAggregateRepository<SysNotice> noticeRepository, IMapper mapper) : AggregateQueryDetailHandler<NoticeQueryDetail, SysNotice, NoticeListResponse>(noticeRepository, mapper)
+public sealed class NoticeQueryDetailHandler(IAggregateRepository<SysNotice> noticeRepository, IMapper mapper) : AggregateQueryDetailHandler<NoticeQueryDetail, SysNotice, NoticeDetailResponse>(noticeRepository, mapper)
 {
     /// <inheritdoc />
     protected override int NotFoundErrorCode => ErrorCodes.NoticeNotFound;
 
     /// <inheritdoc />
     protected override string EntityDisplayName => "通知公告";
-
-    /// <inheritdoc />
-    protected override Task EnrichAsync(NoticeListResponse response, SysNotice entity, CancellationToken cancellationToken)
-    {
-        // 列表映射忽略正文，详情在此显式补充
-        response.Content = entity.Content;
-        return Task.CompletedTask;
-    }
 }
 
 /// <summary>分页查询通知公告处理器。</summary>
 /// <remarks>构造函数。</remarks>
 /// <param name="noticeRepository">通知公告仓储。</param>
 /// <param name="mapper">AutoMapper 映射器。</param>
-public sealed class NoticeQueryPagedHandler(IAggregateRepository<SysNotice> noticeRepository, IMapper mapper) : QueryHandler<NoticeQueryPaged, PagedResponse<NoticeListResponse>>
+public sealed class NoticeQueryPagedHandler(IAggregateRepository<SysNotice> noticeRepository, IMapper mapper) : QueryHandler<NoticeQueryPaged, PagedResponse<NoticePagedResponse>>
 {
     /// <inheritdoc />
-    protected override async Task<PagedResponse<NoticeListResponse>> HandleAsync(NoticeQueryPaged query, CancellationToken cancellationToken)
+    protected override async Task<PagedResponse<NoticePagedResponse>> HandleAsync(NoticeQueryPaged query, CancellationToken cancellationToken)
     {
         var request = query.Request;
         var title = NormalizeFilter(request.Title);
@@ -84,8 +76,8 @@ public sealed class NoticeQueryPagedHandler(IAggregateRepository<SysNotice> noti
             cancellationToken);
 
         // 页内实体列表整体集合映射（元素映射运行期按模块注册解析；列表映射忽略正文）
-        return PagedResponse<NoticeListResponse>.Create(
-            mapper.Map<List<NoticeListResponse>>(paged.Items), paged.Total, request);
+        return PagedResponse<NoticePagedResponse>.Create(
+            mapper.Map<List<NoticePagedResponse>>(paged.Items), paged.Total, request);
     }
 
 }

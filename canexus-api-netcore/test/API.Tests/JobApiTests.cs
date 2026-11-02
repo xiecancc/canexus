@@ -115,7 +115,7 @@ public class JobApiTests
 
         // 3. 修改状态为运行（1）→ 入调度（乐观锁：先回读版本号）
         var statusVersion = await ApiTestSupport.GetVersionAsync<SysJob>(_db, jobId);
-        await SendForJsonAsync(HttpMethod.Put, $"/api/monitor/job/{jobId}/status", new { version = statusVersion, status = 1 });
+        await SendForJsonAsync(HttpMethod.Put, $"/api/monitor/job/{jobId}/{statusVersion}/status", new { status = 1 });
         var afterChange = (await GetJsonAsync($"/api/monitor/job/page?keyword={jobName}"))
             .RootElement.GetProperty("data").GetProperty("items")[0];
         Assert.That(afterChange.GetProperty("status").GetInt32(), Is.EqualTo(1), "启用后状态应为运行");
@@ -130,7 +130,7 @@ public class JobApiTests
             "日志应按触发时间倒序排列");
 
         // 5. 删除任务（同时移出调度）→ 分页不再返回
-        var deleted = await SendAsync(HttpMethod.Delete, $"/api/monitor/job/{jobId}", new { version = await ApiTestSupport.GetVersionAsync<SysJob>(_db, jobId) });
+        var deleted = await SendAsync(HttpMethod.Delete, $"/api/monitor/job/{jobId}/{await ApiTestSupport.GetVersionAsync<SysJob>(_db, jobId)}");
         Assert.That(deleted.StatusCode, Is.EqualTo(HttpStatusCode.OK), "删除任务应成功");
         var afterDelete = await GetJsonAsync($"/api/monitor/job/page?keyword={jobName}");
         Assert.That(afterDelete.RootElement.GetProperty("data").GetProperty("items").GetArrayLength(), Is.EqualTo(0),
@@ -206,9 +206,8 @@ public class JobApiTests
         try
         {
             var jobVersion = await ApiTestSupport.GetVersionAsync<SysJob>(_db, jobId);
-            await SendForJsonAsync(HttpMethod.Put, $"/api/monitor/job/{jobId}", new
+            await SendAsync(HttpMethod.Put, $"/api/monitor/job/{jobId}/{jobVersion}", new
             {
-                version = jobVersion,
                 jobName,
                 jobGroup = "B10_GROUP",
                 cronExpression = "0/5 * * * * ?",
@@ -229,7 +228,7 @@ public class JobApiTests
             });
 
             // 不存在的任务删除 → 400901
-            var deleteMissing = await SendAsync(HttpMethod.Delete, "/api/monitor/job/00000000-0000-0000-0000-000000009999", new { version = Guid.Empty });
+            var deleteMissing = await SendAsync(HttpMethod.Delete, $"/api/monitor/job/00000000-0000-0000-0000-000000009999/{Guid.NewGuid()}");
             var deleteMissingBody = await ReadBodyAsync(deleteMissing);
             Assert.Multiple(() =>
             {
@@ -239,7 +238,7 @@ public class JobApiTests
         }
         finally
         {
-            await SendAsync(HttpMethod.Delete, $"/api/monitor/job/{jobId}", new { version = await ApiTestSupport.GetVersionAsync<SysJob>(_db, jobId) });
+            await SendAsync(HttpMethod.Delete, $"/api/monitor/job/{jobId}/{await ApiTestSupport.GetVersionAsync<SysJob>(_db, jobId)}");
         }
     }
 

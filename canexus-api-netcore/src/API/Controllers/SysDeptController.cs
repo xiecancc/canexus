@@ -11,7 +11,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace API.Controllers;
-/// <summary>部门管理接口：树查询、详情、增删改。</summary>
+/// <summary>部门管理接口：树查询、详情、增删改与恢复。</summary>
 /// <remarks>构造函数。</remarks>
 /// <param name="sender">MediatR 请求发送器（CQRS 分发入口）。</param>
 [ApiController]
@@ -46,7 +46,7 @@ public class SysDeptController(ISender sender) : ControllerBase
     [HttpPost]
     [RequirePermission("system:dept:add")]
     [OperLog("部门管理", OperBusinessType.Add)]
-    public async Task<IActionResult> Create([FromBody] DeptCreateRequest request)
+    public async Task<IActionResult> Create([FromBody] DeptInputRequest request)
     {
         await sender.Send(new DeptCreateCommand(request));
         return Ok(Result.Ok(message: "创建成功"));
@@ -56,25 +56,38 @@ public class SysDeptController(ISender sender) : ControllerBase
     /// <param name="id">部门 Id。</param>
     /// <param name="request">更新请求。</param>
     /// <returns>统一响应。</returns>
-    [HttpPut("{id:guid}")]
+    [HttpPut("{id:guid}/{version:guid}")]
     [RequirePermission("system:dept:edit")]
     [OperLog("部门管理", OperBusinessType.Update)]
-    public async Task<IActionResult> Update(Guid id, [FromBody] DeptUpdateRequest request)
+    public async Task<IActionResult> Update(Guid id, Guid version, [FromBody] DeptInputRequest request)
     {
-        await sender.Send(new DeptUpdateCommand(id, request));
+        await sender.Send(new DeptUpdateCommand(id, version, request));
         return Ok(Result.Ok(message: "更新成功"));
     }
 
     /// <summary>删除部门（存在子部门或部门下存在用户时拒绝）。</summary>
     /// <param name="id">部门 Id。</param>
     /// <returns>统一响应。</returns>
-    /// <param name="request">删除请求（含乐观锁版本号）。</param>
-    [HttpDelete("{id:guid}")]
+    /// <param name="version">乐观锁版本号（须与聚合当前版本一致才允许删除）。</param>
+    [HttpDelete("{id:guid}/{version:guid}")]
     [RequirePermission("system:dept:remove")]
     [OperLog("部门管理", OperBusinessType.Delete)]
-    public async Task<IActionResult> Delete(Guid id, [FromBody] DeptDeleteRequest request)
+    public async Task<IActionResult> Delete(Guid id, Guid version)
     {
-        await sender.Send(new DeptDeleteCommand(id, request.Version));
+        await sender.Send(new DeptDeleteCommand(id, version));
         return Ok(Result.Ok(message: "删除成功"));
+    }
+
+    /// <summary>恢复部门（解除软删除墓碑；幂等执行，不存在或未删除时静默忽略）。</summary>
+    /// <param name="id">部门 Id。</param>
+    /// <param name="version">乐观锁版本号（与删除相同的路由参数模式）。</param>
+    /// <returns>统一响应。</returns>
+    [HttpPatch("{id:guid}/{version:guid}/restore")]
+    [RequirePermission("system:dept:restore")]
+    [OperLog("部门管理", OperBusinessType.Restore)]
+    public async Task<IActionResult> Restore(Guid id, Guid version)
+    {
+        var restored = await sender.Send(new DeptRestoreCommand(id, version));
+        return Ok(Result.Ok(message: restored ? "恢复成功" : "部门不存在或未删除，无需恢复"));
     }
 }

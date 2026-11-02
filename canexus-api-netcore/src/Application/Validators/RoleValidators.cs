@@ -12,7 +12,7 @@ namespace Application.Validators;
 /// 错误码保持 CommonInvalidRequest（40000）与原服务层文案一致；创建 / 更新共用（消除重复定义）。</summary>
 /// <typeparam name="TRequest">角色写入请求类型。</typeparam>
 public class RoleRequestValidator<TRequest> : AbstractValidator<TRequest>
-    where TRequest : RoleRequest
+    where TRequest : RoleInputRequest
 {
     /// <summary>构造函数。</summary>
     public RoleRequestValidator()
@@ -49,8 +49,11 @@ public class RoleRequestValidator<TRequest> : AbstractValidator<TRequest>
 
 /// <summary>创建角色命令验证器（桥接请求验证器）；roleKey 唯一性与保留值校验由处理器完成。</summary>
 public sealed class RoleCreateCommandValidator() :
-    WriteCommandValidator<RoleCreateCommand, RoleCreateRequest>(new RoleRequestValidator<RoleCreateRequest>());
+    WriteCommandValidator<RoleCreateCommand, RoleInputRequest>(new RoleRequestValidator<RoleInputRequest>());
 
 /// <summary>更新角色命令验证器（桥接请求验证器）；roleKey 唯一性与保留值校验由处理器完成。</summary>
 public sealed class RoleUpdateCommandValidator() :
-    WriteCommandValidator<RoleUpdateCommand, RoleUpdateRequest>(new RoleRequestValidator<RoleUpdateRequest>());
+    UpdateCommandValidator<RoleUpdateCommand, RoleInputRequest>(new RoleRequestValidator<RoleInputRequest>());
+
+/// <summary>删除角色命令验证器（乐观锁版本号入口兜底）。</summary>
+public sealed class RoleDeleteCommandValidator() : DeleteCommandValidator<RoleDeleteCommand>;

@@ -13,9 +13,9 @@ namespace Application.Tests.Validators;
 [TestFixture]
 public class MenuValidatorTests
 {
-    private static MenuCreateCommand BuildCommand(Action<MenuCreateRequest> configure)
+    private static MenuCreateCommand BuildCommand(Action<MenuInputRequest> configure)
     {
-        var request = new MenuCreateRequest { MenuType = MenuType.Directory, MenuName = "测试菜单", Path = "/test" };
+        var request = new MenuInputRequest { MenuType = MenuType.Directory, MenuName = "测试菜单", Path = "/test" };
         configure(request);
         return new MenuCreateCommand(request);
     }

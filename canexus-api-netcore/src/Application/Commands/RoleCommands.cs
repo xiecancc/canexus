@@ -134,6 +134,20 @@ public sealed class RoleDeleteCommandHandler(
     }
 }
 
+/// <summary>恢复角色命令处理器（解除软删除墓碑，幂等执行；权限缓存由监听器全量失效）。</summary>
+/// <remarks>构造函数。</remarks>
+/// <para>说明：删除时角色-菜单授权已物理清除，恢复仅还原角色聚合本身，菜单授权需重新分配。</para>
+public sealed class RoleRestoreCommandHandler(
+    IAggregateRepository<SysRole> roleRepository,
+    IDomainEventPublisher domainEventPublisher) : AggregateRestoreCommandHandler<RoleRestoreCommand, SysRole>(roleRepository, domainEventPublisher)
+{
+    /// <inheritdoc />
+    protected override DomainEvent CreateEvent(SysRole restored)
+    {
+        return new RoleRestoredEvent(restored);
+    }
+}
+
 /// <summary>更新角色命令处理器。</summary>
 /// <remarks>构造函数。</remarks>
 public sealed class RoleUpdateCommandHandler(
@@ -168,6 +182,7 @@ public sealed class RoleUpdateCommandHandler(
         await unitOfWork.RunInTransactionAsync(async () =>
         {
             mapper.Map(request, role);
+            role.ApplyVersion(command.Version);
             await roleRepository.UpdateAsync(role, cancellationToken);
             await RoleMenuSupport.ReplaceRoleMenusAsync(roleMenuRepository, command.Id, request.MenuIds, cancellationToken);
         }, cancellationToken);

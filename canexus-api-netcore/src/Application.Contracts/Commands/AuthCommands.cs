@@ -12,7 +12,7 @@ public sealed record AuthLoginCommand(LoginRequest Request, string? Ip, string? 
 
 /// <summary>登出命令：吊销 refreshToken（不传时吊销当前用户全部活跃令牌）。</summary>
 /// <param name="RefreshToken">刷新令牌；可空。</param>
-public sealed record AuthLogoutCommand(string? RefreshToken) : Command;
+public sealed record AuthLogoutCommand(string? RefreshToken) : Request;
 
 /// <summary>刷新令牌命令（轮换：旧 refreshToken 失效，发放新令牌对）。</summary>
 /// <param name="RefreshToken">原刷新令牌。</param>

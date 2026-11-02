@@ -14,3 +14,7 @@ public sealed class DeptUpdatedEvent(SysDept before, SysDept after) : AggregateU
 /// <summary>部门删除领域事件：部门删除成功后发布，Domain 为删除前的部门状态。</summary>
 /// <param name="Entity">删除前的部门。</param>
 public sealed class DeptDeletedEvent(SysDept entity) : AggregateDeletedEvent<SysDept>(entity);
+
+/// <summary>部门恢复领域事件：部门恢复（解除软删除墓碑）成功后发布，Domain 为恢复后的状态。</summary>
+/// <param name="Entity">恢复后的部门。</param>
+public sealed class DeptRestoredEvent(SysDept entity) : AggregateRestoredEvent<SysDept>(entity);

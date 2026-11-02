@@ -39,7 +39,7 @@ public sealed class ConfigQueryByKeyHandler(IDomainRepository<SysConfig> configR
 /// <remarks>构造函数。</remarks>
 /// <param name="configRepository">参数配置仓储（只读）。</param>
 /// <param name="mapper">AutoMapper 映射器。</param>
-public sealed class ConfigQueryPagedHandler(IAggregateRepository<SysConfig> configRepository, IMapper mapper) : AggregateQueryPagedHandler<ConfigQueryPaged, ConfigPageRequest, SysConfig, ConfigListResponse>(configRepository, mapper)
+public sealed class ConfigQueryPagedHandler(IAggregateRepository<SysConfig> configRepository, IMapper mapper) : AggregateQueryPagedHandler<ConfigQueryPaged, ConfigPageRequest, SysConfig, ConfigPagedResponse>(configRepository, mapper)
 {
     /// <inheritdoc />
     protected override Expression<Func<SysConfig, bool>>? BuildPredicate(ConfigPageRequest request)

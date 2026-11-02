@@ -45,8 +45,8 @@ public class Program
                 options.Filters.Add<OperLogActionFilter>();
             });
 
-            // OpenAPI 文档（含 Bearer 鉴权方案）
-            builder.Services.AddOpenApiWithBearer();
+            // Swagger 文档：OpenAPI JSON + Swagger UI（含 Bearer 鉴权方案）
+            builder.Services.AddSwaggerDocumentation();
 
             // 双层缓存：L1 进程内存（短过期）+ L2 分布式缓存（长过期，CacheOption.RedisEnabled 开启后为 Redis）
             builder.Services.AddCaching();
@@ -97,10 +97,8 @@ public class Program
             app.UseAuthentication();
             app.UseAuthorization();
 
-            if (app.Environment.IsDevelopment())
-            {
-                app.MapOpenApi();
-            }
+            // Swagger 文档管道（仅开发环境：/openapi/v1.json + /swagger UI）
+            app.UseSwaggerDocumentation();
 
             // 启动时初始化数据库：自动建库 + CodeFirst 同步表结构 + 幂等种子数据
             using (var scope = app.Services.CreateScope())

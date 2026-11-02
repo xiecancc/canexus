@@ -14,4 +14,4 @@ public sealed record DeptQueryDetail : AggregateQueryDetail<DeptDetailResponse>
 /// <summary>查询部门树（keyword 匹配部门名称 / 负责人；status 精确）。</summary>
 /// <param name="Keyword">关键字。</param>
 /// <param name="Status">状态。</param>
-public sealed record DeptQueryTree(string? Keyword, CommonStatus? Status) : Query<List<DeptTreeResponse>>;
+public sealed record DeptQueryTree(string? Keyword, CommonStatus? Status) : Request<List<DeptTreeResponse>>;

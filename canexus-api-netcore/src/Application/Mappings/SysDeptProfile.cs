@@ -4,7 +4,7 @@ using AutoMapper;
 using Domain.Entities;
 
 namespace Application.Mappings;
-/// <summary>部门模块映射：实体 → 树节点 / 详情（实体树经 <see cref="Domain.Entities.SysDept.BuildTree"/> 装配后，Children 随 AutoMapper 递归映射）；创建 / 更新请求 → 实体。</summary>
+/// <summary>部门模块映射：实体 → 树节点 / 详情（实体树经 <see cref="Domain.Entities.SysDept.BuildTree"/> 装配后，Children 随 AutoMapper 递归映射）；写入请求 → 实体。</summary>
 public sealed class SysDeptProfile : Profile
 {
     /// <summary>构造函数。</summary>
@@ -16,10 +16,8 @@ public sealed class SysDeptProfile : Profile
         CreateMap<SysDept, DeptDetailResponse>()
             .IncludeBase<AggregateBase, AggregateDetailResponse>();
 
-        // 请求 → 实体（IncludeBase 挂接基类映射链）
-        CreateMap<DeptCreateRequest, SysDept>(MemberList.None)
-            .IncludeBase<AggregateChangeRequest, AggregateBase>();
-        CreateMap<DeptUpdateRequest, SysDept>(MemberList.None)
-            .IncludeBase<AggregateChangeRequest, AggregateBase>();
+
+        // 写入请求 → 实体（仅业务字段；乐观锁版本号由处理器回填，不经载荷映射；创建 / 更新共用同一载荷）
+        CreateMap<DeptInputRequest, SysDept>(MemberList.None);
     }
 }

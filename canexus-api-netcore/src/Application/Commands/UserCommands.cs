@@ -144,6 +144,20 @@ public sealed class UserDeleteCommandHandler(
     }
 }
 
+/// <summary>恢复用户命令处理器（解除软删除墓碑，幂等执行；权限缓存由监听器失效）。</summary>
+/// <remarks>构造函数。</remarks>
+/// <para>说明：删除时用户-角色关联已物理清除，恢复仅还原用户聚合本身，角色需重新分配。</para>
+public sealed class UserRestoreCommandHandler(
+    IAggregateRepository<SysUser> userRepository,
+    IDomainEventPublisher domainEventPublisher) : AggregateRestoreCommandHandler<UserRestoreCommand, SysUser>(userRepository, domainEventPublisher)
+{
+    /// <inheritdoc />
+    protected override DomainEvent CreateEvent(SysUser restored)
+    {
+        return new UserRestoredEvent(restored);
+    }
+}
+
 /// <summary>重置用户密码命令处理器（标准更新流程：乐观锁校验 → BCrypt 哈希写入 → 发布重置事件）。</summary>
 /// <remarks>构造函数。</remarks>
 /// <param name="userRepository">用户聚合仓储。</param>
@@ -219,6 +233,7 @@ public sealed class UserUpdateCommandHandler(
             user.Phone = request.Phone;
             user.Status = request.Status;
             user.Description = request.Description;
+            user.ApplyVersion(command.Version);
             await userRepository.UpdateAsync(user, cancellationToken);
             await UserRoleSupport.ReplaceUserRolesAsync(userRoleRepository, command.Id, request.RoleIds, cancellationToken);
         }, cancellationToken);

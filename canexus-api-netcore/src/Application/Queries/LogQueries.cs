@@ -15,10 +15,10 @@ namespace Application.Queries;
 /// <remarks>构造函数。</remarks>
 /// <param name="loginLogRepository">登录日志仓储（只读）。</param>
 /// <param name="mapper">AutoMapper 映射器。</param>
-public sealed class LoginLogQueryPagedHandler(ILoginLogRepository loginLogRepository, IMapper mapper) : QueryHandler<LoginLogQueryPaged, PagedResponse<LoginLogListResponse>>
+public sealed class LoginLogQueryPagedHandler(ILoginLogRepository loginLogRepository, IMapper mapper) : QueryHandler<LoginLogQueryPaged, PagedResponse<LoginLogPagedResponse>>
 {
     /// <inheritdoc />
-    protected override async Task<PagedResponse<LoginLogListResponse>> HandleAsync(LoginLogQueryPaged query, CancellationToken cancellationToken)
+    protected override async Task<PagedResponse<LoginLogPagedResponse>> HandleAsync(LoginLogQueryPaged query, CancellationToken cancellationToken)
     {
         var request = query.Request;
         var userName = NormalizeFilter(request.UserName);
@@ -37,9 +37,9 @@ public sealed class LoginLogQueryPagedHandler(ILoginLogRepository loginLogReposi
         // 按登录时间倒序：日志列表最新记录在前（Guid 主键无时序语义，不能按 Id 排序）
         var page = await loginLogRepository.GetPagedByTimeDescAsync(request, predicate, cancellationToken);
 
-        // 开放泛型映射闭合 PagedResponse<SysLoginLog> → PagedResponse<LoginLogListResponse>：
+        // 开放泛型映射闭合 PagedResponse<SysLoginLog> → PagedResponse<LoginLogPagedResponse>：
         // 分页元数据同名复制，Items 元素运行期按模块映射解析
-        return mapper.Map<PagedResponse<LoginLogListResponse>>(page)!;
+        return mapper.Map<PagedResponse<LoginLogPagedResponse>>(page)!;
     }
 }
 
@@ -47,7 +47,7 @@ public sealed class LoginLogQueryPagedHandler(ILoginLogRepository loginLogReposi
 /// <remarks>构造函数。</remarks>
 /// <param name="operLogRepository">操作日志仓储（只读）。</param>
 /// <param name="mapper">AutoMapper 映射器。</param>
-public sealed class OperLogQueryPagedHandler(IOperLogRepository operLogRepository, IMapper mapper) : AggregateQueryPagedHandler<OperLogQueryPaged, OperLogPageRequest, SysOperLog, OperLogListResponse>(operLogRepository, mapper)
+public sealed class OperLogQueryPagedHandler(IOperLogRepository operLogRepository, IMapper mapper) : AggregateQueryPagedHandler<OperLogQueryPaged, OperLogPageRequest, SysOperLog, OperLogPagedResponse>(operLogRepository, mapper)
 {
     /// <inheritdoc />
     protected override Expression<Func<SysOperLog, bool>>? BuildPredicate(OperLogPageRequest request)

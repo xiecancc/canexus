@@ -13,7 +13,7 @@ public sealed record UserQueryDetail : AggregateQueryDetail<UserDetailResponse>
 
 /// <summary>分页查询用户（keyword 匹配用户名 / 昵称 / 手机号；deptId 按部门及以下；叠加数据范围过滤）。</summary>
 /// <param name="Request">分页与筛选条件。</param>
-public sealed record UserQueryPaged : AggregateQueryPaged<UserPageRequest, UserListResponse>
+public sealed record UserQueryPaged : AggregateQueryPaged<UserPageRequest, UserPagedResponse>
 {
     /// <summary>构造用户分页查询。</summary>
     /// <param name="request">分页与筛选条件。</param>

@@ -40,11 +40,11 @@ public class SysOperLogController(ISender sender) : ControllerBase
     /// <summary>按 Id 删除单条操作日志（物理删除）。</summary>
     /// <param name="id">日志 Id。</param>
     /// <returns>统一响应。</returns>
-    [HttpDelete("{id:guid}")]
+    [HttpDelete("{id:guid}/{version:guid}")]
     [RequirePermission("monitor:operlog:remove")]
-    public async Task<IActionResult> Delete(Guid id, [FromBody] OperLogDeleteRequest request)
+    public async Task<IActionResult> Delete(Guid id, Guid version)
     {
-        await sender.Send(new OperLogDeleteCommand(id, request.Version));
+        await sender.Send(new OperLogDeleteCommand(id, version));
         return Ok(Result.Ok(message: "删除成功"));
     }
 }

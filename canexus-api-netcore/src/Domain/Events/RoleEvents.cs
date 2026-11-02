@@ -14,3 +14,7 @@ public sealed class RoleUpdatedEvent(SysRole before, SysRole after) : AggregateU
 /// <summary>角色删除领域事件：角色删除成功后发布，Domain 为删除前的角色状态。</summary>
 /// <param name="Entity">删除前的角色。</param>
 public sealed class RoleDeletedEvent(SysRole entity) : AggregateDeletedEvent<SysRole>(entity);
+
+/// <summary>角色恢复领域事件：角色恢复（解除软删除墓碑）成功后发布，Domain 为恢复后的状态。</summary>
+/// <param name="Entity">恢复后的角色。</param>
+public sealed class RoleRestoredEvent(SysRole entity) : AggregateRestoredEvent<SysRole>(entity);

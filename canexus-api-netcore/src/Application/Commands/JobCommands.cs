@@ -65,6 +65,38 @@ public sealed class JobDeleteCommandHandler(IAggregateRepository<SysJob> jobRepo
     }
 }
 
+/// <summary>恢复定时任务命令处理器（解除软删除墓碑并同步调度器；幂等执行）。</summary>
+/// <remarks>构造函数。</remarks>
+/// <param name="jobRepository">定时任务仓储。</param>
+/// <param name="scheduleManager">任务调度管理端口（启用状态任务恢复后重新入调度）。</param>
+/// <param name="domainEventPublisher">领域事件发布端口。</param>
+public sealed class JobRestoreCommandHandler(IAggregateRepository<SysJob> jobRepository, IJobScheduleManager scheduleManager, IDomainEventPublisher domainEventPublisher) : RequestHandler<JobRestoreCommand, bool>
+{
+    /// <inheritdoc />
+    protected override async Task<bool> HandleAsync(JobRestoreCommand command, CancellationToken cancellationToken)
+    {
+        // 幂等恢复：主键不存在或未删除时仓储静默忽略（返回 false），不同步调度、不发布事件
+        if (!await jobRepository.RestoreAsync(command.Id, cancellationToken))
+        {
+            return false;
+        }
+
+        // 恢复刚成功，聚合必然可常规查询（墓碑已解除）；取回恢复后状态供调度同步与事件携带
+        var restored = await jobRepository.GetAsync([it => it.Id == command.Id], cancellationToken: cancellationToken)
+            ?? throw new InvalidOperationException($"定时任务 {command.Id} 恢复成功但不可查询，疑似数据访问层软删除过滤异常");
+
+        // 启用状态任务与启停操作口径一致：恢复后重新入 Quartz 调度
+        if (restored.Status == CommonStatus.Enabled)
+        {
+            await scheduleManager.ScheduleAsync(restored, cancellationToken);
+        }
+
+        // 关键节点发布定时任务恢复领域事件（携带恢复后的任务状态）
+        await domainEventPublisher.PublishAsync(new JobRestoredEvent(restored), cancellationToken);
+        return true;
+    }
+}
+
 /// <summary>立即触发一次执行命令处理器。</summary>
 /// <remarks>构造函数。</remarks>
 /// <param name="jobRepository">定时任务仓储。</param>
@@ -105,6 +137,7 @@ public sealed class JobUpdateCommandHandler(IAggregateRepository<SysJob> jobRepo
         var before = entity.Snapshot<SysJob>();
 
         mapper.Map(request, entity);
+        entity.ApplyVersion(command.Version);
         await jobRepository.UpdateAsync(entity, cancellationToken);
 
         // 分组变更时旧 JobKey 失效，需一并清理旧调度
@@ -145,6 +178,7 @@ public sealed class JobUpdateStatusCommandHandler(IAggregateRepository<SysJob> j
         var before = entity.Snapshot<SysJob>();
 
         entity.Status = command.Request.Status;
+        entity.ApplyVersion(command.Version);
         await jobRepository.UpdateAsync(entity, cancellationToken);
 
         if (command.Request.Status == CommonStatus.Enabled)

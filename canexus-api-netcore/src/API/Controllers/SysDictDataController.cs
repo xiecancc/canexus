@@ -11,7 +11,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace API.Controllers;
-/// <summary>字典数据管理接口：分页、按类型下拉、增删改（同类型下标签 / 键值唯一）。</summary>
+/// <summary>字典数据管理接口：分页、按类型下拉、增删改与恢复（同类型下标签 / 键值唯一）。</summary>
 /// <remarks>构造函数。</remarks>
 /// <param name="sender">MediatR 请求发送器（CQRS 分发入口）。</param>
 [ApiController]
@@ -45,7 +45,7 @@ public class SysDictDataController(ISender sender) : ControllerBase
     [HttpPost]
     [RequirePermission("system:dict:add")]
     [OperLog("字典数据", OperBusinessType.Add)]
-    public async Task<IActionResult> Create([FromBody] DictDataCreateRequest request)
+    public async Task<IActionResult> Create([FromBody] DictDataInputRequest request)
     {
         await sender.Send(new DictDataCreateCommand(request));
         return Ok(Result.Ok(message: "创建成功"));
@@ -55,25 +55,38 @@ public class SysDictDataController(ISender sender) : ControllerBase
     /// <param name="id">字典数据 Id。</param>
     /// <param name="request">更新请求。</param>
     /// <returns>统一响应。</returns>
-    [HttpPut("{id:guid}")]
+    [HttpPut("{id:guid}/{version:guid}")]
     [RequirePermission("system:dict:edit")]
     [OperLog("字典数据", OperBusinessType.Update)]
-    public async Task<IActionResult> Update(Guid id, [FromBody] DictDataUpdateRequest request)
+    public async Task<IActionResult> Update(Guid id, Guid version, [FromBody] DictDataInputRequest request)
     {
-        await sender.Send(new DictDataUpdateCommand(id, request));
+        await sender.Send(new DictDataUpdateCommand(id, version, request));
         return Ok(Result.Ok(message: "更新成功"));
     }
 
     /// <summary>删除字典数据。</summary>
     /// <param name="id">字典数据 Id。</param>
     /// <returns>统一响应。</returns>
-    /// <param name="request">删除请求（含乐观锁版本号）。</param>
-    [HttpDelete("{id:guid}")]
+    /// <param name="version">乐观锁版本号（须与聚合当前版本一致才允许删除）。</param>
+    [HttpDelete("{id:guid}/{version:guid}")]
     [RequirePermission("system:dict:remove")]
     [OperLog("字典数据", OperBusinessType.Delete)]
-    public async Task<IActionResult> Delete(Guid id, [FromBody] DictDataDeleteRequest request)
+    public async Task<IActionResult> Delete(Guid id, Guid version)
     {
-        await sender.Send(new DictDataDeleteCommand(id, request.Version));
+        await sender.Send(new DictDataDeleteCommand(id, version));
         return Ok(Result.Ok(message: "删除成功"));
+    }
+
+    /// <summary>恢复字典数据（解除软删除墓碑；幂等执行，不存在或未删除时静默忽略）。</summary>
+    /// <param name="id">字典数据 Id。</param>
+    /// <param name="version">乐观锁版本号（与删除相同的路由参数模式）。</param>
+    /// <returns>统一响应。</returns>
+    [HttpPatch("{id:guid}/{version:guid}/restore")]
+    [RequirePermission("system:dict:restore")]
+    [OperLog("字典数据", OperBusinessType.Restore)]
+    public async Task<IActionResult> Restore(Guid id, Guid version)
+    {
+        var restored = await sender.Send(new DictDataRestoreCommand(id, version));
+        return Ok(Result.Ok(message: restored ? "恢复成功" : "字典数据不存在或未删除，无需恢复"));
     }
 }

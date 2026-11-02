@@ -14,3 +14,7 @@ public sealed class TenantUpdatedEvent(SysTenant before, SysTenant after) : Aggr
 /// <summary>租户删除领域事件：租户删除成功后发布，Domain 为删除前的状态。</summary>
 /// <param name="Entity">删除前的租户。</param>
 public sealed class TenantDeletedEvent(SysTenant entity) : AggregateDeletedEvent<SysTenant>(entity);
+
+/// <summary>租户恢复领域事件：租户恢复（解除软删除墓碑）成功后发布，Domain 为恢复后的状态。</summary>
+/// <param name="Entity">恢复后的租户。</param>
+public sealed class TenantRestoredEvent(SysTenant entity) : AggregateRestoredEvent<SysTenant>(entity);

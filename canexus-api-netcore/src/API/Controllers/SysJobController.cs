@@ -11,7 +11,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace API.Controllers;
-/// <summary>定时任务管理接口：分页、增删改、启停与立即执行（创建 / 修改 / 启停即时同步 Quartz 调度器）。</summary>
+/// <summary>定时任务管理接口：分页、增删改与恢复、启停与立即执行（创建 / 修改 / 启停 / 恢复即时同步 Quartz 调度器）。</summary>
 /// <remarks>构造函数。</remarks>
 /// <param name="sender">MediatR 请求发送器（CQRS 分发入口）。</param>
 [ApiController]
@@ -35,7 +35,7 @@ public class SysJobController(ISender sender) : ControllerBase
     [HttpPost]
     [RequirePermission("monitor:job:add")]
     [OperLog("定时任务", OperBusinessType.Add)]
-    public async Task<IActionResult> Create([FromBody] JobCreateRequest request)
+    public async Task<IActionResult> Create([FromBody] JobInputRequest request)
     {
         await sender.Send(new JobCreateCommand(request));
         return Ok(Result.Ok(message: "创建成功"));
@@ -45,38 +45,51 @@ public class SysJobController(ISender sender) : ControllerBase
     /// <param name="id">任务 Id。</param>
     /// <param name="request">更新请求。</param>
     /// <returns>统一响应。</returns>
-    [HttpPut("{id:guid}")]
+    [HttpPut("{id:guid}/{version:guid}")]
     [RequirePermission("monitor:job:edit")]
     [OperLog("定时任务", OperBusinessType.Update)]
-    public async Task<IActionResult> Update(Guid id, [FromBody] JobUpdateRequest request)
+    public async Task<IActionResult> Update(Guid id, Guid version, [FromBody] JobInputRequest request)
     {
-        await sender.Send(new JobUpdateCommand(id, request));
+        await sender.Send(new JobUpdateCommand(id, version, request));
         return Ok(Result.Ok(message: "更新成功"));
     }
 
     /// <summary>删除定时任务（同时移出调度）。</summary>
     /// <param name="id">任务 Id。</param>
     /// <returns>统一响应。</returns>
-    /// <param name="request">删除请求（含乐观锁版本号）。</param>
-    [HttpDelete("{id:guid}")]
+    /// <param name="version">乐观锁版本号（须与聚合当前版本一致才允许删除）。</param>
+    [HttpDelete("{id:guid}/{version:guid}")]
     [RequirePermission("monitor:job:remove")]
     [OperLog("定时任务", OperBusinessType.Delete)]
-    public async Task<IActionResult> Delete(Guid id, [FromBody] JobDeleteRequest request)
+    public async Task<IActionResult> Delete(Guid id, Guid version)
     {
-        await sender.Send(new JobDeleteCommand(id, request.Version));
+        await sender.Send(new JobDeleteCommand(id, version));
         return Ok(Result.Ok(message: "删除成功"));
+    }
+
+    /// <summary>恢复定时任务（解除软删除墓碑；启用状态任务重新入调度。幂等执行，不存在或未删除时静默忽略）。</summary>
+    /// <param name="id">任务 Id。</param>
+    /// <param name="version">乐观锁版本号（与删除相同的路由参数模式）。</param>
+    /// <returns>统一响应。</returns>
+    [HttpPatch("{id:guid}/{version:guid}/restore")]
+    [RequirePermission("monitor:job:restore")]
+    [OperLog("定时任务", OperBusinessType.Restore)]
+    public async Task<IActionResult> Restore(Guid id, Guid version)
+    {
+        var restored = await sender.Send(new JobRestoreCommand(id, version));
+        return Ok(Result.Ok(message: restored ? "恢复成功" : "任务不存在或未删除，无需恢复"));
     }
 
     /// <summary>修改任务状态（1 运行入调度，0 暂停移出调度）。</summary>
     /// <param name="id">任务 Id。</param>
     /// <param name="request">状态请求。</param>
     /// <returns>统一响应。</returns>
-    [HttpPut("{id:guid}/status")]
+    [HttpPut("{id:guid}/{version:guid}/status")]
     [RequirePermission("monitor:job:changeStatus")]
     [OperLog("定时任务", OperBusinessType.Update)]
-    public async Task<IActionResult> UpdateStatus(Guid id, [FromBody] JobStatusRequest request)
+    public async Task<IActionResult> UpdateStatus(Guid id, Guid version, [FromBody] JobStatusRequest request)
     {
-        await sender.Send(new JobUpdateStatusCommand(id, request));
+        await sender.Send(new JobUpdateStatusCommand(id, version, request));
         return Ok(Result.Ok(message: "状态更新成功"));
     }
 

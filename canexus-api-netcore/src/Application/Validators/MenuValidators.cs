@@ -12,7 +12,7 @@ namespace Application.Validators;
 /// 以及类型与字段耦合的跨属性规则（目录必有 path、菜单必有 path 与 component、按钮必有 perms）。
 /// 错误码保持 MenuRuleInvalid（400404）与原服务层文案一致；创建 / 更新共用（消除重复定义）。</summary>
 public class MenuRequestValidator<TRequest> : AbstractValidator<TRequest>
-    where TRequest : MenuRequest
+    where TRequest : MenuInputRequest
 {
     /// <summary>构造函数。</summary>
     public MenuRequestValidator()
@@ -65,8 +65,11 @@ public class MenuRequestValidator<TRequest> : AbstractValidator<TRequest>
 
 /// <summary>创建菜单命令验证器（桥接请求验证器）；父菜单存在性与层级深度由处理器校验。</summary>
 public sealed class MenuCreateCommandValidator() :
-    WriteCommandValidator<MenuCreateCommand, MenuCreateRequest>(new MenuRequestValidator<MenuCreateRequest>());
+    WriteCommandValidator<MenuCreateCommand, MenuInputRequest>(new MenuRequestValidator<MenuInputRequest>());
 
 /// <summary>更新菜单命令验证器（桥接请求验证器）；父级不可选自身或后代由处理器校验。</summary>
 public sealed class MenuUpdateCommandValidator() :
-    WriteCommandValidator<MenuUpdateCommand, MenuUpdateRequest>(new MenuRequestValidator<MenuUpdateRequest>());
+    UpdateCommandValidator<MenuUpdateCommand, MenuInputRequest>(new MenuRequestValidator<MenuInputRequest>());
+
+/// <summary>删除菜单命令验证器（乐观锁版本号入口兜底）。</summary>
+public sealed class MenuDeleteCommandValidator() : DeleteCommandValidator<MenuDeleteCommand>;

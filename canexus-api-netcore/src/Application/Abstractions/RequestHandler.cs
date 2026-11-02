@@ -31,7 +31,7 @@ public abstract class RequestHandler<TRequest> : MediatR.IRequestHandler<TReques
 /// <para>框架分发的公共入口 <see cref="Handle"/> 统一转发给子类实现的 <see cref="HandleAsync"/>，
 /// 子类只关注业务本身；若未来替换 MediatR，仅需调整本抽象层。</para>
 /// <para>接受一切实现 <c>MediatR.IRequest&lt;TResponse&gt;</c> 的请求
-/// （含标记请求上挂接响应接口的形态，如 <c>AggregateCreateCommand : Command&lt;TRequest&gt;, IRequest&lt;Guid&gt;</c>）。</para>
+/// （如命令根 <c>Request&lt;bool&gt;</c> 的聚合派生、读请求根 <c>Request&lt;TResponse&gt;</c> 的查询派生）。</para>
 /// </summary>
 /// <typeparam name="TRequest">请求类型。</typeparam>
 /// <typeparam name="TResponse">响应类型。</typeparam>

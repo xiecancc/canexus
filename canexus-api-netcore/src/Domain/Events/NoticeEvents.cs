@@ -14,3 +14,7 @@ public sealed class NoticeUpdatedEvent(SysNotice before, SysNotice after) : Aggr
 /// <summary>通知公告删除领域事件：公告删除成功后发布，Domain 为删除前的状态。</summary>
 /// <param name="Entity">删除前的通知公告。</param>
 public sealed class NoticeDeletedEvent(SysNotice entity) : AggregateDeletedEvent<SysNotice>(entity);
+
+/// <summary>通知公告恢复领域事件：公告恢复（解除软删除墓碑）成功后发布，Domain 为恢复后的状态。</summary>
+/// <param name="Entity">恢复后的通知公告。</param>
+public sealed class NoticeRestoredEvent(SysNotice entity) : AggregateRestoredEvent<SysNotice>(entity);

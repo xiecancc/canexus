@@ -12,7 +12,7 @@ public class ConfigValidatorTests
 {
     private static ConfigCreateCommand BuildCommand(string configKey)
     {
-        return new ConfigCreateCommand(new ConfigCreateRequest
+        return new ConfigCreateCommand(new ConfigInputRequest
         {
             ConfigName = "测试参数",
             ConfigKey = configKey,

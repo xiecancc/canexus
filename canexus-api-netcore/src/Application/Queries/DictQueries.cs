@@ -41,7 +41,7 @@ public sealed class DictDataQueryByTypeHandler(IAggregateRepository<SysDictData>
 /// <remarks>构造函数。</remarks>
 /// <param name="dictDataRepository">字典数据仓储（只读）。</param>
 /// <param name="mapper">AutoMapper 映射器。</param>
-public sealed class DictDataQueryPagedHandler(IAggregateRepository<SysDictData> dictDataRepository, IMapper mapper) : AggregateQueryPagedHandler<DictDataQueryPaged, DictDataPageRequest, SysDictData, DictDataListResponse>(dictDataRepository, mapper)
+public sealed class DictDataQueryPagedHandler(IAggregateRepository<SysDictData> dictDataRepository, IMapper mapper) : AggregateQueryPagedHandler<DictDataQueryPaged, DictDataPageRequest, SysDictData, DictDataPagedResponse>(dictDataRepository, mapper)
 {
     /// <inheritdoc />
     protected override Expression<Func<SysDictData, bool>>? BuildPredicate(DictDataPageRequest request)
@@ -58,7 +58,7 @@ public sealed class DictDataQueryPagedHandler(IAggregateRepository<SysDictData> 
 /// <remarks>构造函数。</remarks>
 /// <param name="dictTypeRepository">字典类型仓储（只读）。</param>
 /// <param name="mapper">AutoMapper 映射器。</param>
-public sealed class DictTypeQueryPagedHandler(IAggregateRepository<SysDictType> dictTypeRepository, IMapper mapper) : AggregateQueryPagedHandler<DictTypeQueryPaged, DictTypePageRequest, SysDictType, DictTypeListResponse>(dictTypeRepository, mapper)
+public sealed class DictTypeQueryPagedHandler(IAggregateRepository<SysDictType> dictTypeRepository, IMapper mapper) : AggregateQueryPagedHandler<DictTypeQueryPaged, DictTypePageRequest, SysDictType, DictTypePagedResponse>(dictTypeRepository, mapper)
 {
     /// <inheritdoc />
     protected override Expression<Func<SysDictType, bool>>? BuildPredicate(DictTypePageRequest request)

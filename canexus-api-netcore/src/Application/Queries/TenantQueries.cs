@@ -15,7 +15,7 @@ namespace Application.Queries;
 /// <param name="tenantRepository">租户仓储。</param>
 /// <param name="mapper">AutoMapper 映射器。</param>
 public sealed class TenantQueryDropdownHandler(IAggregateRepository<SysTenant> tenantRepository, IMapper mapper) :
-    AggregateQueryDropdownHandler<TenantQueryDropdown, SysTenant, TenantDropdownResponse>(tenantRepository, mapper)
+    AggregateQueryDropdownHandler<TenantQueryDropdown, TenantDropdownRequest, SysTenant, TenantDropdownResponse>(tenantRepository, mapper)
 {
     /// <inheritdoc />
     protected override Expression<Func<SysTenant, bool>>? BuildDropdownPredicate() => t => t.Status == CommonStatus.Enabled;
@@ -29,7 +29,7 @@ public sealed class TenantQueryDropdownHandler(IAggregateRepository<SysTenant> t
 /// <remarks>构造函数。</remarks>
 /// <param name="tenantRepository">租户仓储（只读）。</param>
 /// <param name="mapper">AutoMapper 映射器。</param>
-public sealed class TenantQueryPagedHandler(IAggregateRepository<SysTenant> tenantRepository, IMapper mapper) : AggregateQueryPagedHandler<TenantQueryPaged, TenantPageRequest, SysTenant, TenantListResponse>(tenantRepository, mapper)
+public sealed class TenantQueryPagedHandler(IAggregateRepository<SysTenant> tenantRepository, IMapper mapper) : AggregateQueryPagedHandler<TenantQueryPaged, TenantPageRequest, SysTenant, TenantPagedResponse>(tenantRepository, mapper)
 {
     /// <inheritdoc />
     protected override Expression<Func<SysTenant, bool>>? BuildPredicate(TenantPageRequest request)

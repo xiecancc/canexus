@@ -14,7 +14,7 @@ namespace Application.Queries;
 /// <summary>获取全部启用角色查询处理器（标准下拉流程：仅启用项，按主键升序排序下推）。</summary>
 /// <remarks>构造函数。</remarks>
 public sealed class RoleQueryDropdownHandler(IAggregateRepository<SysRole> roleRepository, IMapper mapper) :
-    AggregateQueryDropdownHandler<RoleQueryDropdown, SysRole, RoleDropdownResponse>(roleRepository, mapper)
+    AggregateQueryDropdownHandler<RoleQueryDropdown, RoleDropdownRequest, SysRole, RoleDropdownResponse>(roleRepository, mapper)
 {
     /// <inheritdoc />
     protected override Expression<Func<SysRole, bool>>? BuildDropdownPredicate() => r => r.Status == CommonStatus.Enabled;
@@ -51,7 +51,7 @@ public sealed class RoleQueryDetailHandler(
 
 /// <summary>分页查询角色处理器（标准分页流程：关键字模糊匹配角色名 / 角色键、状态过滤）。</summary>
 /// <remarks>构造函数。</remarks>
-public sealed class RoleQueryPagedHandler(IAggregateRepository<SysRole> roleRepository, IMapper mapper) : AggregateQueryPagedHandler<RoleQueryPaged, RolePageRequest, SysRole, RoleListResponse>(roleRepository, mapper)
+public sealed class RoleQueryPagedHandler(IAggregateRepository<SysRole> roleRepository, IMapper mapper) : AggregateQueryPagedHandler<RoleQueryPaged, RolePageRequest, SysRole, RolePagedResponse>(roleRepository, mapper)
 {
     /// <inheritdoc />
     protected override Expression<Func<SysRole, bool>>? BuildPredicate(RolePageRequest request)

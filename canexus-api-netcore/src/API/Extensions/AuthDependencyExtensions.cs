@@ -7,10 +7,9 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
-using Microsoft.OpenApi;
 
 namespace API.Extensions;
-/// <summary>认证授权与 OpenAPI 鉴权方案的依赖注册扩展。</summary>
+/// <summary>认证授权的依赖注册扩展。</summary>
 public static class AuthDependencyExtensions
 {
     /// <summary>
@@ -61,31 +60,6 @@ public static class AuthDependencyExtensions
                     () => monitor.CurrentValue.Secret));
 
         services.AddAuthorization();
-        return services;
-    }
-
-    /// <summary>OpenAPI 增加 Bearer 鉴权方案（UI 出现 Authorize 按钮，可粘贴 accessToken 调试受保护接口）。</summary>
-    /// <param name="services">服务集合。</param>
-    /// <returns>服务集合。</returns>
-    public static IServiceCollection AddOpenApiWithBearer(this IServiceCollection services)
-    {
-        services.AddOpenApi(options =>
-        {
-            options.AddDocumentTransformer((document, _, _) =>
-            {
-                document.Components ??= new OpenApiComponents();
-                document.Components.SecuritySchemes ??= new Dictionary<string, IOpenApiSecurityScheme>();
-                document.Components.SecuritySchemes["Bearer"] = new OpenApiSecurityScheme
-                {
-                    Type = SecuritySchemeType.Http,
-                    Scheme = "bearer",
-                    BearerFormat = "JWT",
-                    Description = "JWT 授权：粘贴 /api/auth/login 返回的 accessToken，前缀 Bearer 由 UI 自动添加"
-                };
-                return Task.CompletedTask;
-            });
-        });
-
         return services;
     }
 }

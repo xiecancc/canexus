@@ -15,19 +15,19 @@ namespace Application.Commands;
 public sealed class NoticeCreateCommandHandler(
     IAggregateRepository<SysNotice> noticeRepository,
     IDomainEventPublisher domainEventPublisher,
-    IMapper mapper) : AggregateCreateCommandHandler<NoticeCreateCommand, NoticeCreateRequest, SysNotice>(noticeRepository, domainEventPublisher)
+    IMapper mapper) : AggregateCreateCommandHandler<NoticeCreateCommand, NoticeInputRequest, SysNotice>(noticeRepository, domainEventPublisher)
 {
     /// <summary>AutoMapper 映射器。</summary>
     private IMapper Mapper { get; } = mapper;
 
     /// <inheritdoc />
-    protected override Task ValidateAsync(NoticeCreateRequest request, CancellationToken cancellationToken)
+    protected override Task ValidateAsync(NoticeInputRequest request, CancellationToken cancellationToken)
     {
         return Task.CompletedTask;
     }
 
     /// <inheritdoc />
-    protected override SysNotice MapToEntity(NoticeCreateRequest request)
+    protected override SysNotice MapToEntity(NoticeInputRequest request)
     {
         return Mapper.Map<SysNotice>(request);
     }
@@ -58,12 +58,25 @@ public sealed class NoticeDeleteCommandHandler(
     }
 }
 
+/// <summary>恢复通知公告命令处理器（解除软删除墓碑，幂等执行）。</summary>
+/// <remarks>构造函数。</remarks>
+public sealed class NoticeRestoreCommandHandler(
+    IAggregateRepository<SysNotice> noticeRepository,
+    IDomainEventPublisher domainEventPublisher) : AggregateRestoreCommandHandler<NoticeRestoreCommand, SysNotice>(noticeRepository, domainEventPublisher)
+{
+    /// <inheritdoc />
+    protected override DomainEvent CreateEvent(SysNotice restored)
+    {
+        return new NoticeRestoredEvent(restored);
+    }
+}
+
 /// <summary>更新通知公告命令处理器（标准原位更新流程，无前置业务校验——字段规则由验证器承接）。</summary>
 /// <remarks>构造函数。</remarks>
 public sealed class NoticeUpdateCommandHandler(
     IAggregateRepository<SysNotice> noticeRepository,
     IDomainEventPublisher domainEventPublisher,
-    IMapper mapper) : AggregateUpdateCommandHandler<NoticeUpdateCommand, NoticeUpdateRequest, SysNotice>(noticeRepository, domainEventPublisher)
+    IMapper mapper) : AggregateUpdateCommandHandler<NoticeUpdateCommand, NoticeInputRequest, SysNotice>(noticeRepository, domainEventPublisher)
 {
     /// <summary>AutoMapper 映射器。</summary>
     private IMapper Mapper { get; } = mapper;
@@ -75,14 +88,14 @@ public sealed class NoticeUpdateCommandHandler(
     protected override string EntityDisplayName => "通知公告";
 
     /// <inheritdoc />
-    protected override Task ValidateAsync(NoticeUpdateRequest request, SysNotice entity, CancellationToken cancellationToken)
+    protected override Task ValidateAsync(NoticeInputRequest request, SysNotice entity, CancellationToken cancellationToken)
     {
         // 无业务守卫：字段规则由验证器拦截，乐观锁比对由基类统一执行
         return Task.CompletedTask;
     }
 
     /// <inheritdoc />
-    protected override void MapToEntity(NoticeUpdateRequest request, SysNotice entity)
+    protected override void MapToEntity(NoticeInputRequest request, SysNotice entity)
     {
         Mapper.Map(request, entity);
     }

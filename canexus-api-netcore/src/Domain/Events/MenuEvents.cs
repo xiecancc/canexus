@@ -14,3 +14,7 @@ public sealed class MenuUpdatedEvent(SysMenu before, SysMenu after) : AggregateU
 /// <summary>菜单删除领域事件：菜单删除成功后发布，Domain 为删除前的菜单状态。</summary>
 /// <param name="Entity">删除前的菜单。</param>
 public sealed class MenuDeletedEvent(SysMenu entity) : AggregateDeletedEvent<SysMenu>(entity);
+
+/// <summary>菜单恢复领域事件：菜单恢复（解除软删除墓碑）成功后发布，Domain 为恢复后的状态。</summary>
+/// <param name="Entity">恢复后的菜单。</param>
+public sealed class MenuRestoredEvent(SysMenu entity) : AggregateRestoredEvent<SysMenu>(entity);

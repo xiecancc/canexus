@@ -26,7 +26,7 @@ public class OperLogPageRequest : AggregatePagedRequest
 }
 
 /// <summary>操作日志列表行（分页数据项）。</summary>
-public class OperLogListResponse : AggregatePagedResponse
+public class OperLogPagedResponse : AggregatePagedResponse
 {
     /// <summary>操作模块。</summary>
     public string Title { get; set; } = string.Empty;
@@ -85,7 +85,7 @@ public class LoginLogPageRequest : AggregatePagedRequest
 }
 
 /// <summary>登录日志列表行（分页数据项）。</summary>
-public class LoginLogListResponse : AggregatePagedResponse
+public class LoginLogPagedResponse : AggregatePagedResponse
 {
     /// <summary>登录账号。</summary>
     public string UserName { get; set; } = string.Empty;
@@ -107,18 +107,4 @@ public class LoginLogListResponse : AggregatePagedResponse
 
     /// <summary>登录时间。</summary>
     public DateTime? LoginTime { get; set; }
-}
-
-/// <summary>删除登录日志请求（DELETE /api/system/login-log/{id}；物理删除不做版本校验，Version 仅保持删除调用形态统一）。</summary>
-public class LoginLogDeleteRequest
-{
-    /// <summary>乐观锁版本号（物理删除不校验，仅为删除调用形态统一）。</summary>
-    public Guid Version { get; set; }
-}
-
-/// <summary>删除操作日志请求（DELETE /api/system/oper-log/{id}；物理删除不做版本校验，Version 仅保持删除调用形态统一）。</summary>
-public class OperLogDeleteRequest
-{
-    /// <summary>乐观锁版本号（物理删除不校验，仅为删除调用形态统一）。</summary>
-    public Guid Version { get; set; }
 }

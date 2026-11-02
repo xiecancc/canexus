@@ -21,6 +21,9 @@ public enum OperBusinessType
     /// <summary>导入。</summary>
     Import = 6,
 
+    /// <summary>恢复。</summary>
+    Restore = 7,
+
     /// <summary>清空。</summary>
     Clean = 8
 }

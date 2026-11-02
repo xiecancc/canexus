@@ -11,9 +11,9 @@ public sealed class SysLogProfile : Profile
     public SysLogProfile()
     {
         // 实体 → 响应模型（IncludeBase 挂接基类映射链，补齐 Id / Version / 审计字段）
-        CreateMap<SysOperLog, OperLogListResponse>()
+        CreateMap<SysOperLog, OperLogPagedResponse>()
             .IncludeBase<AggregateBase, AggregatePagedResponse>();
-        CreateMap<SysLoginLog, LoginLogListResponse>()
+        CreateMap<SysLoginLog, LoginLogPagedResponse>()
             .IncludeBase<AggregateBase, AggregatePagedResponse>();
     }
 }

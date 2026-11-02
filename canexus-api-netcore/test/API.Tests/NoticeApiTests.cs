@@ -129,9 +129,8 @@ public class NoticeApiTests
 
         // 更新（标题 / 类型 / 内容 / 状态 / 备注）→ 详情同步变化（乐观锁：先回读版本号）
         var noticeVersion = await ApiTestSupport.GetVersionAsync<SysNotice>(_db, noticeId);
-        await SendForJsonAsync(HttpMethod.Put, $"/api/system/notice/{noticeId}", new
+        await SendAsync(HttpMethod.Put, $"/api/system/notice/{noticeId}/{noticeVersion}", new
         {
-            version = noticeVersion,
             title = title + "V2",
             noticeType = 2,
             content = "<p>更新后的正文</p>",
@@ -149,7 +148,7 @@ public class NoticeApiTests
         });
 
         // 删除 → 分页不可见
-        await SendForJsonAsync(HttpMethod.Delete, $"/api/system/notice/{noticeId}", new { version = await ApiTestSupport.GetVersionAsync<SysNotice>(_db, noticeId) });
+        await SendAsync(HttpMethod.Delete, $"/api/system/notice/{noticeId}/{await ApiTestSupport.GetVersionAsync<SysNotice>(_db, noticeId)}");
         var afterDelete = await GetJsonAsync($"/api/system/notice/page?title={Uri.EscapeDataString(title)}");
         Assert.That(afterDelete.RootElement.GetProperty("data").GetProperty("total").GetInt64(), Is.EqualTo(0), "删除后分页应不可见");
     }
@@ -204,7 +203,7 @@ public class NoticeApiTests
         // 不存在的详情 / 更新 / 删除 → 401001
         var missingDetail = await SendAsync(HttpMethod.Get, "/api/system/notice/00000000-0000-0000-0000-000000009999", null);
         var missingDetailBody = await ReadBodyAsync(missingDetail);
-        var missingUpdate = await SendAsync(HttpMethod.Put, "/api/system/notice/00000000-0000-0000-0000-000000009999", new
+        var missingUpdate = await SendAsync(HttpMethod.Put, $"/api/system/notice/00000000-0000-0000-0000-000000009999/{Guid.NewGuid()}", new
         {
             title,
             noticeType = 1,
@@ -212,7 +211,7 @@ public class NoticeApiTests
             status = 1
         });
         var missingUpdateBody = await ReadBodyAsync(missingUpdate);
-        var missingDelete = await SendAsync(HttpMethod.Delete, "/api/system/notice/00000000-0000-0000-0000-000000009999", new { version = Guid.Empty });
+        var missingDelete = await SendAsync(HttpMethod.Delete, $"/api/system/notice/00000000-0000-0000-0000-000000009999/{Guid.NewGuid()}");
         var missingDeleteBody = await ReadBodyAsync(missingDelete);
 
         Assert.Multiple(() =>
@@ -292,7 +291,7 @@ public class NoticeApiTests
             // 清理测试公告，避免污染其他用例与重复运行
             foreach (var id in createdIds)
             {
-                await SendAsync(HttpMethod.Delete, $"/api/system/notice/{id}", new { version = await ApiTestSupport.GetVersionAsync<SysNotice>(_db, id) });
+                await SendAsync(HttpMethod.Delete, $"/api/system/notice/{id}/{await ApiTestSupport.GetVersionAsync<SysNotice>(_db, id)}");
             }
         }
     }

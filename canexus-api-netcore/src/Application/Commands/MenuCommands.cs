@@ -19,7 +19,7 @@ namespace Application.Commands;
 public sealed class MenuCreateCommandHandler(
     IAggregateTreeRepository<SysMenu> menuRepository,
     IDomainEventPublisher domainEventPublisher,
-    IMapper mapper) : AggregateCreateCommandHandler<MenuCreateCommand, MenuCreateRequest, SysMenu>(menuRepository, domainEventPublisher)
+    IMapper mapper) : AggregateCreateCommandHandler<MenuCreateCommand, MenuInputRequest, SysMenu>(menuRepository, domainEventPublisher)
 {
     /// <summary>菜单树形仓储（父菜单存在性校验）。</summary>
     private IAggregateTreeRepository<SysMenu> MenuRepository { get; } = menuRepository;
@@ -28,7 +28,7 @@ public sealed class MenuCreateCommandHandler(
     private IMapper Mapper { get; } = mapper;
 
     /// <inheritdoc />
-    protected override async Task ValidateAsync(MenuCreateRequest request, CancellationToken cancellationToken)
+    protected override async Task ValidateAsync(MenuInputRequest request, CancellationToken cancellationToken)
     {
         if (request.ParentId != SysMenu.RootParentId)
         {
@@ -38,7 +38,7 @@ public sealed class MenuCreateCommandHandler(
     }
 
     /// <inheritdoc />
-    protected override SysMenu MapToEntity(MenuCreateRequest request)
+    protected override SysMenu MapToEntity(MenuInputRequest request)
     {
         return Mapper.Map<SysMenu>(request);
     }
@@ -96,6 +96,19 @@ public sealed class MenuDeleteCommandHandler(
     }
 }
 
+/// <summary>恢复菜单命令处理器（解除软删除墓碑，幂等执行；权限缓存由监听器全量失效）。</summary>
+/// <remarks>构造函数。</remarks>
+public sealed class MenuRestoreCommandHandler(
+    IAggregateTreeRepository<SysMenu> menuRepository,
+    IDomainEventPublisher domainEventPublisher) : AggregateRestoreCommandHandler<MenuRestoreCommand, SysMenu>(menuRepository, domainEventPublisher)
+{
+    /// <inheritdoc />
+    protected override DomainEvent CreateEvent(SysMenu restored)
+    {
+        return new MenuRestoredEvent(restored);
+    }
+}
+
 /// <summary>更新菜单命令处理器。</summary>
 /// <remarks>构造函数。</remarks>
 public sealed class MenuUpdateCommandHandler(
@@ -122,6 +135,7 @@ public sealed class MenuUpdateCommandHandler(
             // 仅更新业务字段（ParentId 还原为旧值）；父级变更统一交由树形仓储 MoveAsync 处理（环检测 / 改父）
             mapper.Map(request, menu);
             menu.ParentId = oldParentId;
+            menu.ApplyVersion(command.Version);
             await menuRepository.UpdateAsync(menu, cancellationToken);
 
             if (parentChanged)

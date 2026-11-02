@@ -16,13 +16,13 @@ namespace Application.Commands;
 public sealed class ConfigCreateCommandHandler(
     IAggregateRepository<SysConfig> configRepository,
     IDomainEventPublisher domainEventPublisher,
-    IMapper mapper) : AggregateCreateCommandHandler<ConfigCreateCommand, ConfigCreateRequest, SysConfig>(configRepository, domainEventPublisher)
+    IMapper mapper) : AggregateCreateCommandHandler<ConfigCreateCommand, ConfigInputRequest, SysConfig>(configRepository, domainEventPublisher)
 {
     /// <summary>AutoMapper 映射器。</summary>
     private IMapper Mapper { get; } = mapper;
 
     /// <inheritdoc />
-    protected override async Task ValidateAsync(ConfigCreateRequest request, CancellationToken cancellationToken)
+    protected override async Task ValidateAsync(ConfigInputRequest request, CancellationToken cancellationToken)
     {
         var configKey = request.ConfigKey.Trim();
         await Repository.EnsureNotDuplicateAsync(
@@ -31,7 +31,7 @@ public sealed class ConfigCreateCommandHandler(
     }
 
     /// <inheritdoc />
-    protected override SysConfig MapToEntity(ConfigCreateRequest request)
+    protected override SysConfig MapToEntity(ConfigInputRequest request)
     {
         return Mapper.Map<SysConfig>(request);
     }
@@ -73,12 +73,25 @@ public sealed class ConfigDeleteCommandHandler(
     }
 }
 
+/// <summary>恢复参数配置命令处理器（解除软删除墓碑，幂等执行；恢复后缓存由监听器失效）。</summary>
+/// <remarks>构造函数。</remarks>
+public sealed class ConfigRestoreCommandHandler(
+    IAggregateRepository<SysConfig> configRepository,
+    IDomainEventPublisher domainEventPublisher) : AggregateRestoreCommandHandler<ConfigRestoreCommand, SysConfig>(configRepository, domainEventPublisher)
+{
+    /// <inheritdoc />
+    protected override DomainEvent CreateEvent(SysConfig restored)
+    {
+        return new ConfigRestoredEvent(restored);
+    }
+}
+
 /// <summary>更新参数配置命令处理器（键名可变更并校验唯一，新旧键缓存均由监听器失效）。</summary>
 /// <remarks>构造函数。</remarks>
 public sealed class ConfigUpdateCommandHandler(
     IAggregateRepository<SysConfig> configRepository,
     IDomainEventPublisher domainEventPublisher,
-    IMapper mapper) : AggregateUpdateCommandHandler<ConfigUpdateCommand, ConfigUpdateRequest, SysConfig>(configRepository, domainEventPublisher)
+    IMapper mapper) : AggregateUpdateCommandHandler<ConfigUpdateCommand, ConfigInputRequest, SysConfig>(configRepository, domainEventPublisher)
 {
     /// <summary>AutoMapper 映射器。</summary>
     private IMapper Mapper { get; } = mapper;
@@ -90,7 +103,7 @@ public sealed class ConfigUpdateCommandHandler(
     protected override string EntityDisplayName => "参数配置";
 
     /// <inheritdoc />
-    protected override async Task ValidateAsync(ConfigUpdateRequest request, SysConfig entity, CancellationToken cancellationToken)
+    protected override async Task ValidateAsync(ConfigInputRequest request, SysConfig entity, CancellationToken cancellationToken)
     {
         var configKey = request.ConfigKey.Trim();
         await Repository.EnsureNotDuplicateAsync(
@@ -99,7 +112,7 @@ public sealed class ConfigUpdateCommandHandler(
     }
 
     /// <inheritdoc />
-    protected override void MapToEntity(ConfigUpdateRequest request, SysConfig entity)
+    protected override void MapToEntity(ConfigInputRequest request, SysConfig entity)
     {
         Mapper.Map(request, entity);
     }

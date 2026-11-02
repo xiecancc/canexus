@@ -14,7 +14,7 @@ public class TenantPageRequest : AggregatePagedRequest
 }
 
 /// <summary>租户列表行（分页数据项）。</summary>
-public class TenantListResponse : AggregatePagedResponse
+public class TenantPagedResponse : AggregatePagedResponse
 {
     /// <summary>状态：启用（1），停用（0）。</summary>
     public CommonStatus Status { get; set; }
@@ -32,6 +32,11 @@ public class TenantListResponse : AggregatePagedResponse
     public DateTime? ExpireTime { get; set; }
 }
 
+/// <summary>租户下拉查询请求：租户下拉查询载荷（预留为后续筛选条件的挂载点）。</summary>
+public class TenantDropdownRequest : AggregateDropdownRequest
+{
+}
+
 /// <summary>租户下拉简项（供用户创建时选择所属租户）。</summary>
 public class TenantDropdownResponse : AggregateDropdownResponse
 {
@@ -42,8 +47,8 @@ public class TenantDropdownResponse : AggregateDropdownResponse
     public string TenantName { get; set; } = string.Empty;
 }
 
-/// <summary>租户写入请求基类：创建 / 更新共同字段（镜像 SysTenant 聚合的启停 / 备注与业务字段；TenantKey 创建后不可变更）。</summary>
-public abstract class TenantRequest : AggregateChangeRequest
+/// <summary>租户写入请求（POST / PUT 共用载荷；镜像 SysTenant 聚合的启停 / 备注与业务字段；TenantKey 创建后不可变更）。</summary>
+public class TenantInputRequest : AggregateInputRequest
 {
     /// <summary>状态：启用（1），停用（0）。</summary>
     public CommonStatus Status { get; set; } = CommonStatus.Enabled;
@@ -62,23 +67,6 @@ public abstract class TenantRequest : AggregateChangeRequest
 
     /// <summary>过期时间（可空，不强制校验）。</summary>
     public DateTime? ExpireTime { get; set; }
-}
-
-/// <summary>创建租户请求（POST /api/system/tenant）。</summary>
-public class TenantCreateRequest : TenantRequest
-{
-}
-
-/// <summary>更新租户请求（PUT /api/system/tenant/{id}；TenantKey 不可变更；Version 须回传乐观锁版本号）。</summary>
-public class TenantUpdateRequest : TenantRequest
-{
-}
-
-/// <summary>删除租户请求（DELETE /api/system/tenant/{id}；Version 须回传乐观锁版本号）。</summary>
-public class TenantDeleteRequest
-{
-    /// <summary>乐观锁版本号（须与聚合当前版本一致才允许删除）。</summary>
-    public Guid Version { get; set; }
 }
 
 

@@ -40,11 +40,11 @@ public class SysLoginLogController(ISender sender) : ControllerBase
     /// <summary>按 Id 删除单条登录日志（物理删除）。</summary>
     /// <param name="id">日志 Id。</param>
     /// <returns>统一响应。</returns>
-    [HttpDelete("{id:guid}")]
+    [HttpDelete("{id:guid}/{version:guid}")]
     [RequirePermission("monitor:logininfor:remove")]
-    public async Task<IActionResult> Delete(Guid id, [FromBody] LoginLogDeleteRequest request)
+    public async Task<IActionResult> Delete(Guid id, Guid version)
     {
-        await sender.Send(new LoginLogDeleteCommand(id, request.Version));
+        await sender.Send(new LoginLogDeleteCommand(id, version));
         return Ok(Result.Ok(message: "删除成功"));
     }
 }

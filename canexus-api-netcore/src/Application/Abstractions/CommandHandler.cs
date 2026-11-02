@@ -49,7 +49,7 @@ public abstract class AggregateCreateCommandHandler<TCommand, TRequest, TEntity>
     IAggregateRepository<TEntity> repository,
     IDomainEventPublisher eventPublisher) : AggregateCommandHandler<TCommand, TEntity>(repository, eventPublisher)
     where TCommand : AggregateCreateCommand<TRequest>
-    where TRequest : AggregateChangeRequest
+    where TRequest : AggregateInputRequest
     where TEntity : AggregateBase
 {
     /// <summary>业务校验钩子：唯一性、关联存在性等前置校验（无校验时实现为空操作）。</summary>
@@ -98,7 +98,7 @@ public abstract class AggregateUpdateCommandHandler<TCommand, TRequest, TEntity>
     IAggregateRepository<TEntity> repository,
     IDomainEventPublisher eventPublisher) : AggregateCommandHandler<TCommand, TEntity>(repository, eventPublisher)
     where TCommand : AggregateUpdateCommand<TRequest>
-    where TRequest : AggregateChangeRequest
+    where TRequest : AggregateInputRequest
     where TEntity : AggregateBase
 {
     /// <summary>模块 NotFound 错误码（ErrorCodes 常量）。</summary>
@@ -135,6 +135,10 @@ public abstract class AggregateUpdateCommandHandler<TCommand, TRequest, TEntity>
         var before = entity.Snapshot<TEntity>();
 
         MapToEntity(command.Request, entity);
+
+        // 回填乐观锁版本令牌（命令参数独立携带，不随载荷映射；由 SqlSugar 框架级比对）
+        entity.ApplyVersion(command.Version);
+
         await Repository.UpdateAsync(entity, cancellationToken);
 
         // 关键节点发布修改领域事件（变更比对等响应动作由监听器处理）
@@ -243,6 +247,17 @@ internal static class CommandGuards
         {
             throw new BusinessException(errorCode, duplicateMessage);
         }
+    }
+
+    /// <summary>回填乐观锁版本令牌：把客户端提交的版本号写入聚合（作为 SqlSugar 框架级比对的基准，
+    /// 冲突时受影响 0 行抛并发异常）。版本号由命令参数独立承载，不随载荷映射。</summary>
+    /// <typeparam name="TEntity">聚合实体类型。</typeparam>
+    /// <param name="entity">待更新的聚合。</param>
+    /// <param name="version">客户端提交的乐观锁版本号。</param>
+    public static void ApplyVersion<TEntity>(this TEntity entity, Guid version)
+        where TEntity : AggregateBase
+    {
+        entity.Version = version;
     }
 }
 
