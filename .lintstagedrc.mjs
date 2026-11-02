@@ -10,7 +10,10 @@ const config = {
     'pnpm -C canexus-admin-vue exec oxlint --fix src e2e',
     'pnpm -C canexus-admin-vue exec oxfmt src e2e',
   ],
-  '*.cs': () => 'dotnet format canexus-api-netcore/api.slnx --verify-no-changes',
+  // 写模式而非 --verify-no-changes：verify 的 ENDOFLINE 检查在 Windows（core.autocrlf=true +
+  // lint-staged 经 git 管道命令备份/还原工作树，行尾回退为 LF）下会误报并死锁提交；
+  // 写模式就地修复行尾/编码/格式，lint-staged 自动暂存修复结果，门禁语义不变。
+  '*.cs': () => 'dotnet format canexus-api-netcore/api.slnx',
 }
 
 export default config

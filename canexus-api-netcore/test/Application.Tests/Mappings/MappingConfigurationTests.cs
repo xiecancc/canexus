@@ -1,7 +1,6 @@
 
 using Application.Mappings;
 using AutoMapper;
-using Microsoft.Extensions.Logging;
 using NUnit.Framework;
 
 namespace Application.Tests.Mappings;
@@ -15,10 +14,8 @@ public class MappingConfigurationTests
     [Test]
     public void AutoMapperConfiguration_IsValid()
     {
-        using var loggerFactory = LoggerFactory.Create(_ => { });
         var config = new MapperConfiguration(
-            cfg => cfg.AddMaps(typeof(CommonProfile).Assembly),
-            loggerFactory);
+            cfg => cfg.AddMaps(typeof(CommonProfile).Assembly));
 
         Assert.DoesNotThrow(() => config.AssertConfigurationIsValid());
     }
