@@ -22,4 +22,12 @@ public class SysRefreshToken : AggregateBase
     /// <summary>吊销时间；null 表示未吊销。</summary>
     [SugarColumn(IsNullable = true)]
     public virtual DateTime? RevokedAt { get; set; }
+
+    /// <summary>签发来源 IP（在线会话列表展示用；历史数据为 null）。</summary>
+    [SugarColumn(IsNullable = true, Length = 64)]
+    public virtual string? Ip { get; set; }
+
+    /// <summary>签发来源 User-Agent 原文（在线会话列表展示用；历史数据为 null）。</summary>
+    [SugarColumn(IsNullable = true, Length = 512)]
+    public virtual string? UserAgent { get; set; }
 }

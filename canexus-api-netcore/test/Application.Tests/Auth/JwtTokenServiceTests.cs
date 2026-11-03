@@ -241,6 +241,36 @@ internal sealed class InMemoryRefreshTokenRepository : ISysRefreshTokenRepositor
     }
 
     /// <inheritdoc />
+    public Task<int> RevokeByIdAsync(Guid id, DateTime revokedAt, CancellationToken cancellationToken = default)
+    {
+        var count = 0;
+        foreach (var token in _store.Where(t => t.Id == id && t.RevokedAt is null && t.ExpiresAt > revokedAt))
+        {
+            token.RevokedAt = revokedAt;
+            count++;
+        }
+
+        return Task.FromResult(count);
+    }
+
+    /// <inheritdoc />
+    public Task<PagedResponse<SysRefreshToken>> GetPagedActiveAsync(
+        PagedRequest request,
+        DateTime now,
+        Expression<Func<SysRefreshToken, bool>>? predicate = null,
+        CancellationToken cancellationToken = default)
+    {
+        var query = _store.AsQueryable().Where(t => t.RevokedAt == null && t.ExpiresAt > now);
+        if (predicate is not null)
+        {
+            query = query.Where(predicate);
+        }
+
+        var items = query.OrderByDescending(t => t.CreatedAt).ToList();
+        return Task.FromResult(PagedResponse<SysRefreshToken>.Create(items, items.Count, request));
+    }
+
+    /// <inheritdoc />
     public Task<int> RemoveExpiredAsync(DateTime now, CancellationToken cancellationToken = default)
         => Task.FromResult(_store.RemoveAll(t => t.ExpiresAt < now || t.RevokedAt is not null));
 }

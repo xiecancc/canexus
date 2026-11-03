@@ -57,7 +57,7 @@ public sealed class JwtTokenService(IOptionsMonitor<JwtOption> options, ISysRefr
     };
 
     /// <inheritdoc />
-    public async Task<TokenPair> GenerateAsync(TokenSubject subject, CancellationToken cancellationToken = default)
+    public async Task<TokenPair> GenerateAsync(TokenSubject subject, string? ip = null, string? userAgent = null, CancellationToken cancellationToken = default)
     {
         var now = DateTime.UtcNow;
         var claims = BuildClaims(subject);
@@ -82,7 +82,9 @@ public sealed class JwtTokenService(IOptionsMonitor<JwtOption> options, ISysRefr
         {
             Token = refreshToken,
             UserId = subject.UserId,
-            ExpiresAt = now.AddDays(Options.RefreshTokenDays)
+            ExpiresAt = now.AddDays(Options.RefreshTokenDays),
+            Ip = ip,
+            UserAgent = userAgent
         }, cancellationToken);
 
         return new TokenPair(accessToken, refreshToken, Options.AccessTokenMinutes * 60L);

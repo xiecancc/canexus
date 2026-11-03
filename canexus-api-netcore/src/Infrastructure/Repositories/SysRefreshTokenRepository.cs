@@ -2,7 +2,9 @@
 using Domain.Entities;
 using Domain.Repositories;
 using Domain.Services.Users;
+using Domain.Shared.Paging;
 using SqlSugar;
+using System.Linq.Expressions;
 
 namespace Infrastructure.Repositories;
 /// <summary>基于 SqlSugar 的刷新令牌专属仓储实现（继承聚合仓储，补充令牌语义方法）。</summary>
@@ -25,6 +27,37 @@ public class SysRefreshTokenRepository(ISqlSugarClient client, IUserContext curr
             .SetColumns(t => t.RevokedAt == revokedAt)
             .Where(t => t.UserId == userId && t.RevokedAt == null && t.ExpiresAt > revokedAt)
             .ExecuteCommandAsync(cancellationToken);
+    }
+
+    /// <inheritdoc />
+    public virtual async Task<int> RevokeByIdAsync(Guid id, DateTime revokedAt, CancellationToken cancellationToken = default)
+    {
+        return await Client.Updateable<SysRefreshToken>()
+            .SetColumns(t => t.RevokedAt == revokedAt)
+            .Where(t => t.Id == id && t.RevokedAt == null && t.ExpiresAt > revokedAt)
+            .ExecuteCommandAsync(cancellationToken);
+    }
+
+    /// <inheritdoc />
+    public virtual async Task<PagedResponse<SysRefreshToken>> GetPagedActiveAsync(
+        PagedRequest request,
+        DateTime now,
+        Expression<Func<SysRefreshToken, bool>>? predicate = null,
+        CancellationToken cancellationToken = default)
+    {
+        var total = new RefAsync<int>();
+        var query = Client.Queryable<SysRefreshToken>()
+            .Where(t => t.RevokedAt == null && t.ExpiresAt > now);
+        if (predicate is not null)
+        {
+            query = query.Where(predicate);
+        }
+
+        var items = await query
+            .OrderBy(t => t.CreatedAt, OrderByType.Desc)
+            .OrderBy(t => t.Id, OrderByType.Desc)
+            .ToPageListAsync(request.PageIndex, request.PageSize, total);
+        return PagedResponse<SysRefreshToken>.Create(items, total.Value, request);
     }
 
     /// <inheritdoc />

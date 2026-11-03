@@ -197,6 +197,11 @@ public static class ErrorCodes
     /// <summary>通知公告字段校验不通过（标题 / 内容必填、类型与状态取值合法）。</summary>
     public const int NoticeRuleInvalid = 401002;
 
+    // —— 在线会话模块段（4011xx，对应 HTTP 400）——
+
+    /// <summary>在线会话不存在或已下线（强退目标会话已吊销 / 已过期 / 已被删除）。</summary>
+    public const int OnlineSessionNotFound = 401101;
+
     // —— 系统段 ——
 
     /// <summary>系统内部错误（对应 HTTP 500，不向客户端泄露详情）。</summary>

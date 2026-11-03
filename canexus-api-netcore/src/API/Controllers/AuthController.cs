@@ -49,7 +49,9 @@ public class AuthController(ISender sender) : ControllerBase
     [EnableRateLimiting(AuthRateLimitPolicy)]
     public async Task<IActionResult> Refresh([FromBody] RefreshRequest request)
     {
-        var data = await sender.Send(new AuthRefreshTokenCommand(request.RefreshToken));
+        var ip = HttpContext.Connection.RemoteIpAddress?.ToString();
+        var userAgent = Request.Headers.UserAgent.ToString();
+        var data = await sender.Send(new AuthRefreshTokenCommand(request.RefreshToken, ip, userAgent));
         return Ok(Result.Ok(data));
     }
 

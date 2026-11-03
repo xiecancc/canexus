@@ -14,9 +14,11 @@ public interface ITokenService
 {
     /// <summary>为指定用户发放令牌对（accessToken + refreshToken，refreshToken 同时持久化）。</summary>
     /// <param name="subject">令牌主题（用户与角色信息）。</param>
+    /// <param name="ip">签发来源 IP（可选，持久化到 refreshToken 记录，供在线会话列表展示）。</param>
+    /// <param name="userAgent">签发来源 User-Agent（可选，同上）。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>令牌对（ExpiresIn 为 accessToken 有效期秒数）。</returns>
-    public Task<TokenPair> GenerateAsync(TokenSubject subject, CancellationToken cancellationToken = default);
+    public Task<TokenPair> GenerateAsync(TokenSubject subject, string? ip = null, string? userAgent = null, CancellationToken cancellationToken = default);
 
     /// <summary>校验 accessToken：签名 / 签发者 / 受众 / 生命周期全部通过时返回认证主体，否则返回 null。</summary>
     /// <param name="accessToken">访问令牌。</param>

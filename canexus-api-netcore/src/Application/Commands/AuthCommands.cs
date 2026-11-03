@@ -74,7 +74,7 @@ public sealed class AuthLoginCommandHandler(
         var subject = await tokenSubjectFactory.BuildAsync(user, cancellationToken);
 
         await WriteLoginLogAsync(user.UserName, command.Ip, command.UserAgent, success: true, "登录成功", cancellationToken);
-        var pair = await tokenService.GenerateAsync(subject, cancellationToken);
+        var pair = await tokenService.GenerateAsync(subject, command.Ip, command.UserAgent, cancellationToken);
         return new TokenPairDto { AccessToken = pair.AccessToken, RefreshToken = pair.RefreshToken, ExpiresIn = pair.ExpiresIn };
     }
 
@@ -187,7 +187,7 @@ public sealed class AuthRefreshTokenCommandHandler(
         // 轮换：吊销旧令牌 + 发放新对（同一事务保证一致性，事务由管道自动开启）
         var subject = await tokenSubjectFactory.BuildAsync(user, cancellationToken);
         await tokenService.RevokeAsync(command.RefreshToken, cancellationToken);
-        var pair = await tokenService.GenerateAsync(subject, cancellationToken);
+        var pair = await tokenService.GenerateAsync(subject, command.Ip, command.UserAgent, cancellationToken);
         return new TokenPairDto { AccessToken = pair.AccessToken, RefreshToken = pair.RefreshToken, ExpiresIn = pair.ExpiresIn };
     }
 }
