@@ -2,6 +2,7 @@
 using Domain.Repositories;
 using Domain.Services;
 using Domain.Services.Auth;
+using Domain.Services.Notifications;
 using Domain.Services.Security;
 using Domain.Services.Storage;
 using Domain.Services.Users;
@@ -10,6 +11,7 @@ using Infrastructure.Caching;
 using Infrastructure.DataAccess;
 using Infrastructure.Filtering;
 using Infrastructure.Locking;
+using Infrastructure.Notifications;
 using Infrastructure.Repositories;
 using Infrastructure.Scheduling;
 using Infrastructure.Storage;
@@ -98,6 +100,7 @@ public static class DependencyExtensions
         services.RegisterOption<RateLimitOption>(configuration, "RateLimit");
         services.RegisterOption<HttpsOption>(configuration, "Https");
         services.RegisterOption<FileStorageOption>(configuration, "FileStorage");
+        services.RegisterOption<MailOption>(configuration, "Mail");
 
         return services;
     }
@@ -143,6 +146,20 @@ public static class DependencyExtensions
     {
         // 无状态单例：内部仅持有配置快照与路径计算，无共享可变状态
         services.AddSingleton<IFileStorage, LocalFileStorage>();
+
+        return services;
+    }
+
+    #endregion
+
+    #region 通知投递
+
+    /// <summary>注册通知投递渠道：邮件渠道恒注册（内部按 Mail:Enabled 静默跳过，避免配置热切换时的注册时序问题）。</summary>
+    /// <param name="services">服务集合。</param>
+    /// <returns>服务集合。</returns>
+    public static IServiceCollection AddNotifications(this IServiceCollection services)
+    {
+        services.AddSingleton<INotificationChannel, SmtpEmailChannel>();
 
         return services;
     }

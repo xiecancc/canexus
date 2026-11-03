@@ -62,6 +62,9 @@ public class Program
             // 文件存储：本地磁盘实现（IFileStorage 端口，上传白名单与大小上限经 FileStorage 配置控制）
             builder.Services.AddStorage();
 
+            // 通知投递渠道：邮件等站外载体（渠道按 Mail:Enabled 静默跳过，失败不阻塞主流程）
+            builder.Services.AddNotifications();
+
             // JWT Bearer 认证与授权
             builder.Services.AddJwtAuthentication();
 
