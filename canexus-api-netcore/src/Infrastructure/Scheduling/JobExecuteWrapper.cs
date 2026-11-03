@@ -52,11 +52,8 @@ public class JobExecuteWrapper(
         var stopwatch = Stopwatch.StartNew();
         try
         {
-            var targetType = Type.GetType(job.JobType, throwOnError: false);
-            if (targetType is null || !typeof(IJob).IsAssignableFrom(targetType))
-            {
-                throw new BusinessException(ErrorCodes.JobTypeInvalid, $"任务类型「{job.JobType}」不可解析或未实现 Quartz IJob");
-            }
+            var targetType = JobTypeResolver.Resolve(job.JobType)
+                ?? throw new BusinessException(ErrorCodes.JobTypeInvalid, $"任务类型「{job.JobType}」不可解析或未实现 Quartz IJob");
 
             var instance = (IJob)(serviceProvider.GetService(targetType) ?? Activator.CreateInstance(targetType)!);
             await instance.Execute(context);

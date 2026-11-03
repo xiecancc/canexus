@@ -130,11 +130,10 @@ public class DictConfigApiTests
             Assert.That(duplicateBody.RootElement.GetProperty("code").GetInt32(), Is.EqualTo(400602));
         });
 
-        // 更新（dictType 不变）→ 成功（乐观锁：先回读版本号）
+        // 更新（dictType 不变）→ 成功（乐观锁：版本号经路由传入）
         var typeVersion = await ApiTestSupport.GetVersionAsync<SysDictType>(_db, typeId);
-        await SendForJsonAsync(HttpMethod.Put, $"/api/system/dict-type/{typeId}", new
+        await SendForJsonAsync(HttpMethod.Put, $"/api/system/dict-type/{typeId}/{typeVersion}", new
         {
-            version = typeVersion,
             dictName = "B7 流程字典V2",
             dictType,
             description = "更新后"
@@ -144,9 +143,8 @@ public class DictConfigApiTests
         Assert.That(updated.GetProperty("dictName").GetString(), Is.EqualTo("B7 流程字典V2"));
 
         // 更新变更 dictType → 400603（不可变更）
-        var immutable = await SendAsync(HttpMethod.Put, $"/api/system/dict-type/{typeId}", new
+        var immutable = await SendAsync(HttpMethod.Put, $"/api/system/dict-type/{typeId}/{typeVersion}", new
         {
-            version = typeVersion,
             dictName = "B7 流程字典V2",
             dictType = dictType + "x",
             description = (string?)null
@@ -201,11 +199,10 @@ public class DictConfigApiTests
             Assert.That(firstItems[0].GetProperty("tagType").GetInt32(), Is.EqualTo(1));
         });
 
-        // 更新后立即可见（缓存已失效；乐观锁：先回读版本号）
+        // 更新后立即可见（缓存已失效；乐观锁：版本号经路由传入）
         var dataVersion = await ApiTestSupport.GetVersionAsync<SysDictData>(_db, dataId);
-        await SendForJsonAsync(HttpMethod.Put, $"/api/system/dict-data/{dataId}", new
+        await SendForJsonAsync(HttpMethod.Put, $"/api/system/dict-data/{dataId}/{dataVersion}", new
         {
-            version = dataVersion,
             dictType,
             dictLabel = "选项B2",
             dictValue = "B",
@@ -332,11 +329,10 @@ public class DictConfigApiTests
         var first = await GetJsonAsync($"/api/system/config/key/{configKey}");
         Assert.That(first.RootElement.GetProperty("data").GetString(), Is.EqualTo("v1"));
 
-        // 更新后立即可见（缓存已失效；乐观锁：先回读版本号）
+        // 更新后立即可见（缓存已失效；乐观锁：版本号经路由传入）
         var configVersion = await ApiTestSupport.GetVersionAsync<SysConfig>(_db, configId);
-        await SendForJsonAsync(HttpMethod.Put, $"/api/system/config/{configId}", new
+        await SendForJsonAsync(HttpMethod.Put, $"/api/system/config/{configId}/{configVersion}", new
         {
-            version = configVersion,
             configName = "B7 测试参数",
             configKey,
             configValue = "v2",
@@ -421,7 +417,7 @@ public class DictConfigApiTests
     {
         var response = await SendAsync(method, url, payload);
         var content = await response.Content.ReadAsStringAsync();
-        Assert.That(response.IsSuccessStatusCode, Is.True, $"请求应成功：{method} {url}，响应：{content}");
+        Assert.That(response.IsSuccessStatusCode, Is.True, $"请求应成功：{method} {url}，status={(int)response.StatusCode}，响应：{content}");
         return JsonDocument.Parse(content);
     }
 

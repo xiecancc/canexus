@@ -118,11 +118,10 @@ public class TenantApiTests
             Assert.That(duplicateBody.RootElement.GetProperty("code").GetInt32(), Is.EqualTo(400802));
         });
 
-        // 更新（tenantKey 不变）→ 成功（乐观锁：先回读版本号）
+        // 更新（tenantKey 不变）→ 成功（乐观锁：版本号经路由传入）
         var tenantVersion = await ApiTestSupport.GetVersionAsync<SysTenant>(_db, tenantId);
-        await SendForJsonAsync(HttpMethod.Put, $"/api/system/tenant/{tenantId}", new
+        await SendForJsonAsync(HttpMethod.Put, $"/api/system/tenant/{tenantId}/{tenantVersion}", new
         {
-            version = tenantVersion,
             tenantKey,
             tenantName = "B9 流程租户V2",
             contactPhone = (string?)null,
@@ -135,9 +134,8 @@ public class TenantApiTests
         Assert.That(updated.GetProperty("tenantName").GetString(), Is.EqualTo("B9 流程租户V2"));
 
         // 更新变更 tenantKey → 400803（不可变更）
-        var immutable = await SendAsync(HttpMethod.Put, $"/api/system/tenant/{tenantId}", new
+        var immutable = await SendAsync(HttpMethod.Put, $"/api/system/tenant/{tenantId}/{tenantVersion}", new
         {
-            version = tenantVersion,
             tenantKey = tenantKey + "x",
             tenantName = "B9 流程租户V2",
             status = 1

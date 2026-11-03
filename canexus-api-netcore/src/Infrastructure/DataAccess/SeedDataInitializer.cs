@@ -3,6 +3,7 @@ using Domain.Entities;
 using Domain.Services.Auth;
 using Domain.Shared.Constants;
 using Domain.Shared.Enums;
+using Infrastructure.Shared.Locking;
 using Microsoft.Extensions.Logging;
 using SqlSugar;
 
@@ -19,8 +20,9 @@ namespace Infrastructure.DataAccess;
 /// <remarks>构造函数。</remarks>
 /// <param name="client">SqlSugar 客户端。</param>
 /// <param name="passwordHasher">密码哈希器（种子账号密码加密）。</param>
+/// <param name="distributedLock">分布式锁（多实例并发启动时保护种子初始化的 check-then-insert 竞态）。</param>
 /// <param name="logger">日志。</param>
-public sealed class SeedDataInitializer(ISqlSugarClient client, IPasswordHasher passwordHasher, ILogger<SeedDataInitializer> logger)
+public sealed class SeedDataInitializer(ISqlSugarClient client, IPasswordHasher passwordHasher, IDistributedLock distributedLock, ILogger<SeedDataInitializer> logger)
 {
     /// <summary>由种子序号生成确定性占位主键（格式 00000000-0000-0000-0000-{序号:D12}，保证 36 位）。</summary>
     private static Guid SeedId(long n) => Guid.Parse($"00000000-0000-0000-0000-{n:D12}");
@@ -39,11 +41,23 @@ public sealed class SeedDataInitializer(ISqlSugarClient client, IPasswordHasher 
     /// <summary>字典数据隐藏页菜单固定 Id（挂在字典管理 105 下，visible=0 不进入侧边栏）。</summary>
     private static readonly Guid DictDataMenuId = SeedId(109);
 
+    /// <summary>种子初始化锁键（多实例并发启动时串行化；判重逻辑本身幂等，锁为正确性增强）。</summary>
+    private const string SeedLockKey = "seed:initialize";
+
     /// <summary>初始化种子数据（幂等：基础数据仅当对应表为空时插入，字典与参数按缺失项追加，整体在一个事务内完成）。</summary>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>表示异步操作的任务。</returns>
     public async Task InitializeAsync(CancellationToken cancellationToken = default)
     {
+        // 分布式锁保护 check-then-insert 竞态：多实例并发启动时避免重复插入字典 / 配置项；
+        // 未获取到锁（等待超时 / Redis 故障降级为 null）时按无锁路径继续，由判重幂等兜底
+        await using var handle = await distributedLock.AcquireAsync(
+            SeedLockKey, TimeSpan.FromMinutes(2), TimeSpan.FromSeconds(30), cancellationToken);
+        if (handle is null)
+        {
+            logger.LogWarning("未能获取种子初始化锁（其他实例正在初始化或锁后端异常），按无锁路径继续（判重幂等兜底）");
+        }
+
         await client.Ado.BeginTranAsync();
         try
         {
@@ -313,8 +327,8 @@ public sealed class SeedDataInitializer(ISqlSugarClient client, IPasswordHasher 
     {
         var inserted = false;
 
-        inserted |= await EnsureConfigAsync("sys.user.initPassword", UserConstants.DefaultPassword, "用户初始密码", description: "新增用户时的缺省初始密码");
-        inserted |= await EnsureConfigAsync("sys.account.captchaEnabled", "true", "登录验证码开关", description: "是否开启登录验证码校验（true 开启 / false 关闭）");
+        inserted |= await EnsureConfigAsync(ConfigConstants.InitPasswordKey, UserConstants.DefaultPassword, "用户初始密码", description: "新增用户时的缺省初始密码");
+        inserted |= await EnsureConfigAsync(ConfigConstants.CaptchaEnabledKey, "true", "登录验证码开关", description: "是否开启登录验证码校验（true 开启 / false 关闭）");
 
         if (inserted)
         {

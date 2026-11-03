@@ -11,19 +11,20 @@ using Domain.Shared.Enums;
 using Domain.Shared.Exceptions;
 using Domain.Shared.Results;
 using Infrastructure.Shared.Caching;
+using Infrastructure.Shared.Locking;
 
 namespace Application.Commands;
 /// <summary>账号密码登录命令处理器。</summary>
 /// <remarks>构造函数。</remarks>
 public sealed class AuthLoginCommandHandler(
     IAggregateRepository<SysUser> userRepository,
-    IAggregateRepository<SysRole> roleRepository,
-    IDomainRepository<SysUserRole> userRoleRepository,
     ILoginLogRepository loginLogRepository,
     ICaptchaService captchaService,
     ITokenService tokenService,
+    ITokenSubjectFactory tokenSubjectFactory,
     IPasswordHasher passwordHasher,
-    ICache cache) : RequestHandler<AuthLoginCommand, TokenPairDto>
+    ICache cache,
+    IDistributedLock distributedLock) : RequestHandler<AuthLoginCommand, TokenPairDto>
 {
     /// <summary>登录失败计数缓存 key 前缀（key 格式：{prefix}{userName}）。</summary>
     public const string LoginFailCacheKeyPrefix = "auth:login-fail:";
@@ -64,13 +65,13 @@ public sealed class AuthLoginCommandHandler(
 
         if (user.Status != CommonStatus.Enabled)
         {
-            await WriteLoginLogAsync(user.UserName, command.Ip, command.UserAgent, success: false, "账号已停用", cancellationToken);
+            await WriteLoginLogAsync(user.UserName, command.Ip, command.UserAgent, success: false, "账号已停用", cancellationToken, independent: true);
             throw new BusinessException(ErrorCodes.UserDisabled, "账号已停用，请联系管理员");
         }
 
         // 4. 登录成功：清除失败计数；日志与令牌发放的写一致性由事务管道（TransactionBehavior）保证
         await cache.RemoveAsync(LoginFailCacheKeyPrefix + request.UserName, cancellationToken);
-        var subject = await BuildSubjectAsync(user, cancellationToken);
+        var subject = await tokenSubjectFactory.BuildAsync(user, cancellationToken);
 
         await WriteLoginLogAsync(user.UserName, command.Ip, command.UserAgent, success: true, "登录成功", cancellationToken);
         var pair = await tokenService.GenerateAsync(subject, cancellationToken);
@@ -90,9 +91,17 @@ public sealed class AuthLoginCommandHandler(
     }
 
     /// <summary>记录一次登录失败：失败计数 +1（滑动窗口重置）并写入登录日志。</summary>
+    /// <remarks>
+    /// 计数读-改-写经分布式锁保护（按用户名分区）：多实例并发失败时避免计数丢失导致锁定阈值被稀释；
+    /// 未获取到锁（等待超时 / Redis 故障）降级为无锁路径，认证端点限流（auth 策略）兜底暴力尝试。
+    /// 失败日志经独立连接写入：随后抛出的业务异常会回滚命令事务，审计日志必须存活于回滚之外。
+    /// </remarks>
     private async Task RecordLoginFailAsync(string userName, string? ip, string? userAgent, CancellationToken cancellationToken)
     {
         var key = LoginFailCacheKeyPrefix + userName;
+        await using var handle = await distributedLock.AcquireAsync(
+            key, TimeSpan.FromSeconds(5), TimeSpan.FromMilliseconds(500), cancellationToken);
+
         var current = await cache.GetAsync<LoginFailState>(key, cancellationToken);
         var next = current is not null
             ? new LoginFailState(current.Count + 1, DateTime.UtcNow)
@@ -101,13 +110,20 @@ public sealed class AuthLoginCommandHandler(
         // 显式 TTL：L1 1 分钟（本实例快速判定）/ L2 10 分钟（锁定窗口，跨实例一致）
         await cache.SetAsync(key, next, new CacheTtlProfile(TimeSpan.FromMinutes(1), LockDuration), cancellationToken);
 
-        await WriteLoginLogAsync(userName, ip, userAgent, success: false, "账号或密码错误", cancellationToken);
+        await WriteLoginLogAsync(userName, ip, userAgent, success: false, "账号或密码错误", cancellationToken, independent: true);
     }
 
     /// <summary>写入登录日志（User-Agent 原样存储，浏览器 / 操作系统解析留给展示层）。</summary>
-    private Task WriteLoginLogAsync(string userName, string? ip, string? userAgent, bool success, string msg, CancellationToken cancellationToken)
+    /// <param name="userName">用户名。</param>
+    /// <param name="ip">来源 IP。</param>
+    /// <param name="userAgent">User-Agent。</param>
+    /// <param name="success">是否成功。</param>
+    /// <param name="msg">结果描述。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <param name="independent">是否经独立连接写入（失败审计路径须为 true，存活于事务回滚之外）。</param>
+    private Task WriteLoginLogAsync(string userName, string? ip, string? userAgent, bool success, string msg, CancellationToken cancellationToken, bool independent = false)
     {
-        return loginLogRepository.InsertAsync(new SysLoginLog
+        var log = new SysLoginLog
         {
             UserName = userName,
             Ip = ip,
@@ -117,35 +133,10 @@ public sealed class AuthLoginCommandHandler(
                 : ExecutionStatus.Failure,
             Msg = msg,
             LoginTime = DateTime.UtcNow
-        }, cancellationToken);
-    }
-
-    /// <summary>构造令牌主题：加载用户启用角色（Id 与 roleKey）。</summary>
-    private async Task<TokenSubject> BuildSubjectAsync(SysUser user, CancellationToken cancellationToken)
-    {
-        var roles = await GetUserRolesAsync(user.Id, cancellationToken);
-        return new TokenSubject(
-            user.Id,
-            user.UserName,
-            user.DeptId,
-            roles.Select(r => r.Id).ToList(),
-            roles.Select(r => r.RoleKey).ToList(),
-            user.TenantId);
-    }
-
-    /// <summary>查询用户启用状态的角色列表。</summary>
-    private async Task<List<SysRole>> GetUserRolesAsync(Guid userId, CancellationToken cancellationToken)
-    {
-        var roleIds = (await userRoleRepository.GetListAsync([ur => ur.UserId == userId], cancellationToken: cancellationToken))
-            .Select(ur => ur.RoleId)
-            .Distinct()
-            .ToList();
-        if (roleIds.Count == 0)
-        {
-            return [];
-        }
-
-        return await roleRepository.GetListAsync([r => r.Status == CommonStatus.Enabled && roleIds.Contains(r.Id)], cancellationToken: cancellationToken);
+        };
+        return independent
+            ? loginLogRepository.InsertIndependentAsync(log, cancellationToken)
+            : loginLogRepository.InsertAsync(log, cancellationToken);
     }
 }
 
@@ -178,9 +169,8 @@ public sealed class AuthLogoutCommandHandler(
 /// <remarks>构造函数。</remarks>
 public sealed class AuthRefreshTokenCommandHandler(
     IAggregateRepository<SysUser> userRepository,
-    IAggregateRepository<SysRole> roleRepository,
-    IDomainRepository<SysUserRole> userRoleRepository,
-    ITokenService tokenService) : RequestHandler<AuthRefreshTokenCommand, TokenPairDto>
+    ITokenService tokenService,
+    ITokenSubjectFactory tokenSubjectFactory) : RequestHandler<AuthRefreshTokenCommand, TokenPairDto>
 {
     /// <inheritdoc />
     protected override async Task<TokenPairDto> HandleAsync(AuthRefreshTokenCommand command, CancellationToken cancellationToken)
@@ -195,37 +185,9 @@ public sealed class AuthRefreshTokenCommandHandler(
         }
 
         // 轮换：吊销旧令牌 + 发放新对（同一事务保证一致性，事务由管道自动开启）
-        var subject = await BuildSubjectAsync(user, cancellationToken);
+        var subject = await tokenSubjectFactory.BuildAsync(user, cancellationToken);
         await tokenService.RevokeAsync(command.RefreshToken, cancellationToken);
         var pair = await tokenService.GenerateAsync(subject, cancellationToken);
         return new TokenPairDto { AccessToken = pair.AccessToken, RefreshToken = pair.RefreshToken, ExpiresIn = pair.ExpiresIn };
-    }
-
-    /// <summary>构造令牌主题：加载用户启用角色（Id 与 roleKey）。</summary>
-    private async Task<TokenSubject> BuildSubjectAsync(SysUser user, CancellationToken cancellationToken)
-    {
-        var roles = await GetUserRolesAsync(user.Id, cancellationToken);
-        return new TokenSubject(
-            user.Id,
-            user.UserName,
-            user.DeptId,
-            roles.Select(r => r.Id).ToList(),
-            roles.Select(r => r.RoleKey).ToList(),
-            user.TenantId);
-    }
-
-    /// <summary>查询用户启用状态的角色列表。</summary>
-    private async Task<List<SysRole>> GetUserRolesAsync(Guid userId, CancellationToken cancellationToken)
-    {
-        var roleIds = (await userRoleRepository.GetListAsync([ur => ur.UserId == userId], cancellationToken: cancellationToken))
-            .Select(ur => ur.RoleId)
-            .Distinct()
-            .ToList();
-        if (roleIds.Count == 0)
-        {
-            return [];
-        }
-
-        return await roleRepository.GetListAsync([r => r.Status == CommonStatus.Enabled && roleIds.Contains(r.Id)], cancellationToken: cancellationToken);
     }
 }

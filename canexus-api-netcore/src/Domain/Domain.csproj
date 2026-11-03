@@ -7,7 +7,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
 
-    <!-- XML 文档输出：编译生成与程序集同名的 *.xml（CS1591/CS1572/CS1573 为注释覆盖不足与漂移的存量问题，暂抑制） -->
+    <!-- XML 文档输出：编译生成与程序集同名的 *.xml（CS1591/CS1572/CS1573 已升级为错误，注释缺失或漂移将导致编译失败） -->
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
   </PropertyGroup>
 

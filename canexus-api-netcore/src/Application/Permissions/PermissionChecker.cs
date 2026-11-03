@@ -5,6 +5,7 @@ using Domain.Services.Users;
 using Domain.Shared.Constants;
 using Domain.Shared.Enums;
 using Infrastructure.Shared.Caching;
+using Infrastructure.Shared.Locking;
 
 namespace Application.Permissions;
 /// <summary>
@@ -17,7 +18,8 @@ public sealed class PermissionChecker(
     IDomainRepository<SysRole> roleRepository,
     IDomainRepository<SysRoleMenu> roleMenuRepository,
     IDomainRepository<SysMenu> menuRepository,
-    ICache cache) : IPermissionChecker
+    ICache cache,
+    IDistributedLock distributedLock) : IPermissionChecker
 {
     /// <summary>缓存 key 前缀（key 格式：{prefix}{version}:{userId}）。</summary>
     public const string CacheKeyPrefix = "auth:permissions:";
@@ -64,11 +66,18 @@ public sealed class PermissionChecker(
         await cache.RemoveAsync(BuildKeyStatic(userId, await GetVersionAsync(cancellationToken)), cancellationToken);
     }
 
+    /// <summary>权限版本号锁键（保护版本号读-改-写的原子性）。</summary>
+    private const string VersionLockKey = CacheKeyPrefix + "version-lock";
+
     /// <inheritdoc />
     public async Task InvalidateAllAsync(CancellationToken cancellationToken = default)
     {
         // 版本号递增后旧 key 全部失配，等效于全量失效；版本号 key 必须永不过期（Never 档），
-        // 否则过期后版本号回退 0，历史 v0 用户权限 key 会复活（越权窗口）
+        // 否则过期后版本号回退 0，历史 v0 用户权限 key 会复活（越权窗口）。
+        // 递增经分布式锁保护：多实例并发失效时读-改-写不丢自增；未获取到锁（等待超时 / Redis 故障）
+        // 降级为无锁递增，最坏丢失一次自增，由用户权限 key 的 TTL（10 分钟）兜底最终一致
+        await using var handle = await distributedLock.AcquireAsync(
+            VersionLockKey, TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(2), cancellationToken);
         await cache.SetAsync(VersionCacheKey, await GetVersionAsync(cancellationToken) + 1, CacheTtl.Never, cancellationToken);
     }
 

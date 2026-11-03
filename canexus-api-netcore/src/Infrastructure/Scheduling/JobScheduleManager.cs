@@ -3,6 +3,8 @@ using Domain.Entities;
 using Domain.Repositories;
 using Domain.Services;
 using Domain.Shared.Enums;
+using Domain.Shared.Exceptions;
+using Domain.Shared.Results;
 using Microsoft.Extensions.Logging;
 using Quartz;
 
@@ -39,8 +41,11 @@ public sealed class JobScheduleManager(ISchedulerFactory schedulerFactory, IAggr
     }
 
     /// <inheritdoc />
+    /// <remarks>入调度前 fail-fast 校验 JobType：无效类型拒绝入调度并抛出业务异常（创建 / 更新路径
+    /// 由验证器前置拦截，此处兜底直接写库 / 启动装载的旁路），避免静默入调度后首次执行才暴露。</remarks>
     public async Task ScheduleAsync(SysJob job, CancellationToken cancellationToken = default)
     {
+        EnsureJobTypeValid(job);
         var scheduler = await schedulerFactory.GetScheduler(cancellationToken);
         var jobKey = BuildJobKey(job.Id, job.JobGroup);
         var jobDetail = JobBuilder
@@ -69,8 +74,10 @@ public sealed class JobScheduleManager(ISchedulerFactory schedulerFactory, IAggr
     }
 
     /// <inheritdoc />
+    /// <remarks>与 <see cref="ScheduleAsync"/> 同样入调度前 fail-fast 校验 JobType。</remarks>
     public async Task RunOnceAsync(SysJob job, CancellationToken cancellationToken = default)
     {
+        EnsureJobTypeValid(job);
         var scheduler = await schedulerFactory.GetScheduler(cancellationToken);
         var jobKey = BuildJobKey(job.Id, job.JobGroup);
         var jobDetail = JobBuilder
@@ -89,13 +96,18 @@ public sealed class JobScheduleManager(ISchedulerFactory schedulerFactory, IAggr
     /// <summary>构造任务 JobKey（名称固定为 sys_job_{Id}，避免任务重命名导致调度失联）。</summary>
     private static JobKey BuildJobKey(Guid jobId, string jobGroup) => new($"sys_job_{jobId}", jobGroup);
 
+    /// <summary>校验任务类型可解析且实现 Quartz IJob，不合法抛出业务异常（拒绝入调度）。</summary>
+    private static void EnsureJobTypeValid(SysJob job)
+    {
+        if (JobTypeResolver.Resolve(job.JobType) is null)
+        {
+            throw new BusinessException(ErrorCodes.JobTypeInvalid, $"任务「{job.JobName}」类型「{job.JobType}」不可解析或未实现 Quartz IJob，已拒绝入调度");
+        }
+    }
+
     /// <inheritdoc />
     public bool IsValidCronExpression(string cronExpression) => CronExpression.IsValidExpression(cronExpression);
 
     /// <inheritdoc />
-    public bool IsValidJobType(string jobType)
-    {
-        var targetType = Type.GetType(jobType, throwOnError: false);
-        return targetType is not null && typeof(IJob).IsAssignableFrom(targetType);
-    }
+    public bool IsValidJobType(string jobType) => JobTypeResolver.Resolve(jobType) is not null;
 }

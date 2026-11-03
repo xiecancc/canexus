@@ -14,6 +14,13 @@ namespace Infrastructure.Repositories;
 public class LoginLogRepository(ISqlSugarClient client, IUserContext currentUser) : AggregateRepository<SysLoginLog>(client, currentUser), ILoginLogRepository
 {
     /// <inheritdoc />
+    public async Task InsertIndependentAsync(SysLoginLog log, CancellationToken cancellationToken = default)
+    {
+        // CopyNew：独立连接/事务作用域，环境事务回滚不影响本写入（审计存活语义见接口文档）
+        await Client.CopyNew().Insertable(log).ExecuteCommandAsync(cancellationToken);
+    }
+
+    /// <inheritdoc />
     public async Task ClearAsync(CancellationToken cancellationToken = default)
     {
         await Client.Deleteable<SysLoginLog>().ExecuteCommandAsync(cancellationToken);

@@ -8,10 +8,12 @@ using Infrastructure.Auth;
 using Infrastructure.Caching;
 using Infrastructure.DataAccess;
 using Infrastructure.Filtering;
+using Infrastructure.Locking;
 using Infrastructure.Repositories;
 using Infrastructure.Scheduling;
 using Infrastructure.Shared.Caching;
 using Infrastructure.Shared.Filtering;
+using Infrastructure.Shared.Locking;
 using Infrastructure.Shared.Options;
 using Infrastructure.Shared.Tenants;
 using Infrastructure.Tenants;
@@ -115,6 +117,9 @@ public static class DependencyExtensions
         // 令牌服务：依赖 scoped 仓储（refreshToken 持久化），注册为 scoped
         services.AddScoped<ITokenService, JwtTokenService>();
 
+        // 令牌主题工厂：登录成功与刷新令牌轮换共用的用户角色装载逻辑
+        services.AddScoped<ITokenSubjectFactory, TokenSubjectFactory>();
+
         // 图形验证码：无状态单例（验证码内容经 ICache 双层缓存存取）
         services.AddSingleton<ICaptchaService, CaptchaService>();
 
@@ -173,6 +178,10 @@ public static class DependencyExtensions
         });
 
         services.AddHybridCache();
+
+        // 分布式锁：Redis 启用时 SET NX PX 原子锁（令牌校验释放），未启用降级进程内信号量；
+        // 保护跨实例读-改-写关键区（登录失败计数 / 权限版本号 / 种子初始化）
+        services.AddSingleton<IDistributedLock, DistributedLock>();
 
         // 单条负载上限：经 Options 管道从已注册的 CacheOption 获取（HybridCache 内部启动捕获，不支持热加载）
         services.AddOptions<HybridCacheOptions>()
