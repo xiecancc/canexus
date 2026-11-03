@@ -97,7 +97,7 @@ internal static class SqlSugarClientFactory
             switch (filterModel.OperationType)
             {
                 case DataFilterType.InsertByObject when filterModel.EntityValue is DomainBase insertEntity:
-                    insertEntity.CreatedAt = DateTime.Now;
+                    insertEntity.CreatedAt = DateTime.UtcNow;
                     insertEntity.CreatedBy = currentUser.UserId ?? Guid.Empty;
                     // 租户归属自动填充：实体未显式指定时取当前租户上下文（null 表示平台级数据）
                     insertEntity.TenantId ??= tenantContext.TenantId;
@@ -117,7 +117,7 @@ internal static class SqlSugarClientFactory
                 case DataFilterType.UpdateByObject when filterModel.EntityValue is AggregateBase updateEntity:
                     // 更新人可空语义：无登录上下文（系统任务 / 集成测试）时保持 null 不记录操作人，
                     // 与按列更新路径（ExecDeleteOrRestore）口径一致；更新时间总是填充
-                    updateEntity.UpdatedAt = DateTime.Now;
+                    updateEntity.UpdatedAt = DateTime.UtcNow;
                     updateEntity.UpdatedBy = currentUser.UserId;
                     break;
             }

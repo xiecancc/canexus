@@ -1,6 +1,7 @@
 
 using Domain.Entities;
 using Domain.Services.Auth;
+using Domain.Shared.Constants;
 using Domain.Shared.Enums;
 using Microsoft.Extensions.Logging;
 using SqlSugar;
@@ -90,7 +91,7 @@ public sealed class SeedDataInitializer(ISqlSugarClient client, IPasswordHasher 
         {
             Id = SuperAdminRoleId,
             RoleName = "超级管理员",
-            RoleKey = "super_admin",
+            RoleKey = RoleConstants.SuperAdminRoleKey,
             DataScope = DataScope.All,
             Description = "内置超管角色，放行全部权限"
         });
@@ -109,7 +110,7 @@ public sealed class SeedDataInitializer(ISqlSugarClient client, IPasswordHasher 
         await InsertAsync(new SysUser
         {
             Id = AdminUserId,
-            UserName = "admin",
+            UserName = UserConstants.AdminUserName,
             NickName = "超级管理员",
             PasswordHash = passwordHasher.Hash("admin123"),
             DeptId = DeptCompanyId,
@@ -312,7 +313,7 @@ public sealed class SeedDataInitializer(ISqlSugarClient client, IPasswordHasher 
     {
         var inserted = false;
 
-        inserted |= await EnsureConfigAsync("sys.user.initPassword", "123456", "用户初始密码", description: "新增用户时的缺省初始密码");
+        inserted |= await EnsureConfigAsync("sys.user.initPassword", UserConstants.DefaultPassword, "用户初始密码", description: "新增用户时的缺省初始密码");
         inserted |= await EnsureConfigAsync("sys.account.captchaEnabled", "true", "登录验证码开关", description: "是否开启登录验证码校验（true 开启 / false 关闭）");
 
         if (inserted)

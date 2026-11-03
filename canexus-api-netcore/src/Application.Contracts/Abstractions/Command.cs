@@ -4,6 +4,16 @@ using MediatR;
 namespace Application.Contracts.Abstractions;
 
 /// <summary>
+/// 写命令标记：事务管道（TransactionBehavior）据此对所有写命令自动包裹数据库事务
+/// （成功提交 / 异常回滚），查询请求不得实现本标记。
+/// <para>刻意不继承 MediatR 的 <see cref="IRequest"/>（避免与 <see cref="Request{TResponse}"/>
+/// 的重载决议冲突，见 <see cref="Request"/> 文档）——本标记仅供管道做类型判定，不参与 MediatR 分发。</para>
+/// </summary>
+public interface ICommand
+{
+}
+
+/// <summary>
 /// 聚合写命令抽象基类（带载荷）：携带载荷 DTO 的写操作请求（响应统一为 bool，写操作成功与否），
 /// 载荷经 <see cref="Request"/> 暴露；创建 / 更新命令统一以本类为根，与查询侧
 /// <see cref="AggregateQuery{TRequest, TResponse}"/> 的「根 + 载荷属性」形态对称。
@@ -12,7 +22,7 @@ namespace Application.Contracts.Abstractions;
 /// </summary>
 /// <typeparam name="TRequest">写命令载荷类型。</typeparam>
 /// <param name="request">写命令载荷。</param>
-public abstract record AggregateCommand<TRequest>(TRequest request) : Request<bool>
+public abstract record AggregateCommand<TRequest>(TRequest request) : Request<bool>, ICommand
 {
     /// <summary>写命令载荷。</summary>
     public TRequest Request { get; } = request;
@@ -61,7 +71,7 @@ public abstract record AggregateUpdateCommand<TRequest>(Guid id, Guid version, T
 /// </summary>
 /// <param name="id">目标聚合 id。</param>
 /// <param name="version">乐观锁版本号（须与聚合当前版本一致才允许删除）。</param>
-public abstract record AggregateDeleteCommand(Guid id, Guid version) : Request<bool>
+public abstract record AggregateDeleteCommand(Guid id, Guid version) : Request<bool>, ICommand
 {
     /// <summary>目标聚合 id。</summary>
     public Guid Id { get; } = id;
@@ -78,7 +88,7 @@ public abstract record AggregateDeleteCommand(Guid id, Guid version) : Request<b
 /// </summary>
 /// <param name="id">目标聚合 id。</param>
 /// <param name="version">乐观锁版本号（须与聚合删除时固化的版本一致才允许恢复）。</param>
-public abstract record AggregateRestoreCommand(Guid id, Guid version) : Request<bool>
+public abstract record AggregateRestoreCommand(Guid id, Guid version) : Request<bool>, ICommand
 {
     /// <summary>目标聚合 id。</summary>
     public Guid Id { get; } = id;

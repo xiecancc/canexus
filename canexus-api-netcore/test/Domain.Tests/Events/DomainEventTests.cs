@@ -27,9 +27,9 @@ public class DomainEventTests
     [Test]
     public void OccurredAt_GeneratedAtConstruction()
     {
-        var before = DateTime.Now;
+        var before = DateTime.UtcNow;
         var domainEvent = new TestDomainEvent();
-        var after = DateTime.Now;
+        var after = DateTime.UtcNow;
 
         // 发生时间在构造窗口内自动生成
         Assert.That(domainEvent.OccurredAt, Is.InRange(before, after.AddSeconds(1)));

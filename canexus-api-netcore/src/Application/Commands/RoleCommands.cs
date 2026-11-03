@@ -7,6 +7,7 @@ using Domain.Entities;
 using Domain.Events;
 using Domain.Repositories;
 using Domain.Services.Events;
+using Domain.Shared.Constants;
 using Domain.Shared.Exceptions;
 using Domain.Shared.Results;
 
@@ -50,7 +51,6 @@ public sealed class RoleCreateCommandHandler(
     IDomainRepository<SysRoleMenu> roleMenuRepository,
     IAggregateRepository<SysMenu> menuRepository,
     IDomainEventPublisher domainEventPublisher,
-    IUnitOfWork unitOfWork,
     IMapper mapper) : RequestHandler<RoleCreateCommand, bool>
 {
     /// <inheritdoc />
@@ -61,23 +61,19 @@ public sealed class RoleCreateCommandHandler(
         await EnsureRoleKeyAvailableAsync(roleKey, excludeId: null, cancellationToken);
         await RoleMenuSupport.ValidateMenusAsync(menuRepository, request.MenuIds, cancellationToken);
 
-        var inserted = await unitOfWork.RunInTransactionAsync(async () =>
-        {
-            var role = mapper.Map<SysRole>(request);
-            _ = await roleRepository.InsertAsync(role, cancellationToken);
-            await RoleMenuSupport.ReplaceRoleMenusAsync(roleMenuRepository, role.Id, request.MenuIds, cancellationToken);
-            return role;
-        }, cancellationToken);
+        var role = mapper.Map<SysRole>(request);
+        _ = await roleRepository.InsertAsync(role, cancellationToken);
+        await RoleMenuSupport.ReplaceRoleMenusAsync(roleMenuRepository, role.Id, request.MenuIds, cancellationToken);
 
         // 关键节点发布角色创建领域事件（携带创建后的角色状态）
-        await domainEventPublisher.PublishAsync(new RoleCreatedEvent(inserted), cancellationToken);
+        await domainEventPublisher.PublishAsync(new RoleCreatedEvent(role), cancellationToken);
         return true;
     }
 
     /// <summary>校验 roleKey 可用：不可使用保留值 super_admin，且不与其他角色重复。</summary>
     private async Task EnsureRoleKeyAvailableAsync(string roleKey, Guid? excludeId, CancellationToken cancellationToken)
     {
-        if (roleKey == "super_admin")
+        if (roleKey == RoleConstants.SuperAdminRoleKey)
         {
             throw new BusinessException(ErrorCodes.RoleKeyReserved, "角色权限字符 super_admin 为内置保留值，不可使用");
         }
@@ -98,18 +94,14 @@ public sealed class RoleDeleteCommandHandler(
     IAggregateRepository<SysRole> roleRepository,
     IDomainRepository<SysUserRole> userRoleRepository,
     IDomainRepository<SysRoleMenu> roleMenuRepository,
-    IDomainEventPublisher domainEventPublisher,
-    IUnitOfWork unitOfWork) : RequestHandler<RoleDeleteCommand, bool>
+    IDomainEventPublisher domainEventPublisher) : RequestHandler<RoleDeleteCommand, bool>
 {
-    /// <summary>内置超管角色权限字符（保留值）。</summary>
-    private const string SuperAdminRoleKey = "super_admin";
-
     /// <inheritdoc />
     protected override async Task<bool> HandleAsync(RoleDeleteCommand command, CancellationToken cancellationToken)
     {
         var role = await roleRepository.GetAsync([it => it.Id == command.Id], cancellationToken)
             ?? throw new BusinessException(ErrorCodes.RoleNotFound, $"角色 {command.Id} 不存在");
-        if (role.RoleKey == SuperAdminRoleKey)
+        if (role.RoleKey == RoleConstants.SuperAdminRoleKey)
         {
             throw new BusinessException(ErrorCodes.RoleProtected, "内置超管角色 super_admin 不允许删除");
         }
@@ -122,11 +114,8 @@ public sealed class RoleDeleteCommandHandler(
         // 变更前捕获角色状态快照（软删除可能回填墓碑字段）
         var snapshot = role.Snapshot<SysRole>();
 
-        await unitOfWork.RunInTransactionAsync(async () =>
-        {
-            await roleRepository.DeleteAsync(command.Id, cancellationToken);
-            await roleMenuRepository.DeleteAsync(rm => rm.RoleId == command.Id, cancellationToken);
-        }, cancellationToken);
+        await roleRepository.DeleteAsync(command.Id, cancellationToken);
+        await roleMenuRepository.DeleteAsync(rm => rm.RoleId == command.Id, cancellationToken);
 
         // 关键节点发布角色删除领域事件（携带删除前的角色状态）
         await domainEventPublisher.PublishAsync(new RoleDeletedEvent(snapshot), cancellationToken);
@@ -155,19 +144,15 @@ public sealed class RoleUpdateCommandHandler(
     IDomainRepository<SysRoleMenu> roleMenuRepository,
     IAggregateRepository<SysMenu> menuRepository,
     IDomainEventPublisher domainEventPublisher,
-    IUnitOfWork unitOfWork,
     IMapper mapper) : RequestHandler<RoleUpdateCommand, bool>
 {
-    /// <summary>内置超管角色权限字符（保留值）。</summary>
-    private const string SuperAdminRoleKey = "super_admin";
-
     /// <inheritdoc />
     protected override async Task<bool> HandleAsync(RoleUpdateCommand command, CancellationToken cancellationToken)
     {
         var request = command.Request;
         var role = await roleRepository.GetAsync([it => it.Id == command.Id], cancellationToken)
             ?? throw new BusinessException(ErrorCodes.RoleNotFound, $"角色 {command.Id} 不存在");
-        if (role.RoleKey == SuperAdminRoleKey)
+        if (role.RoleKey == RoleConstants.SuperAdminRoleKey)
         {
             throw new BusinessException(ErrorCodes.RoleProtected, "内置超管角色 super_admin 不允许编辑");
         }
@@ -176,16 +161,13 @@ public sealed class RoleUpdateCommandHandler(
         await EnsureRoleKeyAvailableAsync(roleKey, excludeId: command.Id, cancellationToken);
         await RoleMenuSupport.ValidateMenusAsync(menuRepository, request.MenuIds, cancellationToken);
 
-        // 变更前捕获角色状态快照（实体在事务内被原位修改）
+        // 变更前捕获角色状态快照（实体随后被原位修改）
         var before = role.Snapshot<SysRole>();
 
-        await unitOfWork.RunInTransactionAsync(async () =>
-        {
-            mapper.Map(request, role);
-            role.ApplyVersion(command.Version);
-            await roleRepository.UpdateAsync(role, cancellationToken);
-            await RoleMenuSupport.ReplaceRoleMenusAsync(roleMenuRepository, command.Id, request.MenuIds, cancellationToken);
-        }, cancellationToken);
+        mapper.Map(request, role);
+        role.ApplyVersion(command.Version);
+        await roleRepository.UpdateAsync(role, cancellationToken);
+        await RoleMenuSupport.ReplaceRoleMenusAsync(roleMenuRepository, command.Id, request.MenuIds, cancellationToken);
 
         // 关键节点发布角色修改领域事件（携带变更前后角色状态：key / 状态 / 数据范围 / 授权菜单变化可由监听器比对）
         await domainEventPublisher.PublishAsync(new RoleUpdatedEvent(before, role), cancellationToken);
@@ -195,7 +177,7 @@ public sealed class RoleUpdateCommandHandler(
     /// <summary>校验 roleKey 可用：不可使用保留值 super_admin，且不与其他角色重复。</summary>
     private async Task EnsureRoleKeyAvailableAsync(string roleKey, Guid? excludeId, CancellationToken cancellationToken)
     {
-        if (roleKey == SuperAdminRoleKey)
+        if (roleKey == RoleConstants.SuperAdminRoleKey)
         {
             throw new BusinessException(ErrorCodes.RoleKeyReserved, "角色权限字符 super_admin 为内置保留值，不可使用");
         }

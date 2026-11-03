@@ -232,7 +232,7 @@ public class LogApiTests
         });
 
         // 时间范围过滤（今日，yyyy-MM-dd）仍应命中
-        var today = DateTime.Now.ToString("yyyy-MM-dd");
+        var today = DateTime.UtcNow.ToString("yyyy-MM-dd");
         var ranged = await GetJsonAsync($"/api/system/login-log/page?userName=admin&beginTime={today}&endTime={today}&pageSize=10");
         Assert.That(ranged.RootElement.GetProperty("data").GetProperty("total").GetInt64(),
             Is.GreaterThanOrEqualTo(1), "yyyy-MM-dd 时间范围过滤应含当日");

@@ -1,6 +1,7 @@
 
 using System.Security.Claims;
 using Domain.Services.Users;
+using Domain.Shared.Constants;
 using Microsoft.AspNetCore.Http;
 
 namespace Infrastructure.Users;
@@ -47,5 +48,5 @@ public sealed class HttpContextUserContext(IHttpContextAccessor httpContextAcces
     public bool IsAuthenticated => Principal?.Identity?.IsAuthenticated == true;
 
     /// <inheritdoc />
-    public bool IsSuperAdmin => Roles.Contains("super_admin");
+    public bool IsSuperAdmin => Roles.Contains(RoleConstants.SuperAdminRoleKey);
 }

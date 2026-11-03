@@ -7,6 +7,7 @@ using Domain.Services;
 using Domain.Shared.Results;
 using Infrastructure;
 using Infrastructure.DataAccess;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.Mvc;
 using Serilog;
 
@@ -75,6 +76,9 @@ public class Program
             // 定时任务调度：Quartz 调度器与 IJobScheduleManager（基础设施层实现）
             builder.Services.AddScheduling();
 
+            // 健康检查：liveness / readiness 检查项（MySQL / 分布式缓存 / Quartz），经 MapHealthChecks 暴露
+            builder.Services.AddApiHealthChecks();
+
             // 模型校验失败（含后续 FluentValidation 集成）统一返回 Result 结构，HTTP 400
             builder.Services.Configure<ApiBehaviorOptions>(options =>
             {
@@ -133,6 +137,11 @@ public class Program
             }
 
             app.MapControllers();
+
+            // 健康检查端点（匿名访问，供负载均衡 / 容器编排探针调用）：
+            // /health/live 仅进程存活自检；/health/ready 含数据库 / 缓存 / 调度器就绪探测
+            app.MapHealthChecks("/health/live", new HealthCheckOptions { Predicate = check => check.Tags.Contains("live") });
+            app.MapHealthChecks("/health/ready", new HealthCheckOptions { Predicate = check => check.Tags.Contains("ready") });
 
             app.Run();
         }

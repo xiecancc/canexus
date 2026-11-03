@@ -59,7 +59,7 @@ public sealed class JwtTokenService(IOptionsMonitor<JwtOption> options, ISysRefr
     /// <inheritdoc />
     public async Task<TokenPair> GenerateAsync(TokenSubject subject, CancellationToken cancellationToken = default)
     {
-        var now = DateTime.Now;
+        var now = DateTime.UtcNow;
         var claims = BuildClaims(subject);
 
         var credentials = new SigningCredentials(
@@ -70,8 +70,8 @@ public sealed class JwtTokenService(IOptionsMonitor<JwtOption> options, ISysRefr
             issuer: Options.Issuer,
             audience: Options.Audience,
             claims: claims,
-            notBefore: now.ToUniversalTime(),
-            expires: now.AddMinutes(Options.AccessTokenMinutes).ToUniversalTime(),
+            notBefore: now,
+            expires: now.AddMinutes(Options.AccessTokenMinutes),
             signingCredentials: credentials);
 
         var accessToken = TokenHandler.WriteToken(jwt);
@@ -107,7 +107,7 @@ public sealed class JwtTokenService(IOptionsMonitor<JwtOption> options, ISysRefr
     /// <inheritdoc />
     public async Task<RefreshTokenInfo?> GetActiveRefreshTokenAsync(string refreshToken, CancellationToken cancellationToken = default)
     {
-        var entity = await refreshTokenRepository.GetActiveByTokenAsync(refreshToken, DateTime.Now, cancellationToken);
+        var entity = await refreshTokenRepository.GetActiveByTokenAsync(refreshToken, DateTime.UtcNow, cancellationToken);
         if (entity is null)
         {
             return null;
@@ -119,13 +119,13 @@ public sealed class JwtTokenService(IOptionsMonitor<JwtOption> options, ISysRefr
     /// <inheritdoc />
     public async Task RevokeAsync(string refreshToken, CancellationToken cancellationToken = default)
     {
-        var entity = await refreshTokenRepository.GetActiveByTokenAsync(refreshToken, DateTime.Now, cancellationToken);
+        var entity = await refreshTokenRepository.GetActiveByTokenAsync(refreshToken, DateTime.UtcNow, cancellationToken);
         if (entity is null)
         {
             return;
         }
 
-        entity.RevokedAt = DateTime.Now;
+        entity.RevokedAt = DateTime.UtcNow;
         await refreshTokenRepository.UpdateAsync(entity, cancellationToken);
     }
 

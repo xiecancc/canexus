@@ -16,7 +16,7 @@ public abstract class DomainEvent
     public string EventName => GetType().Name;
 
     /// <summary>事件发生时间（服务器本地时间，与审计字段 CreatedAt 口径一致）。</summary>
-    public DateTime OccurredAt { get; } = DateTime.Now;
+    public DateTime OccurredAt { get; } = DateTime.UtcNow;
 }
 
 /// <summary>

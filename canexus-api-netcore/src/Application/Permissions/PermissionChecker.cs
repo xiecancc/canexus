@@ -2,6 +2,7 @@
 using Domain.Entities;
 using Domain.Repositories;
 using Domain.Services.Users;
+using Domain.Shared.Constants;
 using Domain.Shared.Enums;
 using Infrastructure.Shared.Caching;
 
@@ -29,9 +30,6 @@ public sealed class PermissionChecker(
 
     /// <summary>超管通配权限标识。</summary>
     public const string WildcardPermission = "*:*:*";
-
-    /// <summary>超管角色权限字符串。</summary>
-    private const string SuperAdminRoleKey = "super_admin";
 
     /// <inheritdoc />
     public async Task<IReadOnlySet<string>> GetPermissionsAsync(Guid userId, CancellationToken cancellationToken = default)
@@ -93,7 +91,7 @@ public sealed class PermissionChecker(
         }
 
         // 超管角色：直接返回通配权限，所有权限判断放行
-        if (roles.Any(r => r.RoleKey == SuperAdminRoleKey))
+        if (roles.Any(r => r.RoleKey == RoleConstants.SuperAdminRoleKey))
         {
             return [WildcardPermission];
         }

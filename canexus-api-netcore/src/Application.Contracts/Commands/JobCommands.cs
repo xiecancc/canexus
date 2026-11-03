@@ -23,7 +23,7 @@ public sealed record JobRestoreCommand(Guid Id, Guid Version) : AggregateRestore
 
 /// <summary>立即触发一次执行命令（不影响既定 Cron 调度）。</summary>
 /// <param name="Id">任务 Id。</param>
-public sealed record JobRunOnceCommand(Guid Id) : Request;
+public sealed record JobRunOnceCommand(Guid Id) : Request, ICommand;
 
 /// <summary>更新定时任务命令（按新定义重调度；分组变更时同步清理旧调度键）。</summary>
 public sealed record JobUpdateCommand : AggregateUpdateCommand<JobInputRequest>

@@ -23,7 +23,6 @@ public sealed class AuthLoginCommandHandler(
     ICaptchaService captchaService,
     ITokenService tokenService,
     IPasswordHasher passwordHasher,
-    IUnitOfWork unitOfWork,
     ICache cache) : RequestHandler<AuthLoginCommand, TokenPairDto>
 {
     /// <summary>登录失败计数缓存 key 前缀（key 格式：{prefix}{userName}）。</summary>
@@ -69,16 +68,13 @@ public sealed class AuthLoginCommandHandler(
             throw new BusinessException(ErrorCodes.UserDisabled, "账号已停用，请联系管理员");
         }
 
-        // 4. 登录成功：清除失败计数，日志与令牌发放放在同一事务保证写一致
+        // 4. 登录成功：清除失败计数；日志与令牌发放的写一致性由事务管道（TransactionBehavior）保证
         await cache.RemoveAsync(LoginFailCacheKeyPrefix + request.UserName, cancellationToken);
         var subject = await BuildSubjectAsync(user, cancellationToken);
 
-        return await unitOfWork.RunInTransactionAsync(async () =>
-        {
-            await WriteLoginLogAsync(user.UserName, command.Ip, command.UserAgent, success: true, "登录成功", cancellationToken);
-            var pair = await tokenService.GenerateAsync(subject, cancellationToken);
-            return new TokenPairDto { AccessToken = pair.AccessToken, RefreshToken = pair.RefreshToken, ExpiresIn = pair.ExpiresIn };
-        }, cancellationToken);
+        await WriteLoginLogAsync(user.UserName, command.Ip, command.UserAgent, success: true, "登录成功", cancellationToken);
+        var pair = await tokenService.GenerateAsync(subject, cancellationToken);
+        return new TokenPairDto { AccessToken = pair.AccessToken, RefreshToken = pair.RefreshToken, ExpiresIn = pair.ExpiresIn };
     }
 
     /// <summary>检查账号锁定状态：连续失败达到上限则抛出锁定异常（含剩余分钟数）。</summary>
@@ -87,7 +83,7 @@ public sealed class AuthLoginCommandHandler(
         var state = await cache.GetAsync<LoginFailState>(LoginFailCacheKeyPrefix + userName, cancellationToken);
         if (state is { Count: >= MaxLoginFailCount })
         {
-            var remaining = LockDuration - (DateTime.Now - state.LastFailTime);
+            var remaining = LockDuration - (DateTime.UtcNow - state.LastFailTime);
             var minutes = Math.Max(1, (int)Math.Ceiling(remaining.TotalMinutes));
             throw new BusinessException(ErrorCodes.AuthAccountLocked, $"密码连续错误次数过多，账号已锁定，请约 {minutes} 分钟后重试");
         }
@@ -99,8 +95,8 @@ public sealed class AuthLoginCommandHandler(
         var key = LoginFailCacheKeyPrefix + userName;
         var current = await cache.GetAsync<LoginFailState>(key, cancellationToken);
         var next = current is not null
-            ? new LoginFailState(current.Count + 1, DateTime.Now)
-            : new LoginFailState(1, DateTime.Now);
+            ? new LoginFailState(current.Count + 1, DateTime.UtcNow)
+            : new LoginFailState(1, DateTime.UtcNow);
 
         // 显式 TTL：L1 1 分钟（本实例快速判定）/ L2 10 分钟（锁定窗口，跨实例一致）
         await cache.SetAsync(key, next, new CacheTtlProfile(TimeSpan.FromMinutes(1), LockDuration), cancellationToken);
@@ -120,7 +116,7 @@ public sealed class AuthLoginCommandHandler(
                 ? ExecutionStatus.Success
                 : ExecutionStatus.Failure,
             Msg = msg,
-            LoginTime = DateTime.Now
+            LoginTime = DateTime.UtcNow
         }, cancellationToken);
     }
 
@@ -174,7 +170,7 @@ public sealed class AuthLogoutCommandHandler(
             ?? throw new BusinessException(ErrorCodes.AuthUnauthorized, "未登录或令牌无效");
 
         // 单条 UPDATE 批量吊销全部活跃令牌
-        await refreshTokenRepository.RevokeAllForUserAsync(userId, DateTime.Now, cancellationToken);
+        await refreshTokenRepository.RevokeAllForUserAsync(userId, DateTime.UtcNow, cancellationToken);
     }
 }
 
@@ -184,8 +180,7 @@ public sealed class AuthRefreshTokenCommandHandler(
     IAggregateRepository<SysUser> userRepository,
     IAggregateRepository<SysRole> roleRepository,
     IDomainRepository<SysUserRole> userRoleRepository,
-    ITokenService tokenService,
-    IUnitOfWork unitOfWork) : RequestHandler<AuthRefreshTokenCommand, TokenPairDto>
+    ITokenService tokenService) : RequestHandler<AuthRefreshTokenCommand, TokenPairDto>
 {
     /// <inheritdoc />
     protected override async Task<TokenPairDto> HandleAsync(AuthRefreshTokenCommand command, CancellationToken cancellationToken)
@@ -199,14 +194,11 @@ public sealed class AuthRefreshTokenCommandHandler(
             throw new BusinessException(ErrorCodes.AuthRefreshTokenInvalid, "刷新令牌无效或已过期，请重新登录");
         }
 
-        // 轮换：吊销旧令牌 + 发放新对（同一事务保证一致性）
+        // 轮换：吊销旧令牌 + 发放新对（同一事务保证一致性，事务由管道自动开启）
         var subject = await BuildSubjectAsync(user, cancellationToken);
-        return await unitOfWork.RunInTransactionAsync(async () =>
-        {
-            await tokenService.RevokeAsync(command.RefreshToken, cancellationToken);
-            var pair = await tokenService.GenerateAsync(subject, cancellationToken);
-            return new TokenPairDto { AccessToken = pair.AccessToken, RefreshToken = pair.RefreshToken, ExpiresIn = pair.ExpiresIn };
-        }, cancellationToken);
+        await tokenService.RevokeAsync(command.RefreshToken, cancellationToken);
+        var pair = await tokenService.GenerateAsync(subject, cancellationToken);
+        return new TokenPairDto { AccessToken = pair.AccessToken, RefreshToken = pair.RefreshToken, ExpiresIn = pair.ExpiresIn };
     }
 
     /// <summary>构造令牌主题：加载用户启用角色（Id 与 roleKey）。</summary>

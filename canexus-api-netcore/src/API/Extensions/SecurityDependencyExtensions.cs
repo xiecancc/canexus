@@ -139,14 +139,22 @@ public static class SecurityDependencyExtensions
                 if (option.GlobalPermitLimit > 0)
                 {
                     limiter.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(httpContext =>
-                        RateLimitPartition.GetSlidingWindowLimiter(
+                    {
+                        // 健康检查端点豁免：LB / 容器编排探针来自同一 IP 高频轮询，不应计入业务限流
+                        if (httpContext.Request.Path.StartsWithSegments("/health"))
+                        {
+                            return RateLimitPartition.GetNoLimiter<string>("health");
+                        }
+
+                        return RateLimitPartition.GetSlidingWindowLimiter(
                             GetClientPartitionKey(httpContext),
                             _ => new SlidingWindowRateLimiterOptions
                             {
                                 PermitLimit = option.GlobalPermitLimit,
                                 Window = TimeSpan.FromSeconds(option.GlobalWindowSeconds),
                                 SegmentsPerWindow = 4
-                            }));
+                            });
+                    });
                 }
             });
 

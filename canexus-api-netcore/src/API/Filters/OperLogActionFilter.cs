@@ -64,7 +64,7 @@ public sealed class OperLogActionFilter(IOperLogRepository operLogRepository, IU
                     : Domain.Shared.Enums.ExecutionStatus.Failure,
                 ErrorMsg = exception is null ? null : OperLogSanitizer.Truncate(exception.Message),
                 CostMs = stopwatch.ElapsedMilliseconds,
-                OperTime = DateTime.Now
+                OperTime = DateTime.UtcNow
             });
         }
         catch (Exception ex)

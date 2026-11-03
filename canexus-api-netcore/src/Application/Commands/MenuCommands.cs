@@ -113,7 +113,6 @@ public sealed class MenuRestoreCommandHandler(
 /// <remarks>构造函数。</remarks>
 public sealed class MenuUpdateCommandHandler(
     IAggregateTreeRepository<SysMenu> menuRepository,
-    IUnitOfWork unitOfWork,
     IDomainEventPublisher domainEventPublisher,
     IMapper mapper) : RequestHandler<MenuUpdateCommand, bool>
 {
@@ -127,27 +126,24 @@ public sealed class MenuUpdateCommandHandler(
         var parentChanged = menu.ParentId != request.ParentId;
         var oldParentId = menu.ParentId;
 
-        // 变更前捕获菜单状态快照（实体在事务内被原位修改，挂载点变化亦可由监听器比对）
+        // 变更前捕获菜单状态快照（实体随后被原位修改，挂载点变化亦可由监听器比对）
         var before = menu.Snapshot<SysMenu>();
 
-        await unitOfWork.RunInTransactionAsync(async () =>
-        {
-            // 仅更新业务字段（ParentId 还原为旧值）；父级变更统一交由树形仓储 MoveAsync 处理（环检测 / 改父）
-            mapper.Map(request, menu);
-            menu.ParentId = oldParentId;
-            menu.ApplyVersion(command.Version);
-            await menuRepository.UpdateAsync(menu, cancellationToken);
+        // 仅更新业务字段（ParentId 还原为旧值）；父级变更统一交由树形仓储 MoveAsync 处理（环检测 / 改父）
+        mapper.Map(request, menu);
+        menu.ParentId = oldParentId;
+        menu.ApplyVersion(command.Version);
+        await menuRepository.UpdateAsync(menu, cancellationToken);
 
-            if (parentChanged)
-            {
-                // 传入菜单模块分段错误码，保持既有 API 契约稳定
-                await menuRepository.MoveAsync(command.Id, request.ParentId, new TreeMoveCodes(
-                    ParentInvalid: ErrorCodes.MenuParentInvalid,
-                    NodeNotFound: ErrorCodes.MenuNotFound,
-                    ParentNotFound: ErrorCodes.CommonDataNotFound,
-                    EntityName: "菜单"), cancellationToken);
-            }
-        }, cancellationToken);
+        if (parentChanged)
+        {
+            // 传入菜单模块分段错误码，保持既有 API 契约稳定
+            await menuRepository.MoveAsync(command.Id, request.ParentId, new TreeMoveCodes(
+                ParentInvalid: ErrorCodes.MenuParentInvalid,
+                NodeNotFound: ErrorCodes.MenuNotFound,
+                ParentNotFound: ErrorCodes.CommonDataNotFound,
+                EntityName: "菜单"), cancellationToken);
+        }
 
         // 关键节点发布菜单修改领域事件（携带变更前后菜单状态）
         await domainEventPublisher.PublishAsync(new MenuUpdatedEvent(before, menu), cancellationToken);

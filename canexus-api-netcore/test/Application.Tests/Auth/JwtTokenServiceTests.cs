@@ -318,7 +318,7 @@ public class JwtTokenServiceTests
         {
             Assert.That(persisted.Token, Is.EqualTo(pair.RefreshToken));
             Assert.That(persisted.UserId, Is.EqualTo(TestUserId));
-            Assert.That(persisted.ExpiresAt, Is.GreaterThan(DateTime.Now.AddDays(6.5)), "过期时间应按 RefreshTokenDays 配置");
+            Assert.That(persisted.ExpiresAt, Is.GreaterThan(DateTime.UtcNow.AddDays(6.5)), "过期时间应按 RefreshTokenDays 配置");
             Assert.That(persisted.RevokedAt, Is.Null);
         });
     }
@@ -368,8 +368,8 @@ public class JwtTokenServiceTests
             issuer: Options.Issuer,
             audience: Options.Audience,
             claims: new[] { new Claim("sub", "42"), new Claim("unique_name", "admin") },
-            notBefore: DateTime.Now.AddMinutes(-10).ToUniversalTime(),
-            expires: DateTime.Now.AddMinutes(-5).ToUniversalTime(),
+            notBefore: DateTime.UtcNow.AddMinutes(-10),
+            expires: DateTime.UtcNow.AddMinutes(-5),
             signingCredentials: credentials);
         var token = new System.IdentityModel.Tokens.Jwt.JwtSecurityTokenHandler().WriteToken(expiredToken);
 
@@ -404,7 +404,7 @@ public class JwtTokenServiceTests
         {
             Token = "expired-refresh-token",
             UserId = Guid.Parse("00000000-0000-0000-0000-000000000001"),
-            ExpiresAt = DateTime.Now.AddMinutes(-1)
+            ExpiresAt = DateTime.UtcNow.AddMinutes(-1)
         });
 
         Assert.That(await _tokenService.GetActiveRefreshTokenAsync("expired-refresh-token"), Is.Null, "已过期令牌不应返回");

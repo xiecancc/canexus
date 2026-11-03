@@ -88,7 +88,7 @@ public class AggregateRepository<TEntity>(ISqlSugarClient client, IUserContext c
     /// <returns>受影响行数 &gt; 0 返回 true（幂等重复执行或无匹配时为 false）。</returns>
     protected virtual async Task<bool> ExecDeleteOrRestore(bool deleted, Expression<Func<TEntity, bool>> predicate, CancellationToken cancellationToken = default)
     {
-        var now = DateTime.Now;
+        var now = DateTime.UtcNow;
         var targetDeleted = !deleted;
         var userId = CurrentUser.UserId;
         var newVersion = Guid.NewGuid();

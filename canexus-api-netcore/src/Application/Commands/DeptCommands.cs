@@ -114,8 +114,7 @@ public sealed class DeptRestoreCommandHandler(
 /// <remarks>构造函数。</remarks>
 public sealed class DeptUpdateCommandHandler(
     IAggregateTreeRepository<SysDept> deptRepository,
-    IDomainEventPublisher domainEventPublisher,
-    IUnitOfWork unitOfWork) : RequestHandler<DeptUpdateCommand, bool>
+    IDomainEventPublisher domainEventPublisher) : RequestHandler<DeptUpdateCommand, bool>
 {
     /// <inheritdoc />
     protected override async Task<bool> HandleAsync(DeptUpdateCommand command, CancellationToken cancellationToken)
@@ -126,32 +125,29 @@ public sealed class DeptUpdateCommandHandler(
 
         var parentChanged = dept.ParentId != request.ParentId;
 
-        // 变更前捕获部门状态快照（实体在事务内被原位修改，挂载点变化亦可由监听器比对）
+        // 变更前捕获部门状态快照（实体随后被原位修改，挂载点变化亦可由监听器比对）
         var before = dept.Snapshot<SysDept>();
 
-        await unitOfWork.RunInTransactionAsync(async () =>
-        {
-            // 仅更新业务字段；父级变更统一交由树形仓储 MoveAsync 处理（环检测 / 改父）
-            dept.DeptName = request.DeptName.Trim();
-            dept.OrderNum = request.OrderNum;
-            dept.Leader = request.Leader;
-            dept.Phone = request.Phone;
-            dept.Email = request.Email;
-            dept.Status = request.Status;
-            dept.Description = request.Description;
-            dept.ApplyVersion(command.Version);
-            await deptRepository.UpdateAsync(dept, cancellationToken);
+        // 仅更新业务字段；父级变更统一交由树形仓储 MoveAsync 处理（环检测 / 改父）
+        dept.DeptName = request.DeptName.Trim();
+        dept.OrderNum = request.OrderNum;
+        dept.Leader = request.Leader;
+        dept.Phone = request.Phone;
+        dept.Email = request.Email;
+        dept.Status = request.Status;
+        dept.Description = request.Description;
+        dept.ApplyVersion(command.Version);
+        await deptRepository.UpdateAsync(dept, cancellationToken);
 
-            if (parentChanged)
-            {
-                // 传入部门模块分段错误码，保持既有 API 契约稳定
-                await deptRepository.MoveAsync(command.Id, request.ParentId, new TreeMoveCodes(
-                    ParentInvalid: ErrorCodes.DeptParentInvalid,
-                    NodeNotFound: ErrorCodes.DeptNotFound,
-                    ParentNotFound: ErrorCodes.DeptParentNotFound,
-                    EntityName: "部门"), cancellationToken);
-            }
-        }, cancellationToken);
+        if (parentChanged)
+        {
+            // 传入部门模块分段错误码，保持既有 API 契约稳定
+            await deptRepository.MoveAsync(command.Id, request.ParentId, new TreeMoveCodes(
+                ParentInvalid: ErrorCodes.DeptParentInvalid,
+                NodeNotFound: ErrorCodes.DeptNotFound,
+                ParentNotFound: ErrorCodes.DeptParentNotFound,
+                EntityName: "部门"), cancellationToken);
+        }
 
         // 关键节点发布部门修改领域事件（携带变更前后部门状态）
         await domainEventPublisher.PublishAsync(new DeptUpdatedEvent(before, dept), cancellationToken);

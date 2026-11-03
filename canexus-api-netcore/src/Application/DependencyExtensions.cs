@@ -14,7 +14,7 @@ namespace Application;
 /// <summary>应用层依赖注册扩展。</summary>
 public static class DependencyExtensions
 {
-    /// <summary>注册应用层能力：MediatR（CQRS 分发 + 领域事件通知）、Pipeline Behaviors（验证 / 日志 / 性能）、FluentValidation 验证器、AutoMapper 映射、领域事件发布器、权限校验与数据范围过滤。</summary>
+    /// <summary>注册应用层能力：MediatR（CQRS 分发 + 领域事件通知）、Pipeline Behaviors（验证 / 日志 / 性能 / 事务）、FluentValidation 验证器、AutoMapper 映射、领域事件发布器、权限校验与数据范围过滤。</summary>
     /// <param name="services">服务集合。</param>
     /// <returns>服务集合。</returns>
     public static IServiceCollection AddApplicationServices(this IServiceCollection services)
@@ -24,10 +24,12 @@ public static class DependencyExtensions
         {
             configuration.RegisterServicesFromAssembly(Assembly.GetExecutingAssembly());
 
-            // Pipeline Behaviors：验证在最前（失败抛 ValidationException），其后日志与性能监控
+            // Pipeline Behaviors：验证在最前（失败抛 ValidationException，不开启事务），
+            // 其后日志与性能监控，事务管道最内层（仅包裹处理器执行，写命令自动开启事务）
             configuration.AddBehavior(typeof(IPipelineBehavior<,>), typeof(ValidationBehavior<,>));
             configuration.AddBehavior(typeof(IPipelineBehavior<,>), typeof(LoggingBehavior<,>));
             configuration.AddBehavior(typeof(IPipelineBehavior<,>), typeof(PerformanceBehavior<,>));
+            configuration.AddBehavior(typeof(IPipelineBehavior<,>), typeof(TransactionBehavior<,>));
 
             // 通知发布策略：逐监听器异常隔离（单个监听器失败仅记录日志，不阻断其余监听器与业务请求）
             configuration.NotificationPublisherType = typeof(IsolatedNotificationPublisher);

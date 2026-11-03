@@ -47,7 +47,7 @@ public class JobExecuteWrapper(
             JobName = job.JobName,
             Status = ExecutionStatus.Success,
             Result = "执行成功",
-            TriggerTime = DateTime.Now
+            TriggerTime = DateTime.UtcNow
         };
         var stopwatch = Stopwatch.StartNew();
         try

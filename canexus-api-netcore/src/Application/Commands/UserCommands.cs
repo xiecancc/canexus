@@ -8,6 +8,7 @@ using Domain.Repositories;
 using Domain.Services.Auth;
 using Domain.Services.Events;
 using Domain.Services.Users;
+using Domain.Shared.Constants;
 using Domain.Shared.Enums;
 using Domain.Shared.Exceptions;
 using Domain.Shared.Results;
@@ -32,7 +33,7 @@ internal static class UserRoleSupport
         }
     }
 
-    /// <summary>全量替换用户-角色关联（批量删除 + 批量插入，调用方需保证工作单元事务内执行）。</summary>
+    /// <summary>全量替换用户-角色关联（批量删除 + 批量插入，须在事务内执行——由事务管道 TransactionBehavior 保证）。</summary>
     public static async Task ReplaceUserRolesAsync(IDomainRepository<SysUserRole> userRoleRepository, Guid userId, List<Guid> roleIds, CancellationToken cancellationToken)
     {
         await userRoleRepository.DeleteAsync(ur => ur.UserId == userId, cancellationToken);
@@ -50,15 +51,8 @@ public sealed class UserCreateCommandHandler(
     IAggregateTreeRepository<SysDept> deptRepository,
     IDomainRepository<SysUserRole> userRoleRepository,
     IPasswordHasher passwordHasher,
-    IDomainEventPublisher domainEventPublisher,
-    IUnitOfWork unitOfWork) : RequestHandler<UserCreateCommand, bool>
+    IDomainEventPublisher domainEventPublisher) : RequestHandler<UserCreateCommand, bool>
 {
-    /// <summary>内置超管账号用户名。</summary>
-    public const string AdminUserName = "admin";
-
-    /// <summary>创建用户缺省密码。</summary>
-    private const string DefaultPassword = "123456";
-
     /// <inheritdoc />
     protected override async Task<bool> HandleAsync(UserCreateCommand command, CancellationToken cancellationToken)
     {
@@ -75,28 +69,24 @@ public sealed class UserCreateCommandHandler(
             throw new BusinessException(ErrorCodes.CommonDataNotFound, "所属部门不存在");
         }
 
-        var inserted = await unitOfWork.RunInTransactionAsync(async () =>
+        var user = new SysUser
         {
-            var user = new SysUser
-            {
-                UserName = userName,
-                NickName = request.NickName.Trim(),
-                // 密码缺省使用默认密码 123456（DTO 注释约定），BCrypt 存储
-                PasswordHash = passwordHasher.Hash(
-                    string.IsNullOrWhiteSpace(request.Password) ? DefaultPassword : request.Password),
-                DeptId = request.DeptId,
-                Email = request.Email,
-                Phone = request.Phone,
-                Status = request.Status,
-                Description = request.Description
-            };
-            _ = await userRepository.InsertAsync(user, cancellationToken);
-            await UserRoleSupport.ReplaceUserRolesAsync(userRoleRepository, user.Id, request.RoleIds, cancellationToken);
-            return user;
-        }, cancellationToken);
+            UserName = userName,
+            NickName = request.NickName.Trim(),
+            // 密码缺省使用默认密码 123456（DTO 注释约定），BCrypt 存储
+            PasswordHash = passwordHasher.Hash(
+                string.IsNullOrWhiteSpace(request.Password) ? UserConstants.DefaultPassword : request.Password),
+            DeptId = request.DeptId,
+            Email = request.Email,
+            Phone = request.Phone,
+            Status = request.Status,
+            Description = request.Description
+        };
+        _ = await userRepository.InsertAsync(user, cancellationToken);
+        await UserRoleSupport.ReplaceUserRolesAsync(userRoleRepository, user.Id, request.RoleIds, cancellationToken);
 
         // 关键节点发布用户创建领域事件（携带创建后的用户状态）
-        await domainEventPublisher.PublishAsync(new UserCreatedEvent(inserted), cancellationToken);
+        await domainEventPublisher.PublishAsync(new UserCreatedEvent(user), cancellationToken);
         return true;
     }
 }
@@ -107,18 +97,14 @@ public sealed class UserDeleteCommandHandler(
     IAggregateRepository<SysUser> userRepository,
     IDomainRepository<SysUserRole> userRoleRepository,
     IDomainEventPublisher domainEventPublisher,
-    IUserContext currentUser,
-    IUnitOfWork unitOfWork) : RequestHandler<UserDeleteCommand, bool>
+    IUserContext currentUser) : RequestHandler<UserDeleteCommand, bool>
 {
-    /// <summary>内置超管账号用户名。</summary>
-    private const string AdminUserName = "admin";
-
     /// <inheritdoc />
     protected override async Task<bool> HandleAsync(UserDeleteCommand command, CancellationToken cancellationToken)
     {
         var user = await userRepository.GetAsync([it => it.Id == command.Id], cancellationToken)
             ?? throw new BusinessException(ErrorCodes.UserNotFound, $"用户 {command.Id} 不存在");
-        if (user.UserName == AdminUserName)
+        if (user.UserName == UserConstants.AdminUserName)
         {
             throw new BusinessException(ErrorCodes.UserAdminProtected, "内置超管账号 admin 不允许删除");
         }
@@ -131,12 +117,9 @@ public sealed class UserDeleteCommandHandler(
         // 变更前捕获用户状态快照（软删除可能回填墓碑字段）
         var snapshot = user.Snapshot<SysUser>();
 
-        await unitOfWork.RunInTransactionAsync(async () =>
-        {
-            // 软删除用户与其角色关联（保持可追溯）；关联表按条件物理删除（单条 SQL）
-            await userRepository.DeleteAsync(command.Id, cancellationToken);
-            await userRoleRepository.DeleteAsync(ur => ur.UserId == command.Id, cancellationToken);
-        }, cancellationToken);
+        // 软删除用户与其角色关联（保持可追溯）；关联表按条件物理删除（单条 SQL）
+        await userRepository.DeleteAsync(command.Id, cancellationToken);
+        await userRoleRepository.DeleteAsync(ur => ur.UserId == command.Id, cancellationToken);
 
         // 关键节点发布用户删除领域事件（携带删除前的用户状态）
         await domainEventPublisher.PublishAsync(new UserDeletedEvent(snapshot), cancellationToken);
@@ -204,12 +187,8 @@ public sealed class UserUpdateCommandHandler(
     IAggregateRepository<SysUser> userRepository,
     IAggregateTreeRepository<SysDept> deptRepository,
     IDomainRepository<SysUserRole> userRoleRepository,
-    IDomainEventPublisher domainEventPublisher,
-    IUnitOfWork unitOfWork) : RequestHandler<UserUpdateCommand, bool>
+    IDomainEventPublisher domainEventPublisher) : RequestHandler<UserUpdateCommand, bool>
 {
-    /// <summary>内置超管账号用户名。</summary>
-    private const string AdminUserName = "admin";
-
     /// <inheritdoc />
     protected override async Task<bool> HandleAsync(UserUpdateCommand command, CancellationToken cancellationToken)
     {
@@ -222,21 +201,18 @@ public sealed class UserUpdateCommandHandler(
             throw new BusinessException(ErrorCodes.CommonDataNotFound, "所属部门不存在");
         }
 
-        // 变更前捕获用户状态快照（实体在事务内被原位修改）
+        // 变更前捕获用户状态快照（实体随后被原位修改）
         var before = user.Snapshot<SysUser>();
 
-        await unitOfWork.RunInTransactionAsync(async () =>
-        {
-            user.NickName = request.NickName.Trim();
-            user.DeptId = request.DeptId;
-            user.Email = request.Email;
-            user.Phone = request.Phone;
-            user.Status = request.Status;
-            user.Description = request.Description;
-            user.ApplyVersion(command.Version);
-            await userRepository.UpdateAsync(user, cancellationToken);
-            await UserRoleSupport.ReplaceUserRolesAsync(userRoleRepository, command.Id, request.RoleIds, cancellationToken);
-        }, cancellationToken);
+        user.NickName = request.NickName.Trim();
+        user.DeptId = request.DeptId;
+        user.Email = request.Email;
+        user.Phone = request.Phone;
+        user.Status = request.Status;
+        user.Description = request.Description;
+        user.ApplyVersion(command.Version);
+        await userRepository.UpdateAsync(user, cancellationToken);
+        await UserRoleSupport.ReplaceUserRolesAsync(userRoleRepository, command.Id, request.RoleIds, cancellationToken);
 
         // 关键节点发布用户修改领域事件（携带变更前后用户状态）
         await domainEventPublisher.PublishAsync(new UserUpdatedEvent(before, user), cancellationToken);
@@ -253,7 +229,7 @@ public sealed class UserUpdateCommandHandler(
     /// <summary>内置超管账号保护：admin 拒绝编辑与状态变更。</summary>
     private static void EnsureNotAdmin(SysUser user)
     {
-        if (user.UserName == AdminUserName)
+        if (user.UserName == UserConstants.AdminUserName)
         {
             throw new BusinessException(ErrorCodes.UserAdminProtected, "内置超管账号 admin 不允许编辑");
         }
@@ -266,8 +242,7 @@ public sealed class UserUpdateRolesCommandHandler(
     IAggregateRepository<SysUser> userRepository,
     IAggregateRepository<SysRole> roleRepository,
     IDomainRepository<SysUserRole> userRoleRepository,
-    IDomainEventPublisher domainEventPublisher,
-    IUnitOfWork unitOfWork) : RequestHandler<UserUpdateRolesCommand, bool>
+    IDomainEventPublisher domainEventPublisher) : RequestHandler<UserUpdateRolesCommand, bool>
 {
     /// <inheritdoc />
     protected override async Task<bool> HandleAsync(UserUpdateRolesCommand command, CancellationToken cancellationToken)
@@ -276,15 +251,12 @@ public sealed class UserUpdateRolesCommandHandler(
             ?? throw new BusinessException(ErrorCodes.UserNotFound, $"用户 {command.Id} 不存在");
         await UserRoleSupport.ValidateRolesAsync(roleRepository, command.Request.RoleIds, cancellationToken);
 
-        // 变更前查询既有角色 Id 集合（全量替换在事务内执行）
+        // 变更前查询既有角色 Id 集合（全量替换随后执行）
         var beforeRoleIds = (await userRoleRepository.GetListAsync([ur => ur.UserId == command.Id], cancellationToken: cancellationToken))
             .Select(ur => ur.RoleId)
             .ToList();
 
-        await unitOfWork.RunInTransactionAsync(async () =>
-        {
-            await UserRoleSupport.ReplaceUserRolesAsync(userRoleRepository, command.Id, command.Request.RoleIds, cancellationToken);
-        }, cancellationToken);
+        await UserRoleSupport.ReplaceUserRolesAsync(userRoleRepository, command.Id, command.Request.RoleIds, cancellationToken);
 
         // 关键节点发布用户角色重分配领域事件（Domain 为用户，携带变更前后角色 Id 集合）
         await domainEventPublisher.PublishAsync(
@@ -301,9 +273,6 @@ public sealed class UserUpdateStatusCommandHandler(
     IAggregateRepository<SysUser> userRepository,
     IDomainEventPublisher domainEventPublisher) : AggregateUpdateCommandHandler<UserUpdateStatusCommand, UserStatusRequest, SysUser>(userRepository, domainEventPublisher)
 {
-    /// <summary>内置超管账号用户名。</summary>
-    private const string AdminUserName = "admin";
-
     /// <inheritdoc />
     protected override int NotFoundErrorCode => ErrorCodes.UserNotFound;
 
@@ -313,7 +282,7 @@ public sealed class UserUpdateStatusCommandHandler(
     /// <inheritdoc />
     protected override Task ValidateAsync(UserStatusRequest request, SysUser entity, CancellationToken cancellationToken)
     {
-        if (entity.UserName == AdminUserName)
+        if (entity.UserName == UserConstants.AdminUserName)
         {
             throw new BusinessException(ErrorCodes.UserAdminProtected, "内置超管账号 admin 不允许编辑");
         }
