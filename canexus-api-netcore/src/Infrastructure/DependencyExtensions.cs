@@ -3,6 +3,7 @@ using Domain.Repositories;
 using Domain.Services;
 using Domain.Services.Auth;
 using Domain.Services.Security;
+using Domain.Services.Storage;
 using Domain.Services.Users;
 using Infrastructure.Auth;
 using Infrastructure.Caching;
@@ -11,6 +12,7 @@ using Infrastructure.Filtering;
 using Infrastructure.Locking;
 using Infrastructure.Repositories;
 using Infrastructure.Scheduling;
+using Infrastructure.Storage;
 using Infrastructure.Shared.Caching;
 using Infrastructure.Shared.Filtering;
 using Infrastructure.Shared.Locking;
@@ -95,6 +97,7 @@ public static class DependencyExtensions
         services.RegisterOption<CorsOption>(configuration, "Cors");
         services.RegisterOption<RateLimitOption>(configuration, "RateLimit");
         services.RegisterOption<HttpsOption>(configuration, "Https");
+        services.RegisterOption<FileStorageOption>(configuration, "FileStorage");
 
         return services;
     }
@@ -125,6 +128,21 @@ public static class DependencyExtensions
 
         // 种子数据初始化器：依赖 ISqlSugarClient 与密码哈希
         services.AddSingleton<SeedDataInitializer>();
+
+        return services;
+    }
+
+    #endregion
+
+    #region 文件存储
+
+    /// <summary>注册文件存储能力：本地磁盘实现（对象存储 Provider 后续按 FileStorage:Provider 配置扩展注入）。</summary>
+    /// <param name="services">服务集合。</param>
+    /// <returns>服务集合。</returns>
+    public static IServiceCollection AddStorage(this IServiceCollection services)
+    {
+        // 无状态单例：内部仅持有配置快照与路径计算，无共享可变状态
+        services.AddSingleton<IFileStorage, LocalFileStorage>();
 
         return services;
     }

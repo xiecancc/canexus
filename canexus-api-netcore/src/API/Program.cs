@@ -59,6 +59,9 @@ public class Program
             // 认证授权基座：当前用户上下文、密码哈希、令牌服务、种子数据初始化器
             builder.Services.AddSecurity();
 
+            // 文件存储：本地磁盘实现（IFileStorage 端口，上传白名单与大小上限经 FileStorage 配置控制）
+            builder.Services.AddStorage();
+
             // JWT Bearer 认证与授权
             builder.Services.AddJwtAuthentication();
 

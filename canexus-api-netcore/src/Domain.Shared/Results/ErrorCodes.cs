@@ -202,6 +202,17 @@ public static class ErrorCodes
     /// <summary>在线会话不存在或已下线（强退目标会话已吊销 / 已过期 / 已被删除）。</summary>
     public const int OnlineSessionNotFound = 401101;
 
+    // —— 文件存储模块段（4012xx，对应 HTTP 400）——
+
+    /// <summary>文件不存在（元数据在库但物理文件缺失、或路径非法越界）。</summary>
+    public const int FileNotFound = 401201;
+
+    /// <summary>文件扩展名不在上传白名单内。</summary>
+    public const int FileExtensionNotAllowed = 401202;
+
+    /// <summary>文件大小超出上限。</summary>
+    public const int FileSizeExceeded = 401203;
+
     // —— 系统段 ——
 
     /// <summary>系统内部错误（对应 HTTP 500，不向客户端泄露详情）。</summary>
