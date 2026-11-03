@@ -53,6 +53,7 @@ public class SystemManagementApiTests
                     configuration.AddInMemoryCollection(new Dictionary<string, string?>
                     {
                         ["Database:ConnectionString"] = connectionString,
+                        ["Jwt:Secret"] = ApiTestSupport.TestJwtSecret,
                         ["RateLimit:Enabled"] = "false" // 集成测试共享 127.0.0.1 分区且高频请求，关闭限流避免不稳定
                     });
                 });

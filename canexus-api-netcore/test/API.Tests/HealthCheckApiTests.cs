@@ -39,6 +39,7 @@ public class HealthCheckApiTests
                     configuration.AddInMemoryCollection(new Dictionary<string, string?>
                     {
                         ["Database:ConnectionString"] = connectionString,
+                        ["Jwt:Secret"] = ApiTestSupport.TestJwtSecret,
                         // 全局限流 3 次/分钟/IP：探针若未豁免，第 4 次请求即被限流
                         ["RateLimit:Enabled"] = "true",
                         ["RateLimit:GlobalPermitLimit"] = "3",

@@ -121,9 +121,13 @@ canexus-api-netcore/
 
 ## 本地运行
 
+仓库中的 `appsettings.json` 不含任何密钥（`Database:ConnectionString` 与 `Jwt:Secret` 留空，缺失时启动即报错）。
+敏感配置经 **User Secrets**（Development 环境）或环境变量注入，本地首次运行前执行：
+
 ```bash
-# 1. 修改数据库连接（可选，默认 localhost:3306 root/***REMOVED***）
-#    编辑 src/API/appsettings.json → Database:ConnectionString
+# 1. 写入本地机密（存放于 %APPDATA%\Microsoft\UserSecrets\canexus-super-admin-api，不入 Git）
+dotnet user-secrets set "Database:ConnectionString" "server=localhost;port=3306;database=super_admin;user id=root;password=你的密码;CharSet=utf8mb4;AllowPublicKeyRetrieval=true;SslMode=none" --project src/API
+dotnet user-secrets set "Jwt:Secret" "至少 32 字符的随机密钥" --project src/API
 
 # 2. 启动（首次启动自动建库建表 + 写入种子数据）
 dotnet run --project src/API
@@ -146,9 +150,10 @@ dotnet test test/API.Tests                # 仅 API 集成测试
 ## 部署说明
 
 1. **发布**：`dotnet publish src/API -c Release -o publish`，产物为自包含目录（按目标运行时加 `--runtime` 参数）
-2. **配置**：生产环境通过 `appsettings.Production.json` 或环境变量覆盖：
-   - `Database:ConnectionString` — 生产数据库连接串（`Database:DbType / AutoCreateTable / AutoSyncStructure` 等亦可覆盖）
-   - `Jwt:Secret / Issuer / Audience` — 生产密钥（务必更换默认值）
-   - `MultiTenancy:Enabled` — 多租户开关
+2. **配置**：`appsettings.json` 不含密钥，生产环境必须经环境变量注入（双下划线 `__` 表示层级，优先级高于配置文件）：
+   - `Database__ConnectionString` — 生产数据库连接串（`Database__DbType / Database__AutoCreateTable` 等亦可覆盖）
+   - `Jwt__Secret` — 生产签名密钥（随机生成，不与任何环境复用；更换后所有已签发令牌失效）
+   - `MultiTenancy__Enabled` — 多租户开关
+   - 密钥缺失时应用启动即失败（Options 启动校验），不会带病运行
 3. **数据库**：首次启动自动建库建表并写入种子数据；已有库表结构由 CodeFirst 增量补齐（不修改已有列类型，跨大版本结构变更需重建或手工迁移）
 4. **运行**：`dotnet API.dll`，或配置为 systemd / Windows 服务 / 容器；前端生产环境由 nginx 将 `/api` 反向代理到本服务

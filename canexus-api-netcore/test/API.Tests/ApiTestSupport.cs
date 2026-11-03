@@ -10,6 +10,9 @@ namespace API.Tests;
 /// </summary>
 internal static class ApiTestSupport
 {
+    /// <summary>测试专用 JWT 签名密钥（appsettings.json 已脱敏，集成测试经内存配置覆盖注入）。</summary>
+    public const string TestJwtSecret = "TestOnly@Jwt#Secret-Key-0123456789-abcdef-2026";
+
     /// <summary>读取聚合当前乐观锁版本号。</summary>
     /// <typeparam name="TEntity">聚合实体类型。</typeparam>
     /// <param name="db">测试库 SqlSugar 客户端（与被测 API 同一 DI 容器 / 同一数据库）。</param>

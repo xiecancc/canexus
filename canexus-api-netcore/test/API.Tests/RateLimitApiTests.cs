@@ -39,6 +39,7 @@ public class RateLimitApiTests
                     configuration.AddInMemoryCollection(new Dictionary<string, string?>
                     {
                         ["Database:ConnectionString"] = connectionString,
+                        ["Jwt:Secret"] = ApiTestSupport.TestJwtSecret,
                         ["RateLimit:Enabled"] = "true",
                         ["RateLimit:AuthPermitLimit"] = "3",
                         ["RateLimit:AuthWindowSeconds"] = "60"
