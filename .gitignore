@@ -187,3 +187,6 @@ secrets.*.json
 # Node（根目录工程化工具：husky / lint-staged）
 node_modules/
 .pnpm-store/
+
+# 分析报告与本地文档：统一放入 .docs/，禁止提交到 Git
+.docs/
