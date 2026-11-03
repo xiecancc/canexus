@@ -15,10 +15,6 @@ namespace API.Tests;
 [TestFixture]
 public class RateLimitApiTests
 {
-    /// <summary>默认测试连接串（root 密码为本机约定值）。</summary>
-    private const string DefaultConnectionString =
-        "server=localhost;port=3306;database=super_admin_test;user id=root;password=***REMOVED***;CharSet=utf8mb4;AllowPublicKeyRetrieval=true;SslMode=none";
-
     private static WebApplicationFactory<Program> _factory = null!;
     private static HttpClient _httpClient = null!;
 
@@ -26,7 +22,7 @@ public class RateLimitApiTests
     [OneTimeSetUp]
     public void OneTimeSetUp()
     {
-        var connectionString = Environment.GetEnvironmentVariable("SUPER_ADMIN_TEST_CONN") ?? DefaultConnectionString;
+        var connectionString = ApiTestSupport.TestConnectionString;
         // API 项目根目录（appsettings.json 所在位置，含 Jwt 节、Serilog 等配置）
         var apiContentRoot = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "src", "API"));
         _factory = new WebApplicationFactory<Program>()

@@ -145,7 +145,7 @@ dotnet test                               # 全量测试（单元 + 集成）
 dotnet test test/API.Tests                # 仅 API 集成测试
 ```
 
-> 说明：集成测试默认连接 `super_admin_test` 测试库（连接串可经环境变量 `SUPER_ADMIN_TEST_CONN` 覆盖），测试库由 CodeFirst 自动创建；当前测试连接串覆盖对宿主 Program 配置存在失效问题，测试数据会写入开发库 `super_admin`，属已知遗留项。
+> 说明：集成测试强制从环境变量 `SUPER_ADMIN_TEST_CONN` 读取测试库连接串（代码中不内置任何密码回退值），测试库由 CodeFirst 自动创建；当前测试连接串覆盖对宿主 Program 配置存在失效问题，测试数据会写入开发库 `super_admin`，属已知遗留项。
 
 ## 部署说明
 

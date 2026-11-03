@@ -24,10 +24,6 @@ namespace API.Tests;
 [TestFixture]
 public class SystemManagementApiTests
 {
-    /// <summary>默认测试连接串（root 密码为本机约定值）。</summary>
-    private const string DefaultConnectionString =
-        "server=localhost;port=3306;database=super_admin_test;user id=root;password=***REMOVED***;CharSet=utf8mb4;AllowPublicKeyRetrieval=true;SslMode=none";
-
     private const string AdminUserName = "admin";
     private const string AdminPassword = "admin123";
 
@@ -41,7 +37,7 @@ public class SystemManagementApiTests
     [OneTimeSetUp]
     public async Task OneTimeSetUpAsync()
     {
-        var connectionString = Environment.GetEnvironmentVariable("SUPER_ADMIN_TEST_CONN") ?? DefaultConnectionString;
+        var connectionString = ApiTestSupport.TestConnectionString;
         var apiContentRoot = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "src", "API"));
         _factory = new WebApplicationFactory<Program>()
             .WithWebHostBuilder(builder =>

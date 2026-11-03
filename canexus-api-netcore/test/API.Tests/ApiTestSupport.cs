@@ -13,6 +13,13 @@ internal static class ApiTestSupport
     /// <summary>测试专用 JWT 签名密钥（appsettings.json 已脱敏，集成测试经内存配置覆盖注入）。</summary>
     public const string TestJwtSecret = "TestOnly@Jwt#Secret-Key-0123456789-abcdef-2026";
 
+    /// <summary>测试连接串：强制经环境变量 SUPER_ADMIN_TEST_CONN 注入，代码中不内置任何密码回退值。</summary>
+    public static string TestConnectionString =>
+        Environment.GetEnvironmentVariable("SUPER_ADMIN_TEST_CONN")
+        ?? throw new InvalidOperationException(
+            "缺少环境变量 SUPER_ADMIN_TEST_CONN（测试库连接串）。请先设置，例如："
+            + "server=localhost;port=3306;database=super_admin_test;user id=root;password=<你的密码>;CharSet=utf8mb4;AllowPublicKeyRetrieval=true;SslMode=none");
+
     /// <summary>读取聚合当前乐观锁版本号。</summary>
     /// <typeparam name="TEntity">聚合实体类型。</typeparam>
     /// <param name="db">测试库 SqlSugar 客户端（与被测 API 同一 DI 容器 / 同一数据库）。</param>
