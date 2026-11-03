@@ -145,6 +145,9 @@ public static class DependencyExtensions
         // 定时任务调度管理（依赖 scoped 仓储，随请求作用域创建）
         services.AddScoped<IJobScheduleManager, JobScheduleManager>();
 
+        // 调度器运行信息提供者（监控端点消费）
+        services.AddScoped<ISchedulerInfoProvider, SchedulerInfoProvider>();
+
         return services;
     }
 
