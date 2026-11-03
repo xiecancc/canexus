@@ -51,6 +51,24 @@ public class SysUserController(ISender sender) : ControllerBase
         return Ok(Result.Ok(message: "创建成功"));
     }
 
+    /// <summary>批量导入用户（Excel/xlsx，multipart/form-data；全量成功才入库，行级错误随响应回执返回）。</summary>
+    /// <param name="file">导入文件（列名：用户名 / 昵称 / 邮箱 / 手机号 / 部门Id / 初始密码）。</param>
+    /// <returns>导入回执（总数 / 成功 / 失败 / 行级错误明细）。</returns>
+    [HttpPost("import")]
+    [RequirePermission("system:user:import")]
+    [OperLog("用户管理", OperBusinessType.Import)]
+    public async Task<IActionResult> Import(IFormFile file)
+    {
+        if (file is null || file.Length == 0)
+        {
+            return Ok(Result.Fail(ErrorCodes.UserImportFileInvalid, "请选择要导入的 Excel 文件"));
+        }
+
+        await using var stream = file.OpenReadStream();
+        var data = await sender.Send(new UserImportCommand(stream));
+        return Ok(Result.Ok(data, message: data.FailureCount == 0 ? $"导入成功，共 {data.SuccessCount} 条" : "导入失败，详见行级错误明细（未写入任何数据）"));
+    }
+
     /// <summary>更新用户（不含用户名；内置超管 admin 拒绝编辑；角色全量替换）。</summary>
     /// <param name="id">用户 Id。</param>
     /// <param name="request">更新请求。</param>

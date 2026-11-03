@@ -11,6 +11,10 @@ public sealed record UserCreateCommand : AggregateCreateCommand<UserInputRequest
     public UserCreateCommand(UserInputRequest request) : base(request) { }
 }
 
+/// <summary>批量导入用户命令（Excel 流经 MiniExcel 解析；行级校验全部通过才入库，任一行失败整体回执不入库）。</summary>
+/// <param name="Content">Excel 文件内容流（xlsx）。</param>
+public sealed record UserImportCommand(Stream Content) : Request<UserImportResultDto>, ICommand;
+
 /// <summary>删除用户命令（内置超管 admin 与当前登录人自身拒绝删除）。</summary>
 /// <param name="Id">用户 Id。</param>
 /// <param name="Version">乐观锁版本号。</param>

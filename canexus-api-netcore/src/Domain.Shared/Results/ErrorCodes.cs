@@ -82,6 +82,9 @@ public static class ErrorCodes
     /// <summary>不能删除当前登录账号自己。</summary>
     public const int UserDeleteSelfForbidden = 400206;
 
+    /// <summary>用户导入文件非法（空文件 / 无法解析 / 行数超上限）。</summary>
+    public const int UserImportFileInvalid = 400207;
+
     // —— 角色模块段（4003xx，对应 HTTP 400）——
 
     /// <summary>角色不存在。</summary>
