@@ -7,6 +7,7 @@ namespace Domain.Tests.Exceptions;
 [TestFixture]
 public class BusinessExceptionTests
 {
+    /// <summary>验证仅传消息构造时默认使用通用请求错误码。</summary>
     [Test]
     public void Constructor_WithMessageOnly_UsesCommonInvalidRequestCode()
     {
@@ -20,6 +21,7 @@ public class BusinessExceptionTests
         });
     }
 
+    /// <summary>验证错误码与消息同时传入时两者均被异常携带。</summary>
     [Test]
     public void Constructor_WithCodeAndMessage_CarriesBoth()
     {
@@ -33,6 +35,7 @@ public class BusinessExceptionTests
         });
     }
 
+    /// <summary>验证带内部异常构造时异常链被完整保留。</summary>
     [Test]
     public void Constructor_WithInnerException_CarriesInner()
     {
@@ -48,6 +51,7 @@ public class BusinessExceptionTests
         });
     }
 
+    /// <summary>验证业务异常属于 Exception 体系，可按类型被捕获。</summary>
     [Test]
     public void BusinessException_IsException()
     {

@@ -19,6 +19,7 @@ namespace Application.Commands;
 /// <param name="jobRepository">定时任务仓储。</param>
 /// <param name="scheduleManager">任务调度管理端口（Cron / 任务类型校验与调度同步）。</param>
 /// <param name="domainEventPublisher">领域事件发布端口。</param>
+/// <param name="mapper">对象映射器。</param>
 public sealed class JobCreateCommandHandler(IAggregateRepository<SysJob> jobRepository, IJobScheduleManager scheduleManager, IDomainEventPublisher domainEventPublisher, IMapper mapper) : RequestHandler<JobCreateCommand, bool>
 {
     /// <inheritdoc />
@@ -119,6 +120,7 @@ public sealed class JobRunOnceCommandHandler(IAggregateRepository<SysJob> jobRep
 /// <param name="jobRepository">定时任务仓储。</param>
 /// <param name="scheduleManager">任务调度管理端口（Cron / 任务类型校验与调度同步）。</param>
 /// <param name="domainEventPublisher">领域事件发布端口。</param>
+/// <param name="mapper">对象映射器。</param>
 public sealed class JobUpdateCommandHandler(IAggregateRepository<SysJob> jobRepository, IJobScheduleManager scheduleManager, IDomainEventPublisher domainEventPublisher, IMapper mapper) : RequestHandler<JobUpdateCommand, bool>
 {
     /// <inheritdoc />

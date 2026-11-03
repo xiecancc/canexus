@@ -4,9 +4,10 @@ using Application.Contracts.Tenants;
 
 namespace Application.Contracts.Commands;
 /// <summary>创建租户命令（tenantKey 全局唯一）。</summary>
-/// <param name="Request">创建请求。</param>
 public sealed record TenantCreateCommand : AggregateCreateCommand<TenantInputRequest>
 {
+    /// <summary>构造创建租户命令。</summary>
+    /// <param name="request">创建请求。</param>
     public TenantCreateCommand(TenantInputRequest request) : base(request) { }
 }
 
@@ -21,10 +22,11 @@ public sealed record TenantDeleteCommand(Guid Id, Guid Version) : AggregateDelet
 public sealed record TenantRestoreCommand(Guid Id, Guid Version) : AggregateRestoreCommand(Id, Version);
 
 /// <summary>更新租户命令（tenantKey 不可变更）。</summary>
-/// <param name="Id">租户 Id。</param>
-/// <param name="Version">乐观锁版本号。</param>
-/// <param name="Request">更新请求。</param>
 public sealed record TenantUpdateCommand : AggregateUpdateCommand<TenantInputRequest>
 {
+    /// <summary>构造更新租户命令。</summary>
+    /// <param name="id">租户 Id。</param>
+    /// <param name="version">乐观锁版本号。</param>
+    /// <param name="request">更新请求。</param>
     public TenantUpdateCommand(Guid id, Guid version, TenantInputRequest request) : base(id, version, request) { }
 }

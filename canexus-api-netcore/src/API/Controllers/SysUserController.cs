@@ -54,6 +54,7 @@ public class SysUserController(ISender sender) : ControllerBase
     /// <summary>更新用户（不含用户名；内置超管 admin 拒绝编辑；角色全量替换）。</summary>
     /// <param name="id">用户 Id。</param>
     /// <param name="request">更新请求。</param>
+    /// <param name="version">乐观锁版本号。</param>
     /// <returns>统一响应。</returns>
     [HttpPut("{id:guid}/{version:guid}")]
     [RequirePermission("system:user:edit")]
@@ -93,6 +94,7 @@ public class SysUserController(ISender sender) : ControllerBase
     /// <summary>修改用户状态（内置超管 admin 拒绝操作）。</summary>
     /// <param name="id">用户 Id。</param>
     /// <param name="request">状态请求。</param>
+    /// <param name="version">乐观锁版本号。</param>
     /// <returns>统一响应。</returns>
     [HttpPut("{id:guid}/{version:guid}/status")]
     [RequirePermission("system:user:edit")]
@@ -106,6 +108,7 @@ public class SysUserController(ISender sender) : ControllerBase
     /// <summary>重置密码（BCrypt 存储）。</summary>
     /// <param name="id">用户 Id。</param>
     /// <param name="request">新密码。</param>
+    /// <param name="version">乐观锁版本号。</param>
     /// <returns>统一响应。</returns>
     [HttpPut("{id:guid}/{version:guid}/password")]
     [RequirePermission("system:user:resetPwd")]
@@ -119,6 +122,7 @@ public class SysUserController(ISender sender) : ControllerBase
     /// <summary>分配角色（全量替换）。</summary>
     /// <param name="id">用户 Id。</param>
     /// <param name="request">角色 Id 集合。</param>
+    /// <param name="version">乐观锁版本号。</param>
     /// <returns>统一响应。</returns>
     [HttpPut("{id:guid}/{version:guid}/roles")]
     [RequirePermission("system:user:edit")]

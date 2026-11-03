@@ -19,6 +19,7 @@ public class AggregateBaseTests
 {
     private static readonly Guid SameId = Guid.Parse("00000000-0000-0000-0000-000000000001");
 
+    /// <summary>验证同类型且主键相同的两个聚合实例相等，== 与哈希码一致。</summary>
     [Test]
     public void Equals_SameTypeAndSameId_ReturnsTrue()
     {
@@ -34,6 +35,7 @@ public class AggregateBaseTests
         });
     }
 
+    /// <summary>验证主键不同的聚合实例不相等。</summary>
     [Test]
     public void Equals_DifferentId_ReturnsFalse()
     {
@@ -48,6 +50,7 @@ public class AggregateBaseTests
         });
     }
 
+    /// <summary>验证类型不同（含派生关系）的聚合实例即使主键相同也不相等。</summary>
     [Test]
     public void Equals_DifferentType_ReturnsFalse()
     {
@@ -58,6 +61,7 @@ public class AggregateBaseTests
         Assert.That(left.Equals(right), Is.False);
     }
 
+    /// <summary>验证未持久化（主键为空 Guid）的瞬态聚合彼此不相等。</summary>
     [Test]
     public void Equals_TransientEntities_AreNotEqual()
     {
@@ -73,6 +77,7 @@ public class AggregateBaseTests
         });
     }
 
+    /// <summary>验证聚合与 null 或无关对象比较均返回不相等。</summary>
     [Test]
     public void Equals_NullOrOtherObject_ReturnsFalse()
     {
@@ -86,6 +91,7 @@ public class AggregateBaseTests
         });
     }
 
+    /// <summary>验证同一引用的聚合比较返回相等（即使主键为空）。</summary>
     [Test]
     public void Equals_SameReference_ReturnsTrue()
     {
@@ -99,6 +105,7 @@ public class AggregateBaseTests
         });
     }
 
+    /// <summary>验证空主键瞬态聚合与 null 通过运算符比较的结果正确。</summary>
     [Test]
     public void TransientEntity_NullComparison_WorksViaOperators()
     {
@@ -113,6 +120,7 @@ public class AggregateBaseTests
         });
     }
 
+    /// <summary>验证聚合审计字段的默认值合理（版本令牌自动生成、未删除、审计人/时间为空）。</summary>
     [Test]
     public void AuditFields_DefaultValues_AreSensible()
     {
@@ -166,6 +174,7 @@ public class TestSingleValue : ValueObject
 [TestFixture]
 public class ValueObjectTests
 {
+    /// <summary>验证分量值完全相同的值对象相等，== 与哈希码一致。</summary>
     [Test]
     public void Equals_SameComponentValues_ReturnsTrue()
     {
@@ -181,6 +190,7 @@ public class ValueObjectTests
         });
     }
 
+    /// <summary>验证任一分量不同的值对象不相等。</summary>
     [Test]
     public void Equals_AnyComponentDiffers_ReturnsFalse()
     {
@@ -195,6 +205,7 @@ public class ValueObjectTests
         });
     }
 
+    /// <summary>验证类型不同的值对象即使分量值相同也不相等。</summary>
     [Test]
     public void Equals_DifferentType_ReturnsFalse()
     {
@@ -205,6 +216,7 @@ public class ValueObjectTests
         Assert.That(left.Equals(right), Is.False);
     }
 
+    /// <summary>验证值对象与 null 比较返回不相等。</summary>
     [Test]
     public void Equals_Null_ReturnsFalse()
     {
@@ -218,6 +230,7 @@ public class ValueObjectTests
         });
     }
 
+    /// <summary>验证分量为 null 的值对象按 null 值参与相等性比较。</summary>
     [Test]
     public void Equals_NullComponent_MatchesNullValue()
     {

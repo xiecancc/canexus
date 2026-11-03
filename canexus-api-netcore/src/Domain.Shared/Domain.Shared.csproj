@@ -6,6 +6,9 @@
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+
+    <!-- XML 文档输出：编译生成与程序集同名的 *.xml（CS1591/CS1572/CS1573 为注释覆盖不足与漂移的存量问题，暂抑制） -->
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
   </PropertyGroup>
 
 </Project>

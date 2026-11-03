@@ -4,9 +4,10 @@ using Application.Contracts.Roles;
 
 namespace Application.Contracts.Commands;
 /// <summary>创建角色命令（roleKey 唯一且不可使用保留值 super_admin；菜单授权全删全插）。</summary>
-/// <param name="Request">创建请求。</param>
 public sealed record RoleCreateCommand : AggregateCreateCommand<RoleInputRequest>
 {
+    /// <summary>构造创建角色命令。</summary>
+    /// <param name="request">创建请求。</param>
     public RoleCreateCommand(RoleInputRequest request) : base(request) { }
 }
 
@@ -21,10 +22,11 @@ public sealed record RoleDeleteCommand(Guid Id, Guid Version) : AggregateDeleteC
 public sealed record RoleRestoreCommand(Guid Id, Guid Version) : AggregateRestoreCommand(Id, Version);
 
 /// <summary>更新角色命令（内置 super_admin 角色整体拒绝编辑）。</summary>
-/// <param name="Id">角色 Id。</param>
-/// <param name="Version">乐观锁版本号。</param>
-/// <param name="Request">更新请求。</param>
 public sealed record RoleUpdateCommand : AggregateUpdateCommand<RoleInputRequest>
 {
+    /// <summary>构造更新角色命令。</summary>
+    /// <param name="id">角色 Id。</param>
+    /// <param name="version">乐观锁版本号。</param>
+    /// <param name="request">更新请求。</param>
     public RoleUpdateCommand(Guid id, Guid version, RoleInputRequest request) : base(id, version, request) { }
 }

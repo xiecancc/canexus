@@ -33,6 +33,7 @@ public class DictConfigApiTests
     private static ISqlSugarClient _db = null!;
     private static string _adminToken = null!;
 
+    /// <summary>测试套件初始化：启动测试宿主并走真实登录链路获取令牌。</summary>
     [OneTimeSetUp]
     public async Task OneTimeSetUpAsync()
     {
@@ -47,7 +48,8 @@ public class DictConfigApiTests
                     configuration.AddJsonFile(Path.Combine(apiContentRoot, "appsettings.json"), optional: false, reloadOnChange: false);
                     configuration.AddInMemoryCollection(new Dictionary<string, string?>
                     {
-                        ["Database:ConnectionString"] = connectionString
+                        ["Database:ConnectionString"] = connectionString,
+                        ["RateLimit:Enabled"] = "false" // 集成测试共享 127.0.0.1 分区且高频请求，关闭限流避免不稳定
                     });
                 });
             });
@@ -76,6 +78,7 @@ public class DictConfigApiTests
         _adminToken = loginBody.RootElement.GetProperty("data").GetProperty("accessToken").GetString()!;
     }
 
+    /// <summary>测试套件清理：释放宿主与资源。</summary>
     [OneTimeTearDown]
     public void OneTimeTearDown()
     {
@@ -86,6 +89,7 @@ public class DictConfigApiTests
 
     // —— 字典类型 ——
 
+    /// <summary>验证字典类型全流程：创建、重复拒绝、内置类型不可修改、非空类型禁止删除。</summary>
     [Test]
     public async Task DictType_FullFlow_DuplicateAndImmutableAndNonEmptyDelete()
     {
@@ -172,6 +176,7 @@ public class DictConfigApiTests
 
     // —— 字典数据与缓存刷新 ——
 
+    /// <summary>验证字典数据写操作后按类型查询的缓存立即刷新。</summary>
     [Test]
     public async Task DictData_TypeList_CacheRefreshedImmediatelyAfterWrite()
     {
@@ -220,6 +225,7 @@ public class DictConfigApiTests
         await SendAsync(HttpMethod.Delete, $"/api/system/dict-type/{typeId}/{await ApiTestSupport.GetVersionAsync<SysDictType>(_db, typeId)}");
     }
 
+    /// <summary>验证同类型下重复字典标签或键值被拒绝并返回 400606。</summary>
     [Test]
     public async Task DictData_DuplicateLabelOrValue_Rejected400606()
     {
@@ -283,6 +289,7 @@ public class DictConfigApiTests
 
     // —— 参数配置 ——
 
+    /// <summary>验证参数配置全流程：创建、按键取值缓存刷新、重复键拒绝、内置参数受保护。</summary>
     [Test]
     public async Task Config_FullFlow_KeyCacheRefreshedAndBuiltInProtected()
     {
@@ -349,6 +356,7 @@ public class DictConfigApiTests
         });
     }
 
+    /// <summary>验证内置参数随种子数据初始化且禁止删除。</summary>
     [Test]
     public async Task Config_BuiltIn_SeededAndDeleteRejected()
     {

@@ -53,6 +53,7 @@ public class SysTenantController(ISender sender) : ControllerBase
     /// <summary>更新租户（tenantKey 不可变更）。</summary>
     /// <param name="id">租户 Id。</param>
     /// <param name="request">更新请求。</param>
+    /// <param name="version">乐观锁版本号。</param>
     /// <returns>统一响应。</returns>
     [HttpPut("{id:guid}/{version:guid}")]
     [RequirePermission("system:tenant:edit")]

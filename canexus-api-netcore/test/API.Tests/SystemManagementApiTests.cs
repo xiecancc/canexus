@@ -37,6 +37,7 @@ public class SystemManagementApiTests
     private static ICache _cache = null!;
     private static string _adminToken = null!;
 
+    /// <summary>测试套件初始化：启动测试宿主并准备种子数据。</summary>
     [OneTimeSetUp]
     public async Task OneTimeSetUpAsync()
     {
@@ -51,7 +52,8 @@ public class SystemManagementApiTests
                     configuration.AddJsonFile(Path.Combine(apiContentRoot, "appsettings.json"), optional: false, reloadOnChange: false);
                     configuration.AddInMemoryCollection(new Dictionary<string, string?>
                     {
-                        ["Database:ConnectionString"] = connectionString
+                        ["Database:ConnectionString"] = connectionString,
+                        ["RateLimit:Enabled"] = "false" // 集成测试共享 127.0.0.1 分区且高频请求，关闭限流避免不稳定
                     });
                 });
             });
@@ -64,6 +66,7 @@ public class SystemManagementApiTests
         _adminToken = await LoginAndGetAccessTokenAsync(AdminUserName, AdminPassword);
     }
 
+    /// <summary>测试套件清理：释放宿主与资源。</summary>
     [OneTimeTearDown]
     public void OneTimeTearDown()
     {
@@ -75,6 +78,7 @@ public class SystemManagementApiTests
 
     // —— 用户管理 ——
 
+    /// <summary>验证超管查询用户分页时返回分页项及部门、角色信息。</summary>
     [Test]
     public async Task UserPage_AsSuperAdmin_ReturnsPagedItemsWithDeptAndRoles()
     {
@@ -103,6 +107,7 @@ public class SystemManagementApiTests
         });
     }
 
+    /// <summary>验证用户分页关键字过滤按用户名匹配。</summary>
     [Test]
     public async Task UserPage_KeywordFilter_MatchesUserName()
     {
@@ -119,6 +124,7 @@ public class SystemManagementApiTests
         });
     }
 
+    /// <summary>验证用户创建、更新、删除全流程。</summary>
     [Test]
     public async Task User_CreateUpdateDelete_FullFlow()
     {
@@ -188,6 +194,7 @@ public class SystemManagementApiTests
         await SendAsync(HttpMethod.Delete, $"/api/system/role/{roleId}/{await ApiTestSupport.GetVersionAsync<SysRole>(_db, roleId)}", null, _adminToken);
     }
 
+    /// <summary>验证创建重复用户名的用户返回 400204。</summary>
     [Test]
     public async Task User_Create_DuplicateUserName_Returns400204()
     {
@@ -209,6 +216,7 @@ public class SystemManagementApiTests
         });
     }
 
+    /// <summary>验证重置密码后可用新密码登录。</summary>
     [Test]
     public async Task User_ResetPassword_NewPasswordCanLogin()
     {
@@ -231,6 +239,7 @@ public class SystemManagementApiTests
         Assert.That(newLogin.StatusCode, Is.EqualTo(HttpStatusCode.OK), "重置后新密码应可登录");
     }
 
+    /// <summary>验证创建用户使用默认密码 123456 后可登录。</summary>
     [Test]
     public async Task User_Create_DefaultPassword_123456_CanLogin()
     {
@@ -242,6 +251,7 @@ public class SystemManagementApiTests
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK), "缺省密码应为 123456");
     }
 
+    /// <summary>验证对 admin 用户执行禁用、删除等操作被拒绝并返回 400205。</summary>
     [Test]
     public async Task User_AdminProtectedOperations_Returns400205()
     {
@@ -277,6 +287,7 @@ public class SystemManagementApiTests
 
     // —— 数据范围过滤 ——
 
+    /// <summary>验证部门数据权限角色查询用户分页时仅可见本部门用户。</summary>
     [Test]
     public async Task UserPage_WithDeptScopeRole_SeesOnlyOwnDeptUsers()
     {
@@ -323,6 +334,7 @@ public class SystemManagementApiTests
 
     // —— 部门管理 ——
 
+    /// <summary>验证部门创建、树形查询与详情接口。</summary>
     [Test]
     public async Task Dept_CreateTreeDetail()
     {
@@ -356,6 +368,7 @@ public class SystemManagementApiTests
         await SendAsync(HttpMethod.Delete, $"/api/system/dept/{deptId}/{await ApiTestSupport.GetVersionAsync<SysDept>(_db, deptId)}", null, _adminToken);
     }
 
+    /// <summary>验证部门父级改为自身后代时被拒绝并返回 400504。</summary>
     [Test]
     public async Task Dept_Update_ParentAsOwnDescendant_Returns400504()
     {
@@ -400,6 +413,7 @@ public class SystemManagementApiTests
         await SendAsync(HttpMethod.Delete, $"/api/system/dept/{d1}/{await ApiTestSupport.GetVersionAsync<SysDept>(_db, d1)}", null, _adminToken);
     }
 
+    /// <summary>验证删除存在子部门或归属用户的部门时被拒绝。</summary>
     [Test]
     public async Task Dept_Delete_WithChildrenOrUsers_Rejected()
     {
@@ -440,6 +454,7 @@ public class SystemManagementApiTests
 
     // —— 角色管理与权限联动 ——
 
+    /// <summary>验证为角色分配菜单后用户权限随之变化且可回显。</summary>
     [Test]
     public async Task Role_AssignMenus_UserPermissionsChangeAndEcho()
     {
@@ -514,6 +529,7 @@ public class SystemManagementApiTests
         Assert.That(deleteRole.StatusCode, Is.EqualTo(HttpStatusCode.OK));
     }
 
+    /// <summary>验证角色创建流程及参数校验规则。</summary>
     [Test]
     public async Task Role_Create_RulesAndValidation()
     {
@@ -551,6 +567,7 @@ public class SystemManagementApiTests
         await SendAsync(HttpMethod.Delete, $"/api/system/role/{roleId}/{await ApiTestSupport.GetVersionAsync<SysRole>(_db, roleId)}", null, _adminToken);
     }
 
+    /// <summary>验证角色更新与删除流程，且超管角色受保护返回 400304。</summary>
     [Test]
     public async Task Role_UpdateAndDelete_SuperAdminProtected_Returns400304()
     {
@@ -576,6 +593,7 @@ public class SystemManagementApiTests
         });
     }
 
+    /// <summary>验证角色下拉列表接口包含 super_admin 角色。</summary>
     [Test]
     public async Task Role_All_ContainsSuperAdminForUserDropdown()
     {
@@ -593,6 +611,7 @@ public class SystemManagementApiTests
 
     // —— 菜单管理 ——
 
+    /// <summary>验证菜单创建、更新、删除流程及参数校验。</summary>
     [Test]
     public async Task Menu_CreateUpdateDelete_FlowWithValidation()
     {

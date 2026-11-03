@@ -4,9 +4,10 @@ using Application.Contracts.Notices;
 
 namespace Application.Contracts.Commands;
 /// <summary>创建通知公告命令（标题必填 ≤ 200、类型 ∈ {1,2}、状态 ∈ {0,1}、内容必填）。</summary>
-/// <param name="Request">创建请求。</param>
 public sealed record NoticeCreateCommand : AggregateCreateCommand<NoticeInputRequest>
 {
+    /// <summary>构造创建通知公告命令。</summary>
+    /// <param name="request">创建请求。</param>
     public NoticeCreateCommand(NoticeInputRequest request) : base(request) { }
 }
 
@@ -21,10 +22,11 @@ public sealed record NoticeDeleteCommand(Guid Id, Guid Version) : AggregateDelet
 public sealed record NoticeRestoreCommand(Guid Id, Guid Version) : AggregateRestoreCommand(Id, Version);
 
 /// <summary>更新通知公告命令（校验规则与创建一致）。</summary>
-/// <param name="Id">公告 Id。</param>
-/// <param name="Version">乐观锁版本号。</param>
-/// <param name="Request">更新请求。</param>
 public sealed record NoticeUpdateCommand : AggregateUpdateCommand<NoticeInputRequest>
 {
+    /// <summary>构造更新通知公告命令。</summary>
+    /// <param name="id">公告 Id。</param>
+    /// <param name="version">乐观锁版本号。</param>
+    /// <param name="request">更新请求。</param>
     public NoticeUpdateCommand(Guid id, Guid version, NoticeInputRequest request) : base(id, version, request) { }
 }

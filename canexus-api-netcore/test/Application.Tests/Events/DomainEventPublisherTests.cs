@@ -112,6 +112,7 @@ public class MediatRDomainEventPublisherTests
 {
     private static readonly Guid UserId = Guid.Parse("00000000-0000-0000-0000-000000000001");
 
+    /// <summary>验证发布领域事件时被包装为非泛型通知信封投递给监听器。</summary>
     [Test]
     public async Task PublishAsync_WrapsDomainEventIntoNotification()
     {
@@ -138,6 +139,7 @@ public class IsolatedNotificationPublisherTests
 {
     private static readonly DomainEventNotification Notification = new(new UserPasswordResetEvent(Guid.NewGuid()));
 
+    /// <summary>验证单个监听器抛异常时其余监听器仍照常执行。</summary>
     [Test]
     public async Task Publish_OneListenerThrows_RemainingListenersStillExecute()
     {
@@ -159,6 +161,7 @@ public class IsolatedNotificationPublisherTests
         Assert.That(executed, Is.EqualTo(new[] { "second" }));
     }
 
+    /// <summary>验证监听器请求取消时取消异常原样传播而不被降级吞掉。</summary>
     [Test]
     public void Publish_CancellationRequested_PropagatesWithoutDegradation()
     {
@@ -185,6 +188,7 @@ public class PermissionCacheInvalidationHandlerTests
 
     private static SysUser CreateUser() => new() { Id = UserId, UserName = "user" };
 
+    /// <summary>验证用户各类事件仅失效对应用户的权限缓存。</summary>
     [Test]
     public async Task Handle_UserEvents_InvalidatesSingleUser()
     {
@@ -206,6 +210,7 @@ public class PermissionCacheInvalidationHandlerTests
         });
     }
 
+    /// <summary>验证角色与菜单各类事件触发全量权限缓存失效。</summary>
     [Test]
     public async Task Handle_RoleAndMenuEvents_InvalidatesAllPermissions()
     {
@@ -229,6 +234,7 @@ public class PermissionCacheInvalidationHandlerTests
         });
     }
 
+    /// <summary>验证非权限领域事件不触发任何权限缓存清理。</summary>
     [Test]
     public async Task Handle_UnrelatedEvent_DoesNothing()
     {
@@ -256,6 +262,7 @@ public class DictCacheInvalidationHandlerTests
 
     private static SysDictData CreateDictData(string dictType) => new() { Id = DictDataId, DictType = dictType };
 
+    /// <summary>验证字典数据创建事件失效对应类型的缓存。</summary>
     [Test]
     public async Task Handle_DictDataCreatedEvent_InvalidatesTypeCache()
     {
@@ -268,6 +275,7 @@ public class DictCacheInvalidationHandlerTests
         Assert.That(cache.RemovedKeys, Is.EqualTo([DictRules.DataTypeCacheKey(DictType)]));
     }
 
+    /// <summary>验证字典类型迁移时新旧类型的缓存均失效。</summary>
     [Test]
     public async Task Handle_DictTypeMigrated_InvalidatesBothCaches()
     {
@@ -281,6 +289,7 @@ public class DictCacheInvalidationHandlerTests
         Assert.That(cache.RemovedKeys, Is.EqualTo([DictRules.DataTypeCacheKey(DictType), DictRules.DataTypeCacheKey("old_type")]));
     }
 
+    /// <summary>验证字典数据删除事件失效对应类型的缓存。</summary>
     [Test]
     public async Task Handle_DictDataDeletedEvent_InvalidatesTypeCache()
     {
@@ -293,6 +302,7 @@ public class DictCacheInvalidationHandlerTests
         Assert.That(cache.RemovedKeys, Is.EqualTo([DictRules.DataTypeCacheKey(DictType)]));
     }
 
+    /// <summary>验证非字典领域事件不触发任何缓存清理。</summary>
     [Test]
     public async Task Handle_UnrelatedEvent_DoesNothing()
     {
@@ -316,6 +326,7 @@ public class ConfigCacheInvalidationHandlerTests
 
     private static SysConfig CreateConfig(string configKey) => new() { Id = ConfigId, ConfigKey = configKey };
 
+    /// <summary>验证配置创建事件失效对应键名的缓存。</summary>
     [Test]
     public async Task Handle_ConfigCreatedEvent_InvalidatesKeyCache()
     {
@@ -328,6 +339,7 @@ public class ConfigCacheInvalidationHandlerTests
         Assert.That(cache.RemovedKeys, Is.EqualTo([ConfigRules.ValueCacheKey(ConfigKey)]));
     }
 
+    /// <summary>验证配置键名变更时新旧键的缓存均失效。</summary>
     [Test]
     public async Task Handle_ConfigKeyRenamed_InvalidatesBothCaches()
     {
@@ -341,6 +353,7 @@ public class ConfigCacheInvalidationHandlerTests
         Assert.That(cache.RemovedKeys, Is.EqualTo([ConfigRules.ValueCacheKey(ConfigKey), ConfigRules.ValueCacheKey("old_key")]));
     }
 
+    /// <summary>验证配置删除事件失效对应键名的缓存。</summary>
     [Test]
     public async Task Handle_ConfigDeletedEvent_InvalidatesKeyCache()
     {
@@ -353,6 +366,7 @@ public class ConfigCacheInvalidationHandlerTests
         Assert.That(cache.RemovedKeys, Is.EqualTo([ConfigRules.ValueCacheKey(ConfigKey)]));
     }
 
+    /// <summary>验证非配置领域事件不触发任何缓存清理。</summary>
     [Test]
     public async Task Handle_UnrelatedEvent_DoesNothing()
     {
@@ -371,6 +385,7 @@ public class ConfigCacheInvalidationHandlerTests
 [TestFixture]
 public class DomainEventAuditHandlerTests
 {
+    /// <summary>验证任意领域事件记录审计日志时不抛出异常。</summary>
     [Test]
     public async Task Handle_AnyEvent_CompletesWithoutError()
     {

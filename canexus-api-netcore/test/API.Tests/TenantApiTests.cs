@@ -36,6 +36,7 @@ public class TenantApiTests
     private static ICache _cache = null!;
     private static string _adminToken = null!;
 
+    /// <summary>测试套件初始化：启动测试宿主并准备种子数据。</summary>
     [OneTimeSetUp]
     public async Task OneTimeSetUpAsync()
     {
@@ -50,7 +51,8 @@ public class TenantApiTests
                     configuration.AddJsonFile(Path.Combine(apiContentRoot, "appsettings.json"), optional: false, reloadOnChange: false);
                     configuration.AddInMemoryCollection(new Dictionary<string, string?>
                     {
-                        ["Database:ConnectionString"] = connectionString
+                        ["Database:ConnectionString"] = connectionString,
+                        ["RateLimit:Enabled"] = "false" // 集成测试共享 127.0.0.1 分区且高频请求，关闭限流避免不稳定
                     });
                 });
             });
@@ -61,6 +63,7 @@ public class TenantApiTests
         _adminToken = await LoginAndGetAccessTokenAsync(AdminUserName, AdminPassword);
     }
 
+    /// <summary>测试套件清理：释放宿主与资源。</summary>
     [OneTimeTearDown]
     public void OneTimeTearDown()
     {
@@ -72,6 +75,7 @@ public class TenantApiTests
 
     // —— 租户管理 CRUD ——/
 
+    /// <summary>验证租户全流程：创建、重复键拒绝、tenantKey 不可变更、存在归属用户时禁止删除。</summary>
     [Test]
     public async Task Tenant_FullFlow_DuplicateAndImmutableAndInUseDelete()
     {
@@ -170,6 +174,7 @@ public class TenantApiTests
 
     // —— 多租户关闭：携带租户头也不过滤 ——/
 
+    /// <summary>验证多租户关闭时携带租户头也不过滤数据。</summary>
     [Test]
     public async Task UserPage_WhenTenancyDisabled_TenantHeaderIgnored()
     {
@@ -324,6 +329,7 @@ public class TenantEnabledApiTests
     private static ICache _cache = null!;
     private static string _adminToken = null!;
 
+    /// <summary>测试套件初始化：启动测试宿主并启用多租户开关。</summary>
     [OneTimeSetUp]
     public async Task OneTimeSetUpAsync()
     {
@@ -339,7 +345,8 @@ public class TenantEnabledApiTests
                     configuration.AddInMemoryCollection(new Dictionary<string, string?>
                     {
                         ["Database:ConnectionString"] = connectionString,
-                        ["MultiTenancy:Enabled"] = "true"
+                        ["MultiTenancy:Enabled"] = "true",
+                        ["RateLimit:Enabled"] = "false" // 集成测试共享 127.0.0.1 分区且高频请求，关闭限流避免不稳定
                     });
                 });
             });
@@ -350,6 +357,7 @@ public class TenantEnabledApiTests
         _adminToken = await LoginAndGetAccessTokenAsync("admin", "admin123");
     }
 
+    /// <summary>测试套件清理：释放宿主与资源。</summary>
     [OneTimeTearDown]
     public void OneTimeTearDown()
     {
@@ -359,6 +367,7 @@ public class TenantEnabledApiTests
         _factory.Dispose();
     }
 
+    /// <summary>验证多租户开启时按租户头过滤并隔离各租户数据。</summary>
     [Test]
     public async Task UserPage_WhenTenancyEnabled_TenantFilterIsolatesData()
     {

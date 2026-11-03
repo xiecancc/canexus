@@ -14,6 +14,7 @@ public class OptionValidationTests
 {
     // —— RegisterOption 管道（错误消息透传 + 具体类型注入） ——
 
+    /// <summary>验证非法配置注册选项时抛出的异常保留字段级错误消息。</summary>
     [Test]
     public void RegisterOption_InvalidConfig_OptionsValidationExceptionKeepsFieldMessage()
     {
@@ -32,6 +33,7 @@ public class OptionValidationTests
         Assert.That(ex!.Message, Does.Contain("Jwt:Secret 长度不得小于 32 字符"));
     }
 
+    /// <summary>验证合法配置注册选项后具体类型可注入且与 IOptions 为同一实例。</summary>
     [Test]
     public void RegisterOption_ValidConfig_ConcreteTypeInjectableAndSameAsIOptions()
     {
@@ -56,12 +58,14 @@ public class OptionValidationTests
 
     // —— CacheOption ——
 
+    /// <summary>验证缓存选项默认值通过校验。</summary>
     [Test]
     public void CacheOption_Defaults_Pass()
     {
         Assert.DoesNotThrow(() => new CacheOption().Validate());
     }
 
+    /// <summary>验证缓存 TTL 为零时校验抛出异常。</summary>
     [Test]
     public void CacheOption_ZeroTtl_Throws()
     {
@@ -71,6 +75,7 @@ public class OptionValidationTests
         Assert.Throws<ArgumentOutOfRangeException>(() => option.Validate());
     }
 
+    /// <summary>验证缓存 TTL 超过一天时校验抛出异常。</summary>
     [Test]
     public void CacheOption_TtlExceedsOneDay_Throws()
     {
@@ -80,6 +85,7 @@ public class OptionValidationTests
         Assert.Throws<ArgumentOutOfRangeException>(() => option.Validate());
     }
 
+    /// <summary>验证本地缓存时长长于分布式缓存时长时校验抛出异常。</summary>
     [Test]
     public void CacheOption_LocalLongerThanDistributed_Throws()
     {
@@ -90,6 +96,7 @@ public class OptionValidationTests
         Assert.That(ex!.Message, Does.Contain("不应长于"));
     }
 
+    /// <summary>验证未启用 Redis 且连接配置为空时校验通过。</summary>
     [Test]
     public void CacheOption_RedisDisabled_EmptyRedisConfiguration_Passes()
     {
@@ -98,6 +105,7 @@ public class OptionValidationTests
         Assert.DoesNotThrow(() => option.Validate());
     }
 
+    /// <summary>验证启用 Redis 但连接配置为空时校验抛出异常。</summary>
     [Test]
     public void CacheOption_RedisEnabled_EmptyRedisConfiguration_Throws()
     {
@@ -106,6 +114,7 @@ public class OptionValidationTests
         Assert.Throws<ArgumentException>(() => option.Validate());
     }
 
+    /// <summary>验证最大负载字节数为零时校验抛出异常。</summary>
     [Test]
     public void CacheOption_ZeroMaximumPayloadBytes_Throws()
     {
@@ -116,6 +125,7 @@ public class OptionValidationTests
 
     // —— DatabaseOption ——
 
+    /// <summary>验证数据库连接字符串为空时校验抛出异常。</summary>
     [Test]
     public void DatabaseOption_EmptyConnectionString_Throws()
     {
@@ -125,6 +135,7 @@ public class OptionValidationTests
         Assert.That(ex!.Message, Does.Contain("ConnectionString 不能为空"));
     }
 
+    /// <summary>验证数据库选项默认值通过校验。</summary>
     [Test]
     public void DatabaseOption_Defaults_Pass()
     {
@@ -133,6 +144,7 @@ public class OptionValidationTests
         Assert.DoesNotThrow(() => option.Validate());
     }
 
+    /// <summary>验证命令超时时间超出范围时校验抛出异常。</summary>
     [Test]
     public void DatabaseOption_CommandTimeOutOutOfRange_Throws()
     {
@@ -141,6 +153,7 @@ public class OptionValidationTests
         Assert.Throws<ArgumentOutOfRangeException>(() => option.Validate());
     }
 
+    /// <summary>验证数据库类型取值非法时校验抛出异常。</summary>
     [Test]
     public void DatabaseOption_InvalidDbType_Throws()
     {
@@ -155,6 +168,7 @@ public class OptionValidationTests
 
     // —— JwtOption ——
 
+    /// <summary>验证 JWT 配置合法时通过校验。</summary>
     [Test]
     public void JwtOption_ValidConfig_Passes()
     {
@@ -163,6 +177,7 @@ public class OptionValidationTests
         Assert.DoesNotThrow(() => option.Validate());
     }
 
+    /// <summary>验证 JWT 密钥过短时校验抛出异常。</summary>
     [Test]
     public void JwtOption_ShortSecret_Throws()
     {
@@ -172,6 +187,7 @@ public class OptionValidationTests
         Assert.That(ex!.Message, Does.Contain("不得小于 32 字符"));
     }
 
+    /// <summary>验证 accessToken 有效期超过一天时校验抛出异常。</summary>
     [Test]
     public void JwtOption_AccessTokenMinutesExceedsOneDay_Throws()
     {
@@ -184,6 +200,7 @@ public class OptionValidationTests
         Assert.Throws<ArgumentOutOfRangeException>(() => option.Validate());
     }
 
+    /// <summary>验证刷新令牌有效期超过一年时校验抛出异常。</summary>
     [Test]
     public void JwtOption_RefreshTokenDaysExceedsOneYear_Throws()
     {
@@ -196,6 +213,7 @@ public class OptionValidationTests
         Assert.Throws<ArgumentOutOfRangeException>(() => option.Validate());
     }
 
+    /// <summary>验证 JWT 签发者为空时校验抛出异常。</summary>
     [Test]
     public void JwtOption_EmptyIssuer_Throws()
     {
@@ -204,6 +222,127 @@ public class OptionValidationTests
             Issuer = string.Empty,
             Secret = "valid-secret-key-0123456789-abcdef"
         };
+
+        Assert.Throws<ArgumentException>(() => option.Validate());
+    }
+
+    // —— CorsOption ——
+
+    /// <summary>验证未启用 CORS 且允许来源为空时校验通过。</summary>
+    [Test]
+    public void CorsOption_Disabled_EmptyOrigins_Passes()
+    {
+        var option = new CorsOption { Enabled = false, AllowedOrigins = [] };
+
+        Assert.DoesNotThrow(() => option.Validate());
+    }
+
+    /// <summary>验证启用 CORS 但允许来源为空时校验抛出异常。</summary>
+    [Test]
+    public void CorsOption_Enabled_EmptyOrigins_Throws()
+    {
+        var option = new CorsOption { Enabled = true, AllowedOrigins = [] };
+
+        var ex = Assert.Throws<ArgumentException>(() => option.Validate());
+        Assert.That(ex!.Message, Does.Contain("AllowedOrigins 不能为空"));
+    }
+
+    /// <summary>验证启用 CORS 且来源含通配符时校验抛出异常。</summary>
+    [Test]
+    public void CorsOption_Enabled_WildcardOrigin_Throws()
+    {
+        var option = new CorsOption { Enabled = true, AllowedOrigins = ["*"] };
+
+        var ex = Assert.Throws<ArgumentException>(() => option.Validate());
+        Assert.That(ex!.Message, Does.Contain("不允许包含"));
+    }
+
+    /// <summary>验证启用 CORS 且来源合法时通过校验。</summary>
+    [Test]
+    public void CorsOption_Enabled_ValidOrigins_Passes()
+    {
+        var option = new CorsOption { Enabled = true, AllowedOrigins = ["http://localhost:5173"] };
+
+        Assert.DoesNotThrow(() => option.Validate());
+    }
+
+    /// <summary>验证预检请求最大缓存时长为零时校验抛出异常。</summary>
+    [Test]
+    public void CorsOption_ZeroPreflightMaxAge_Throws()
+    {
+        var option = new CorsOption { Enabled = true, AllowedOrigins = ["http://localhost:5173"], PreflightMaxAgeSeconds = 0 };
+
+        Assert.Throws<ArgumentException>(() => option.Validate());
+    }
+
+    // —— RateLimitOption ——
+
+    /// <summary>验证限流选项默认值通过校验。</summary>
+    [Test]
+    public void RateLimitOption_Defaults_Pass()
+    {
+        Assert.DoesNotThrow(() => new RateLimitOption().Validate());
+    }
+
+    /// <summary>验证启用限流但登录接口允许次数为零时校验抛出异常。</summary>
+    [Test]
+    public void RateLimitOption_Enabled_ZeroAuthPermitLimit_Throws()
+    {
+        var option = new RateLimitOption { Enabled = true, AuthPermitLimit = 0 };
+
+        Assert.Throws<ArgumentException>(() => option.Validate());
+    }
+
+    /// <summary>验证启用限流但全局限流次数为负时校验抛出异常。</summary>
+    [Test]
+    public void RateLimitOption_Enabled_NegativeGlobalPermitLimit_Throws()
+    {
+        var option = new RateLimitOption { Enabled = true, GlobalPermitLimit = -1 };
+
+        Assert.Throws<ArgumentException>(() => option.Validate());
+    }
+
+    /// <summary>验证全局限流窗口时长为零时校验抛出异常。</summary>
+    [Test]
+    public void RateLimitOption_GlobalLimitWithZeroWindow_Throws()
+    {
+        var option = new RateLimitOption { Enabled = true, GlobalPermitLimit = 100, GlobalWindowSeconds = 0 };
+
+        Assert.Throws<ArgumentException>(() => option.Validate());
+    }
+
+    /// <summary>验证未启用限流时忽略非法取值并通过校验。</summary>
+    [Test]
+    public void RateLimitOption_Disabled_IgnoresInvalidValues_Passes()
+    {
+        var option = new RateLimitOption { Enabled = false, AuthPermitLimit = 0, AuthWindowSeconds = 0 };
+
+        Assert.DoesNotThrow(() => option.Validate());
+    }
+
+    // —— HttpsOption ——
+
+    /// <summary>验证 HTTPS 选项默认值通过校验。</summary>
+    [Test]
+    public void HttpsOption_Defaults_Pass()
+    {
+        Assert.DoesNotThrow(() => new HttpsOption().Validate());
+    }
+
+    /// <summary>验证 HTTPS 端口号超出范围时校验抛出异常。</summary>
+    [Test]
+    public void HttpsOption_InvalidPort_Throws()
+    {
+        var option = new HttpsOption { HttpsPort = 70_000 };
+
+        Assert.Throws<ArgumentException>(() => option.Validate());
+    }
+
+    /// <summary>验证 HSTS 最大有效期超出范围时校验抛出异常。</summary>
+    [Test]
+    public void HttpsOption_HstsMaxAgeOutOfRange_Throws()
+    {
+        var option = new HttpsOption { HstsMaxAgeDays = 731 };
 
         Assert.Throws<ArgumentException>(() => option.Validate());
     }

@@ -7,15 +7,17 @@ namespace Application.Contracts.Queries;
 public sealed record RoleQueryDropdown() : AggregateQueryDropdown<RoleDropdownRequest, RoleDropdownResponse>(new RoleDropdownRequest());
 
 /// <summary>获取角色详情（含授权菜单 Id 集合，前端用作菜单授权回显）。</summary>
-/// <param name="Id">角色 Id。</param>
 public sealed record RoleQueryDetail : AggregateQueryDetail<RoleDetailResponse>
 {
+    /// <summary>构造角色详情查询。</summary>
+    /// <param name="id">角色 Id。</param>
     public RoleQueryDetail(Guid id) : base(id) { }
 }
 
 /// <summary>分页查询角色（keyword 匹配角色名称 / 角色权限字符；status 精确）。</summary>
-/// <param name="Request">分页与筛选条件。</param>
 public sealed record RoleQueryPaged : AggregateQueryPaged<RolePageRequest, RolePagedResponse>
 {
+    /// <summary>构造角色分页查询。</summary>
+    /// <param name="request">分页与筛选条件。</param>
     public RoleQueryPaged(RolePageRequest request) : base(request) { }
 }

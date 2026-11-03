@@ -12,7 +12,7 @@ namespace Domain.Shared.Json;
 /// 叠加中文不转义（UnsafeRelaxedJsonEscaping），HTTP 响应与日志中的中文保持可读；</item>
 /// <item><see cref="Serialize{TValue}(TValue)"/> / <see cref="Deserialize{TValue}(string)"/>：标准版本，
 /// 非法输入抛 JsonException，由调用方按自身异常策略处理（请求链路上的异常统一进入全局异常处理）；</item>
-/// <item><see cref="TryDeserialize{TValue}(string?, out TValue?)"/>：容错版本，解析失败返回 false 不抛异常，
+/// <item><see cref="TryDeserialize{TValue}"/>：容错版本，解析失败返回 false 不抛异常，
 /// 适用于日志、外部系统输入等不可信数据的防御性解析。</item>
 /// </list>
 /// </summary>

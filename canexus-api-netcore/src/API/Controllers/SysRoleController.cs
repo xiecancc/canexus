@@ -63,6 +63,7 @@ public class SysRoleController(ISender sender) : ControllerBase
     /// <summary>更新角色（内置 super_admin 角色整体拒绝编辑）。</summary>
     /// <param name="id">角色 Id。</param>
     /// <param name="request">更新请求。</param>
+    /// <param name="version">乐观锁版本号。</param>
     /// <returns>统一响应。</returns>
     [HttpPut("{id:guid}/{version:guid}")]
     [RequirePermission("system:role:edit")]

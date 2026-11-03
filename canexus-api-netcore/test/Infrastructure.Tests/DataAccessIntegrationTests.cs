@@ -33,6 +33,7 @@ public class DataAccessIntegrationTests
     private ITenantContext _tenantContext = null!;
     private IDataFilter _dataFilter = null!;
 
+    /// <summary>一次性初始化：按生产口径装配数据访问并建库建表。</summary>
     [OneTimeSetUp]
     public async Task OneTimeSetUpAsync()
     {
@@ -70,6 +71,7 @@ public class DataAccessIntegrationTests
         await initializer.InitializeAsync();
     }
 
+    /// <summary>一次性清理：释放客户端与服务提供程序。</summary>
     [OneTimeTearDown]
     public void OneTimeTearDown()
     {
@@ -77,6 +79,7 @@ public class DataAccessIntegrationTests
         _provider.Dispose();
     }
 
+    /// <summary>每个测试前清空数据并重置租户与过滤上下文，保证测试独立。</summary>
     [SetUp]
     public async Task SetUpAsync()
     {
@@ -89,6 +92,7 @@ public class DataAccessIntegrationTests
         _dataFilter.TenantFilterEnabled = true;
     }
 
+    /// <summary>验证 CodeFirst 初始化后三张测试表均已创建。</summary>
     [Test]
     public async Task CodeFirst_CreatesDatabaseAndTables()
     {
@@ -103,6 +107,7 @@ public class DataAccessIntegrationTests
         await Task.CompletedTask;
     }
 
+    /// <summary>验证工作单元事务内异常时自动回滚，插入数据被丢弃。</summary>
     [Test]
     public async Task UnitOfWork_ExceptionRollback_DiscardsInsertedData()
     {
@@ -119,6 +124,7 @@ public class DataAccessIntegrationTests
         await Task.CompletedTask;
     }
 
+    /// <summary>验证工作单元事务正常结束时提交，插入数据持久化。</summary>
     [Test]
     public async Task UnitOfWork_Commit_PersistsInsertedData()
     {
@@ -133,6 +139,7 @@ public class DataAccessIntegrationTests
         Assert.That(count, Is.EqualTo(1));
     }
 
+    /// <summary>验证插入与更新时审计字段自动填充且版本令牌轮换。</summary>
     [Test]
     public async Task InsertAndUpdate_FillsAuditFields()
     {
@@ -170,6 +177,7 @@ public class DataAccessIntegrationTests
         });
     }
 
+    /// <summary>验证持过期版本令牌提交更新时抛出并发冲突异常。</summary>
     [Test]
     public async Task Update_StaleVersion_ThrowsConcurrencyConflict()
     {
@@ -189,6 +197,7 @@ public class DataAccessIntegrationTests
         await Task.CompletedTask;
     }
 
+    /// <summary>验证软删除后默认查询不可见但物理行保留并标记已删除。</summary>
     [Test]
     public async Task SoftDelete_MarkedDeleted_InvisibleByDefault()
     {
@@ -211,6 +220,7 @@ public class DataAccessIntegrationTests
         });
     }
 
+    /// <summary>验证关闭软删除过滤开关后已删除数据恢复可见。</summary>
     [Test]
     public async Task SoftDelete_DisabledFilter_MakesDeletedVisible()
     {
@@ -225,6 +235,7 @@ public class DataAccessIntegrationTests
         Assert.That(count, Is.EqualTo(1), "关闭过滤开关后已删除数据应可见");
     }
 
+    /// <summary>验证按条件删除聚合时被重写为软删除并兜底填充审计与版本。</summary>
     [Test]
     public async Task DeleteByPredicate_Aggregate_SoftDelete()
     {
@@ -253,6 +264,7 @@ public class DataAccessIntegrationTests
         });
     }
 
+    /// <summary>验证软删除轮换版本令牌后旧快照实体的更新被并发冲突拒绝。</summary>
     [Test]
     public async Task SoftDelete_RotatesVersion_StaleEntityUpdateRejected()
     {
@@ -274,6 +286,7 @@ public class DataAccessIntegrationTests
         Assert.That(physicalCount, Is.EqualTo(1), "软删除标记不应被旧令牌更新翻转");
     }
 
+    /// <summary>验证软删除实体恢复后默认查询重新可见。</summary>
     [Test]
     public async Task Restore_SoftDeletedEntity_BecomesVisibleAgain()
     {
@@ -295,6 +308,7 @@ public class DataAccessIntegrationTests
         Assert.That(reloaded!.IsDeleted, Is.False);
     }
 
+    /// <summary>验证版本令牌仅在 OptLock 实体更新路径自动轮换，普通与按列更新均不维护。</summary>
     [Test]
     public async Task Version_AutoUpdateMatrix_OnlyOptLockRotates()
     {
@@ -338,6 +352,7 @@ public class DataAccessIntegrationTests
         return Guid.Parse(Convert.ToString(value)!);
     }
 
+    /// <summary>验证按主键集合与条件谓词的批量软删除及恢复均幂等正确。</summary>
     [Test]
     public async Task DeleteAndRestore_ByIdsAndPredicate_BatchSoftDelete()
     {
@@ -378,6 +393,7 @@ public class DataAccessIntegrationTests
         });
     }
 
+    /// <summary>验证租户过滤钩子按当前租户隔离数据可见性。</summary>
     [Test]
     public async Task TenantFilter_IsolatesDataByCurrentTenant()
     {
@@ -401,6 +417,7 @@ public class DataAccessIntegrationTests
         });
     }
 
+    /// <summary>验证分页查询返回正确的页数据与总数。</summary>
     [Test]
     public async Task GetPagedAsync_ReturnsCorrectPageAndTotal()
     {

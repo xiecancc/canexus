@@ -5,9 +5,10 @@ using Domain.Shared.Enums;
 
 namespace Application.Contracts.Queries;
 /// <summary>获取部门详情。</summary>
-/// <param name="Id">部门 Id。</param>
 public sealed record DeptQueryDetail : AggregateQueryDetail<DeptDetailResponse>
 {
+    /// <summary>构造部门详情查询。</summary>
+    /// <param name="id">部门 Id。</param>
     public DeptQueryDetail(Guid id) : base(id) { }
 }
 

@@ -20,6 +20,7 @@ public class ConfigValidatorTests
         });
     }
 
+    /// <summary>验证参数键名为空白时校验产生失败。</summary>
     [Test]
     public void Validate_BlankKey_HasFailure()
     {
@@ -27,6 +28,7 @@ public class ConfigValidatorTests
         result.ShouldHaveValidationErrorFor(command => command.Request.ConfigKey);
     }
 
+    /// <summary>验证参数键名超长（超过 100 字符）时校验产生失败。</summary>
     [Test]
     public void Validate_TooLongKey_HasFailure()
     {
@@ -34,6 +36,7 @@ public class ConfigValidatorTests
         result.ShouldHaveValidationErrorFor(command => command.Request.ConfigKey);
     }
 
+    /// <summary>验证参数键名合法时校验不产生任何失败。</summary>
     [Test]
     public void Validate_ValidKey_NoFailures()
     {

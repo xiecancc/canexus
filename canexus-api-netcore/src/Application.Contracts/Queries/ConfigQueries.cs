@@ -9,8 +9,9 @@ namespace Application.Contracts.Queries;
 public sealed record ConfigQueryByKey(string ConfigKey) : Request<string>;
 
 /// <summary>分页查询参数配置（keyword 模糊匹配名称 / 键名 / 键值）。</summary>
-/// <param name="Request">分页与筛选条件。</param>
 public sealed record ConfigQueryPaged : AggregateQueryPaged<ConfigPageRequest, ConfigPagedResponse>
 {
+    /// <summary>构造参数配置分页查询。</summary>
+    /// <param name="request">分页与筛选条件。</param>
     public ConfigQueryPaged(ConfigPageRequest request) : base(request) { }
 }

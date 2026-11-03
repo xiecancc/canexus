@@ -54,6 +54,7 @@ public class SysNoticeController(ISender sender) : ControllerBase
     /// <summary>更新通知公告（校验规则与创建一致）。</summary>
     /// <param name="id">公告 Id。</param>
     /// <param name="request">更新请求。</param>
+    /// <param name="version">乐观锁版本号。</param>
     /// <returns>统一响应。</returns>
     [HttpPut("{id:guid}/{version:guid}")]
     [RequirePermission("system:notice:edit")]

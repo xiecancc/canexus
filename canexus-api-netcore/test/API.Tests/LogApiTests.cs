@@ -34,6 +34,7 @@ public class LogApiTests
     private static ICache _cache = null!;
     private static string _adminToken = null!;
 
+    /// <summary>测试套件初始化：启动测试宿主并准备种子数据。</summary>
     [OneTimeSetUp]
     public async Task OneTimeSetUpAsync()
     {
@@ -48,7 +49,8 @@ public class LogApiTests
                     configuration.AddJsonFile(Path.Combine(apiContentRoot, "appsettings.json"), optional: false, reloadOnChange: false);
                     configuration.AddInMemoryCollection(new Dictionary<string, string?>
                     {
-                        ["Database:ConnectionString"] = connectionString
+                        ["Database:ConnectionString"] = connectionString,
+                        ["RateLimit:Enabled"] = "false" // 集成测试共享 127.0.0.1 分区且高频请求，关闭限流避免不稳定
                     });
                 });
             });
@@ -63,6 +65,7 @@ public class LogApiTests
         _adminToken = await LoginAndGetAccessTokenAsync(AdminUserName, AdminPassword);
     }
 
+    /// <summary>测试套件清理：释放宿主与资源。</summary>
     [OneTimeTearDown]
     public void OneTimeTearDown()
     {
@@ -74,6 +77,7 @@ public class LogApiTests
 
     // —— 操作日志写入与查询 ——
 
+    /// <summary>验证创建字典类型时操作日志被写入且可分页查询。</summary>
     [Test]
     public async Task OperLog_CreateDictType_WrittenAndQueryable()
     {
@@ -109,6 +113,7 @@ public class LogApiTests
         await SendAsync(HttpMethod.Delete, $"/api/system/dict-type/{typeId}/{await ApiTestSupport.GetVersionAsync<SysDictType>(_db, typeId)}", null);
     }
 
+    /// <summary>验证操作日志中敏感字段（密码等）被脱敏为六颗星且不出现明文。</summary>
     [Test]
     public async Task OperLog_SensitiveFields_MaskedAsSixStars()
     {
@@ -152,6 +157,7 @@ public class LogApiTests
         await SendAsync(HttpMethod.Delete, $"/api/system/user/{userId}/{await ApiTestSupport.GetVersionAsync<SysUser>(_db, userId)}", null);
     }
 
+    /// <summary>验证失败请求记录错误信息且状态记为失败（0）。</summary>
     [Test]
     public async Task OperLog_FailedRequest_RecordsErrorAndStatus0()
     {
@@ -188,6 +194,7 @@ public class LogApiTests
         await SendAsync(HttpMethod.Delete, $"/api/system/dict-type/{typeId}/{await ApiTestSupport.GetVersionAsync<SysDictType>(_db, typeId)}", null);
     }
 
+    /// <summary>验证清空操作日志接口移除全部日志记录。</summary>
     [Test]
     public async Task OperLog_Clean_RemovesAllLogs()
     {
@@ -205,6 +212,7 @@ public class LogApiTests
 
     // —— 登录日志 ——
 
+    /// <summary>验证登录日志分页查询、时间范围过滤及清空功能。</summary>
     [Test]
     public async Task LoginLog_PageQuery_AndClean()
     {

@@ -60,6 +60,15 @@ public class Program
             // JWT Bearer 认证与授权
             builder.Services.AddJwtAuthentication();
 
+            // HTTPS 安全传输参数（HSTS max-age 与重定向端口；经 UseApiHttps 挂载，HttpOption 控制开关）
+            builder.Services.AddApiHttps();
+
+            // CORS 跨域策略（命名策略，经 UseApiCors 挂载；CorsOption.Enabled=false 时不生效）
+            builder.Services.AddApiCors();
+
+            // 接口限流：全局可选 + 认证端点（验证码/登录/刷新令牌）固定窗口，被限流返回统一 Result 结构
+            builder.Services.AddApiRateLimiting();
+
             // 应用服务：认证、菜单路由、验证码、权限校验、数据范围过滤
             builder.Services.AddApplicationServices();
 
@@ -89,6 +98,15 @@ public class Program
 
             // 请求日志（结构化记录方法、路径、状态码与耗时）
             app.UseSerilogRequestLogging();
+
+            // HTTPS 安全传输：HSTS（仅非 Development 且 HstsEnabled 开启时）+ HTTP 强制重定向（RedirectEnabled 开启时）
+            app.UseApiHttps();
+
+            // CORS 跨域中间件（须在鉴权之前，正确处理预检 OPTIONS 请求；CorsOption.Enabled=false 时不挂载）
+            app.UseApiCors();
+
+            // 接口限流中间件（须在鉴权之前，避免匿名端点被无限请求打满；RateLimitOption.Enabled=false 时不挂载）
+            app.UseApiRateLimiter();
 
             // 租户解析中间件（MultiTenancy:Enabled=true 时读取 X-Tenant-Id 请求头，需在鉴权之前注册）
             app.UseMiddleware<TenantResolutionMiddleware>();

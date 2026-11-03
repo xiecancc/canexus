@@ -35,7 +35,8 @@ namespace Infrastructure;
 /// <item>认证授权基座：<see cref="AddSecurity"/>；</item>
 /// <item>定时任务调度：<see cref="AddScheduling"/>；</item>
 /// <item>双层缓存：<see cref="AddCaching"/>（HybridCache + Redis）；</item>
-/// <item>数据访问：<see cref="AddDataAccess"/>（SqlSugar 客户端 / 仓储 / 工作单元，客户端构造等行为逻辑见 DataAccess 模块的 SqlSugarClientFactory）。</item>
+/// <item>数据访问：<see cref="AddDataAccess"/>（SqlSugar 客户端 / 仓储 / 工作单元，客户端构造等行为逻辑见 DataAccess 模块的 SqlSugarClientFactory）；</item>
+/// <item>CORS / 接口限流 / HTTPS 的服务与管道注册位于 API 层的 SecurityDependencyExtensions（宿主层横切关注点）。</item>
 /// </list>
 /// </summary>
 public static class DependencyExtensions
@@ -89,6 +90,9 @@ public static class DependencyExtensions
         services.RegisterOption<CacheOption>(configuration, "Cache");
         services.RegisterOption<DatabaseOption>(configuration, "Database");
         services.RegisterOption<JwtOption>(configuration, "Jwt");
+        services.RegisterOption<CorsOption>(configuration, "Cors");
+        services.RegisterOption<RateLimitOption>(configuration, "RateLimit");
+        services.RegisterOption<HttpsOption>(configuration, "Https");
 
         return services;
     }

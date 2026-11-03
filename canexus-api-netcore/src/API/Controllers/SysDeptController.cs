@@ -55,6 +55,7 @@ public class SysDeptController(ISender sender) : ControllerBase
     /// <summary>更新部门（父级不可选自身或自己的后代）。</summary>
     /// <param name="id">部门 Id。</param>
     /// <param name="request">更新请求。</param>
+    /// <param name="version">乐观锁版本号。</param>
     /// <returns>统一响应。</returns>
     [HttpPut("{id:guid}/{version:guid}")]
     [RequirePermission("system:dept:edit")]

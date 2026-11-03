@@ -41,6 +41,7 @@ public class AuthApiIntegrationTests
     private static IPasswordHasher _passwordHasher = null!;
     private static string _adminAccessToken = null!;
 
+    /// <summary>测试套件初始化：启动测试宿主并准备种子数据。</summary>
     [OneTimeSetUp]
     public async Task OneTimeSetUpAsync()
     {
@@ -56,7 +57,8 @@ public class AuthApiIntegrationTests
                     configuration.AddJsonFile(Path.Combine(apiContentRoot, "appsettings.json"), optional: false, reloadOnChange: false);
                     configuration.AddInMemoryCollection(new Dictionary<string, string?>
                     {
-                        ["Database:ConnectionString"] = connectionString
+                        ["Database:ConnectionString"] = connectionString,
+                        ["RateLimit:Enabled"] = "false" // 集成测试共享 127.0.0.1 分区且高频请求，关闭限流避免不稳定
                     });
                 });
             });
@@ -77,6 +79,7 @@ public class AuthApiIntegrationTests
         _adminAccessToken = await LoginAndGetAccessTokenAsync(AdminUserName, AdminPassword);
     }
 
+    /// <summary>测试套件清理：释放宿主与资源。</summary>
     [OneTimeTearDown]
     public void OneTimeTearDown()
     {
@@ -88,6 +91,7 @@ public class AuthApiIntegrationTests
 
     // —— 验证码 ——
 
+    /// <summary>验证验证码接口返回 SVG 格式的 base64 data URI。</summary>
     [Test]
     public async Task Captcha_ReturnsSvgDataUri()
     {
@@ -106,6 +110,7 @@ public class AuthApiIntegrationTests
 
     // —— 登录 ——
 
+    /// <summary>验证验证码错误时登录返回 400 及业务错误码 40104。</summary>
     [Test]
     public async Task Login_WrongCaptcha_Returns400WithBusinessCode()
     {
@@ -127,6 +132,7 @@ public class AuthApiIntegrationTests
         });
     }
 
+    /// <summary>验证密码错误时登录返回 401 并写入失败登录日志。</summary>
     [Test]
     public async Task Login_WrongPassword_Returns401AndWritesLoginLog()
     {
@@ -155,6 +161,7 @@ public class AuthApiIntegrationTests
         ClearLoginFailState(AdminUserName);
     }
 
+    /// <summary>验证密码连续错误五次后账号被锁定。</summary>
     [Test]
     public async Task Login_FiveConsecutiveFailures_LocksAccount()
     {
@@ -191,6 +198,7 @@ public class AuthApiIntegrationTests
         ClearLoginFailState(TestUserName);
     }
 
+    /// <summary>验证登录成功后返回包含访问令牌与刷新令牌的令牌对。</summary>
     [Test]
     public async Task Login_Success_ReturnsTokenPair()
     {
@@ -218,6 +226,7 @@ public class AuthApiIntegrationTests
 
     // —— 刷新令牌轮换 ——
 
+    /// <summary>验证刷新令牌会轮换出新令牌且旧刷新令牌立即失效。</summary>
     [Test]
     public async Task Refresh_RotatesToken_OldRefreshTokenFails()
     {
@@ -248,6 +257,7 @@ public class AuthApiIntegrationTests
 
     // —— 登出 ——
 
+    /// <summary>验证登出后刷新令牌被吊销且无法再用于刷新。</summary>
     [Test]
     public async Task Logout_RevokesRefreshToken()
     {
@@ -264,6 +274,7 @@ public class AuthApiIntegrationTests
 
     // —— 用户信息 ——
 
+    /// <summary>验证未携带令牌访问用户信息接口返回 401 及统一响应结构。</summary>
     [Test]
     public async Task UserInfo_WithoutToken_Returns401WithUnifiedBody()
     {
@@ -278,6 +289,7 @@ public class AuthApiIntegrationTests
         });
     }
 
+    /// <summary>验证携带过期令牌访问用户信息接口返回 401 及过期错误码。</summary>
     [Test]
     public async Task UserInfo_WithExpiredToken_Returns401WithExpiredCode()
     {
@@ -291,6 +303,7 @@ public class AuthApiIntegrationTests
         Assert.That(body.RootElement.GetProperty("code").GetInt32(), Is.Not.EqualTo(200));
     }
 
+    /// <summary>验证超管令牌获取用户信息时返回 super_admin 角色与通配权限标识。</summary>
     [Test]
     public async Task UserInfo_WithAdminToken_ReturnsSuperAdminRolesAndWildcardPermissions()
     {
@@ -312,6 +325,7 @@ public class AuthApiIntegrationTests
 
     // —— 路由树 ——
 
+    /// <summary>验证路由接口返回按权限过滤后的菜单树。</summary>
     [Test]
     public async Task Routes_ReturnsFilteredMenuTree()
     {
@@ -356,6 +370,7 @@ public class AuthApiIntegrationTests
 
     // —— RequirePermission 端点 ——
 
+    /// <summary>验证未携带令牌访问受保护端点返回 401。</summary>
     [Test]
     public async Task ProtectedEndpoint_WithoutToken_Returns401()
     {
@@ -364,6 +379,7 @@ public class AuthApiIntegrationTests
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Unauthorized));
     }
 
+    /// <summary>验证超管访问受保护端点返回 200。</summary>
     [Test]
     public async Task ProtectedEndpoint_WithSuperAdmin_Returns200()
     {
@@ -377,6 +393,7 @@ public class AuthApiIntegrationTests
         });
     }
 
+    /// <summary>验证无权限用户访问受保护端点返回 403。</summary>
     [Test]
     public async Task ProtectedEndpoint_WithNoPermissionUser_Returns403()
     {

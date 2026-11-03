@@ -55,6 +55,5 @@ public sealed class DictTypeCreateCommandValidator() :
 public sealed class DictTypeUpdateCommandValidator() :
     UpdateCommandValidator<DictTypeUpdateCommand, DictTypeInputRequest>(new DictTypeRequestValidator<DictTypeInputRequest>());
 
-/// <summary>删除字典数据 / 字典类型命令验证器（乐观锁版本号入口兜底）。</summary>
-public sealed class DictDataDeleteCommandValidator() : DeleteCommandValidator<DictDataDeleteCommand>;
+/// <summary>删除字典类型命令验证器（乐观锁版本号入口兜底）；DictType 内置保护由处理器校验。</summary>
 public sealed class DictTypeDeleteCommandValidator() : DeleteCommandValidator<DictTypeDeleteCommand>;

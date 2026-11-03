@@ -25,7 +25,7 @@ public enum CacheTtl
 
     /// <summary>不过期档：L1 / L2 均不设置过期时间，条目长期驻留（仅经显式失效或容量淘汰移除）。
     /// 适用于过期会破坏正确性的元数据——如权限全局版本号：过期回退 0 会导致旧版本缓存 key 复活。
-    /// 本档位不参与 <see cref="CacheOption"/> 档位配置，固定为不过期。</summary>
+    /// 本档位不参与 <see cref="Infrastructure.Shared.Options.CacheOption"/> 档位配置，固定为不过期。</summary>
     Never,
 }
 

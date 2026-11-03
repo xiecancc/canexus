@@ -5,9 +5,10 @@ using Domain.Shared.Enums;
 
 namespace Application.Contracts.Queries;
 /// <summary>获取菜单详情。</summary>
-/// <param name="Id">菜单 Id。</param>
 public sealed record MenuQueryDetail : AggregateQueryDetail<MenuDetailResponse>
 {
+    /// <summary>构造菜单详情查询。</summary>
+    /// <param name="id">菜单 Id。</param>
     public MenuQueryDetail(Guid id) : base(id) { }
 }
 

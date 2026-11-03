@@ -6,6 +6,8 @@ using Domain.Shared.Results;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
+using static API.Extensions.SecurityDependencyExtensions;
 
 namespace API.Controllers;
 /// <summary>认证授权接口：验证码、登录、刷新令牌、登出、用户信息与路由。</summary>
@@ -19,6 +21,7 @@ public class AuthController(ISender sender) : ControllerBase
     /// <returns>验证码 Id 与图片。</returns>
     [HttpGet("captcha")]
     [AllowAnonymous]
+    [EnableRateLimiting(AuthRateLimitPolicy)]
     public async Task<IActionResult> Captcha()
     {
         return Ok(Result.Ok(await sender.Send(new AuthQueryCaptcha())));
@@ -29,6 +32,7 @@ public class AuthController(ISender sender) : ControllerBase
     /// <returns>令牌对（accessToken / refreshToken / expiresIn）。</returns>
     [HttpPost("login")]
     [AllowAnonymous]
+    [EnableRateLimiting(AuthRateLimitPolicy)]
     public async Task<IActionResult> Login([FromBody] LoginRequest request)
     {
         var ip = HttpContext.Connection.RemoteIpAddress?.ToString();
@@ -42,6 +46,7 @@ public class AuthController(ISender sender) : ControllerBase
     /// <returns>新令牌对。</returns>
     [HttpPost("refresh")]
     [AllowAnonymous]
+    [EnableRateLimiting(AuthRateLimitPolicy)]
     public async Task<IActionResult> Refresh([FromBody] RefreshRequest request)
     {
         var data = await sender.Send(new AuthRefreshTokenCommand(request.RefreshToken));

@@ -54,6 +54,7 @@ public class SysDictDataController(ISender sender) : ControllerBase
     /// <summary>更新字典数据（类型可迁移，迁移后新旧类型缓存均失效）。</summary>
     /// <param name="id">字典数据 Id。</param>
     /// <param name="request">更新请求。</param>
+    /// <param name="version">乐观锁版本号。</param>
     /// <returns>统一响应。</returns>
     [HttpPut("{id:guid}/{version:guid}")]
     [RequirePermission("system:dict:edit")]

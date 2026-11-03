@@ -5,7 +5,7 @@ namespace Domain.Events;
 /// <summary>
 /// 聚合级事件基类族：按变更类型（创建 / 修改 / 删除 / 恢复）划分的泛型事件基类，
 /// 事件类本身即表达变更类型，各基类按语义携带对应聚合状态
-/// （<see cref="DomainEvent{TDomain}.Domain"/> 为创建后 / 变更后 / 删除前 / 恢复后状态，
+/// （<see cref="DomainEvent{TDomain}.NewEntity"/> 为创建后 / 变更后 / 删除前 / 恢复后状态，
 /// 修改类另以 <see cref="AggregateUpdatedEvent{TAggregate}.OldEntity"/> 携带变更前快照）。
 /// 状态以聚合实体（浅拷贝快照）承载，监听器经强类型属性访问。
 /// <para>不适用场景：无实体状态的事件（如重置密码）继承 <see cref="DomainEvent"/>；

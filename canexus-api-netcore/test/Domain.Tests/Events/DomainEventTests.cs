@@ -13,6 +13,7 @@ public class SnapshotTestAggregate : AggregateBase;
 [TestFixture]
 public class DomainEventTests
 {
+    /// <summary>验证事件名称取具体事件类型的短类名。</summary>
     [Test]
     public void EventName_UsesConcreteTypeName()
     {
@@ -22,6 +23,7 @@ public class DomainEventTests
         Assert.That(domainEvent.EventName, Is.EqualTo(nameof(TestDomainEvent)));
     }
 
+    /// <summary>验证发生时间在事件构造时自动生成且落在构造时间窗口内。</summary>
     [Test]
     public void OccurredAt_GeneratedAtConstruction()
     {
@@ -42,6 +44,7 @@ public class AggregateEventBaseTests
 
     private static SnapshotTestAggregate CreateEntity() => new() { Id = EntityId };
 
+    /// <summary>验证创建事件携带被创建的聚合实体且事件名称正确。</summary>
     [Test]
     public void DomainCreatedEvent_CarriesCreatedAggregate()
     {
@@ -55,6 +58,7 @@ public class AggregateEventBaseTests
         });
     }
 
+    /// <summary>验证修改事件同时携带变更前与变更后的实体状态。</summary>
     [Test]
     public void DomainUpdatedEvent_CarriesBeforeAndAfterStates()
     {
@@ -71,6 +75,7 @@ public class AggregateEventBaseTests
         });
     }
 
+    /// <summary>验证删除事件携带被删除的聚合实体。</summary>
     [Test]
     public void DomainDeletedEvent_CarriesDeletedAggregate()
     {
@@ -84,6 +89,7 @@ public class AggregateEventBaseTests
         });
     }
 
+    /// <summary>验证恢复事件携带被恢复的聚合实体。</summary>
     [Test]
     public void DomainRestoredEvent_CarriesRestoredAggregate()
     {
@@ -117,6 +123,7 @@ public class EntitySnapshotTests
 {
     private static readonly Guid EntityId = Guid.Parse("00000000-0000-0000-0000-000000000001");
 
+    /// <summary>验证快照方法生成浅拷贝，原实体后续修改不影响快照状态。</summary>
     [Test]
     public void Snapshot_CapturesIndependentState()
     {
@@ -142,6 +149,7 @@ public class ConcreteDomainEventTests
 {
     private static readonly Guid EntityId = Guid.Parse("00000000-0000-0000-0000-000000000001");
 
+    /// <summary>验证用户各事件的实体状态携带与事件名称均正确。</summary>
     [Test]
     public void UserEvents_CarryStatesAndEventNames()
     {
@@ -159,6 +167,7 @@ public class ConcreteDomainEventTests
         });
     }
 
+    /// <summary>验证用户角色变更事件携带用户实体及变更前后的角色 Id 列表。</summary>
     [Test]
     public void UserRolesUpdatedEvent_CarriesUserAndRoleIdsBeforeAndAfter()
     {
@@ -175,6 +184,7 @@ public class ConcreteDomainEventTests
         });
     }
 
+    /// <summary>验证重置密码事件仅携带用户 Id 而不携带实体状态。</summary>
     [Test]
     public void UserPasswordResetEvent_CarriesUserIdWithoutState()
     {
@@ -184,6 +194,7 @@ public class ConcreteDomainEventTests
         Assert.That(domainEvent.UserId, Is.EqualTo(EntityId));
     }
 
+    /// <summary>验证字典数据变更事件通过变更前状态表达旧类型迁移信息。</summary>
     [Test]
     public void DictDataUpdatedEvent_ExposesMigrationInfoViaBefore()
     {
@@ -199,6 +210,7 @@ public class ConcreteDomainEventTests
         });
     }
 
+    /// <summary>验证配置变更事件通过变更前状态表达旧键名。</summary>
     [Test]
     public void ConfigUpdatedEvent_ExposesRenamedKeyViaBefore()
     {
@@ -214,6 +226,7 @@ public class ConcreteDomainEventTests
         });
     }
 
+    /// <summary>验证其余各领域事件均使用具体类型名作为事件名称。</summary>
     [Test]
     public void OtherDomainEvents_UseTypedEventNames()
     {
@@ -239,6 +252,7 @@ public class ConcreteDomainEventTests
         });
     }
 
+    /// <summary>验证单条删除日志事件携带日志类型与被删除的日志 Id。</summary>
     [Test]
     public void LogDeletedEvent_SingleDelete_CarriesLogId()
     {
@@ -253,6 +267,7 @@ public class ConcreteDomainEventTests
         });
     }
 
+    /// <summary>验证清空全部日志事件的日志 Id 为 null。</summary>
     [Test]
     public void LogDeletedEvent_CleanAll_LogIdIsNull()
     {

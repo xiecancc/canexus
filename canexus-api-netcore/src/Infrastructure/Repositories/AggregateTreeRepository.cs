@@ -16,6 +16,7 @@ namespace Infrastructure.Repositories;
 /// <typeparam name="TAggregate">树形聚合类型。</typeparam>
 /// <remarks>构造函数。</remarks>
 /// <param name="client">SqlSugar 客户端。</param>
+/// <param name="currentUser">当前用户上下文。</param>
 public class AggregateTreeRepository<TAggregate>(ISqlSugarClient client, IUserContext currentUser) : AggregateRepository<TAggregate>(client, currentUser), IAggregateTreeRepository<TAggregate>
     where TAggregate : AggregateTreeBase<TAggregate>, new()
 {

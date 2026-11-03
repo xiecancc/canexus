@@ -14,6 +14,7 @@ public class JsonHelperTests
         public string? Remark { get; set; }
     }
 
+    /// <summary>验证序列化使用 camelCase 且中文保持原文不转义。</summary>
     [Test]
     public void Serialize_UsesCamelCaseAndKeepsChineseReadable()
     {
@@ -24,6 +25,7 @@ public class JsonHelperTests
         Assert.That(json, Does.Not.Contain("\\u"));
     }
 
+    /// <summary>验证反序列化忽略属性名大小写并兼容字符串数字。</summary>
     [Test]
     public void Deserialize_IsCaseInsensitiveAndSupportsStringNumber()
     {
@@ -37,6 +39,7 @@ public class JsonHelperTests
         });
     }
 
+    /// <summary>验证序列化与反序列化往返后数据保持一致。</summary>
     [Test]
     public void SerializeDeserialize_RoundTripPreservesData()
     {
@@ -53,6 +56,7 @@ public class JsonHelperTests
         });
     }
 
+    /// <summary>验证 object 类型重载按运行时形状序列化。</summary>
     [Test]
     public void Serialize_ObjectTypeOverload_SerializesByRuntimeShape()
     {
@@ -61,6 +65,7 @@ public class JsonHelperTests
         Assert.That(json, Does.Contain("\"userName\":\"typed\""));
     }
 
+    /// <summary>验证容错反序列化对非法、null 或空白输入返回 false 不抛异常。</summary>
     [Test]
     public void TryDeserialize_ReturnsFalseOnInvalidOrEmptyInput()
     {

@@ -4,9 +4,10 @@ using Application.Contracts.Depts;
 
 namespace Application.Contracts.Commands;
 /// <summary>创建部门命令（父部门存在性由处理器校验）。</summary>
-/// <param name="Request">创建请求。</param>
 public sealed record DeptCreateCommand : AggregateCreateCommand<DeptInputRequest>
 {
+    /// <summary>构造创建部门命令。</summary>
+    /// <param name="request">创建请求。</param>
     public DeptCreateCommand(DeptInputRequest request) : base(request) { }
 }
 
@@ -21,10 +22,11 @@ public sealed record DeptDeleteCommand(Guid Id, Guid Version) : AggregateDeleteC
 public sealed record DeptRestoreCommand(Guid Id, Guid Version) : AggregateRestoreCommand(Id, Version);
 
 /// <summary>更新部门命令（父级不可选自身或自己的后代）。</summary>
-/// <param name="Id">部门 Id。</param>
-/// <param name="Version">乐观锁版本号。</param>
-/// <param name="Request">更新请求。</param>
 public sealed record DeptUpdateCommand : AggregateUpdateCommand<DeptInputRequest>
 {
+    /// <summary>构造更新部门命令。</summary>
+    /// <param name="id">部门 Id。</param>
+    /// <param name="version">乐观锁版本号。</param>
+    /// <param name="request">更新请求。</param>
     public DeptUpdateCommand(Guid id, Guid version, DeptInputRequest request) : base(id, version, request) { }
 }

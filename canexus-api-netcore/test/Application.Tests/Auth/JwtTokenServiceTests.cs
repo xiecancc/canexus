@@ -274,6 +274,7 @@ public class JwtTokenServiceTests
     private InMemoryRefreshTokenRepository _repository = null!;
     private JwtTokenService _tokenService = null!;
 
+    /// <summary>测试初始化：构建内存刷新令牌仓储与 JWT 令牌服务。</summary>
     [SetUp]
     public void SetUp()
     {
@@ -295,6 +296,7 @@ public class JwtTokenServiceTests
     private static readonly Guid TestRoleId1 = Guid.Parse("00000000-0000-0000-0000-000000000001");
     private static readonly Guid TestRoleId2 = Guid.Parse("00000000-0000-0000-0000-000000000002");
 
+    /// <summary>验证生成令牌对返回 accessToken 与 64 位刷新令牌，并将刷新令牌持久化。</summary>
     [Test]
     public async Task GenerateAsync_ReturnsPairAndPersistsRefreshToken()
     {
@@ -321,6 +323,7 @@ public class JwtTokenServiceTests
         });
     }
 
+    /// <summary>验证合法的 accessToken 校验通过且解析出全部声明。</summary>
     [Test]
     public async Task ValidateAccessToken_ValidToken_ReturnsPrincipalWithClaims()
     {
@@ -340,6 +343,7 @@ public class JwtTokenServiceTests
         });
     }
 
+    /// <summary>验证被篡改的 accessToken 校验返回 null。</summary>
     [Test]
     public async Task ValidateAccessToken_TamperedToken_ReturnsNull()
     {
@@ -352,6 +356,7 @@ public class JwtTokenServiceTests
         Assert.That(_tokenService.ValidateAccessToken(tampered), Is.Null);
     }
 
+    /// <summary>验证已过期的 accessToken 校验返回 null。</summary>
     [Test]
     public void ValidateAccessToken_ExpiredToken_ReturnsNull()
     {
@@ -371,6 +376,7 @@ public class JwtTokenServiceTests
         Assert.That(_tokenService.ValidateAccessToken(token), Is.Null, "过期 token 应校验失败返回 null");
     }
 
+    /// <summary>验证刷新令牌查询的状态机：活跃可查、吊销后不可查、不存在返回 null。</summary>
     [Test]
     public async Task GetActiveRefreshTokenAsync_StateMachine()
     {
@@ -389,6 +395,7 @@ public class JwtTokenServiceTests
         Assert.That(await _tokenService.GetActiveRefreshTokenAsync("unknown-token"), Is.Null);
     }
 
+    /// <summary>验证已过期的刷新令牌查询返回 null。</summary>
     [Test]
     public async Task GetActiveRefreshTokenAsync_Expired_ReturnsNull()
     {
@@ -403,6 +410,7 @@ public class JwtTokenServiceTests
         Assert.That(await _tokenService.GetActiveRefreshTokenAsync("expired-refresh-token"), Is.Null, "已过期令牌不应返回");
     }
 
+    /// <summary>验证重复吊销同一刷新令牌是幂等的，不会改动首次吊销时间。</summary>
     [Test]
     public async Task RevokeAsync_IsIdempotent()
     {
@@ -424,6 +432,7 @@ public class BCryptPasswordHasherTests
 {
     private readonly BCryptPasswordHasher _hasher = new(NullLogger<BCryptPasswordHasher>.Instance);
 
+    /// <summary>验证哈希结果含 BCrypt 盐前缀且可通过明文验证。</summary>
     [Test]
     public void Hash_ProducesVerifiableHashWithSalt()
     {
@@ -437,6 +446,7 @@ public class BCryptPasswordHasherTests
         });
     }
 
+    /// <summary>验证同一明文两次哈希因自动加盐产生不同结果。</summary>
     [Test]
     public void Hash_SamePassword_ProducesDifferentHashes()
     {
@@ -452,6 +462,7 @@ public class BCryptPasswordHasherTests
         });
     }
 
+    /// <summary>验证密码错误时校验返回 false。</summary>
     [Test]
     public void Verify_WrongPassword_ReturnsFalse()
     {
@@ -460,6 +471,7 @@ public class BCryptPasswordHasherTests
         Assert.That(_hasher.Verify("wrong-password", hash), Is.False);
     }
 
+    /// <summary>验证非法或空哈希串校验返回 false 而不抛异常。</summary>
     [Test]
     public void Verify_InvalidHash_ReturnsFalseWithoutThrow()
     {

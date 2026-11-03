@@ -123,7 +123,7 @@ public abstract class AggregateQueryDetailHandler<TQuery, TEntity, TResponse>(
 /// <summary>
 /// 聚合列表查询处理器基类（对应 <see cref="AggregateQueryList{TRequest, TResponse}"/>）：封装
 /// 「构造过滤条件 → 仓储条件查询（自动附加租户隔离与软删除过滤）→ 集合映射」的标准列表查询流程。
-/// 需要关联数据批量组装的列表查询应直接继承 <see cref="QueryHandler{TQuery, List{TResponse}}"/> 显式实现。
+/// 需要关联数据批量组装的列表查询应直接继承 <see cref="QueryHandler{TQuery, TResponse}"/>（TResponse 为 List 集合）显式实现。
 /// </summary>
 /// <typeparam name="TQuery">列表查询类型。</typeparam>
 /// <typeparam name="TRequest">列表请求类型（须继承 <see cref="AggregateListRequest"/>）。</typeparam>

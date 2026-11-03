@@ -8,6 +8,7 @@ namespace Infrastructure.Repositories;
 /// <summary>基于 SqlSugar 的刷新令牌专属仓储实现（继承聚合仓储，补充令牌语义方法）。</summary>
 /// <remarks>构造函数。</remarks>
 /// <param name="client">SqlSugar 客户端。</param>
+/// <param name="currentUser">当前用户上下文。</param>
 public class SysRefreshTokenRepository(ISqlSugarClient client, IUserContext currentUser) : AggregateRepository<SysRefreshToken>(client, currentUser), ISysRefreshTokenRepository
 {
     /// <inheritdoc />

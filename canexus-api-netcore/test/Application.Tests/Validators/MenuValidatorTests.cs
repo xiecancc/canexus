@@ -20,6 +20,7 @@ public class MenuValidatorTests
         return new MenuCreateCommand(request);
     }
 
+    /// <summary>验证目录类型菜单缺少路由路径时抛出菜单规则异常。</summary>
     [Test]
     public void Validate_DirectoryWithoutPath_ThrowsMenuRuleInvalid()
     {
@@ -29,6 +30,7 @@ public class MenuValidatorTests
             Throws.TypeOf<BusinessException>().With.Property("Code").EqualTo(ErrorCodes.MenuRuleInvalid));
     }
 
+    /// <summary>验证菜单类型缺少组件路径时抛出菜单规则异常。</summary>
     [Test]
     public void Validate_ItemWithoutComponent_ThrowsMenuRuleInvalid()
     {
@@ -42,6 +44,7 @@ public class MenuValidatorTests
             Throws.TypeOf<BusinessException>().With.Property("Code").EqualTo(ErrorCodes.MenuRuleInvalid));
     }
 
+    /// <summary>验证按钮类型缺少权限标识时抛出菜单规则异常。</summary>
     [Test]
     public void Validate_ButtonWithoutPerms_ThrowsMenuRuleInvalid()
     {
@@ -56,6 +59,7 @@ public class MenuValidatorTests
             Throws.TypeOf<BusinessException>().With.Property("Code").EqualTo(ErrorCodes.MenuRuleInvalid));
     }
 
+    /// <summary>验证合法的目录类型菜单可以通过校验。</summary>
     [Test]
     public void Validate_ValidDirectory_Passes()
     {
@@ -63,6 +67,7 @@ public class MenuValidatorTests
         Assert.That(() => new MenuCreateCommandValidator().Validate(command), Throws.Nothing);
     }
 
+    /// <summary>验证状态取值非法时抛出菜单规则异常。</summary>
     [Test]
     public void Validate_InvalidStatus_ThrowsMenuRuleInvalid()
     {

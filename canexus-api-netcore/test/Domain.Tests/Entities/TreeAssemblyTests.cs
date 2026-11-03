@@ -6,6 +6,7 @@ namespace Domain.Tests.Entities;
 /// <summary>由序号生成测试用确定性 Guid（与种子数据占位主键同格式）。</summary>
 public static class TreeTestIds
 {
+    /// <summary>按序号生成第 n 个测试用确定性 Guid。</summary>
     public static Guid Id(long n) => Guid.Parse($"00000000-0000-0000-0000-{n:D12}");
 }
 
@@ -16,6 +17,7 @@ public class TreeAssemblyTests
     /// <summary>全 0 Guid（根节点父 Id）。</summary>
     private static Guid Root => Guid.Empty;
 
+    /// <summary>验证装配树时子节点正确嵌套到父节点下，且同级按 OrderNum 升序排列。</summary>
     [Test]
     public void BuildTree_NestsChildrenAndSortsByOrderNum()
     {
@@ -45,6 +47,7 @@ public class TreeAssemblyTests
         });
     }
 
+    /// <summary>验证父节点缺失的孤儿节点会挂到根级而非被丢弃。</summary>
     [Test]
     public void BuildTree_OrphanNodeWithMissingParent_AttachesToRoot()
     {
@@ -64,6 +67,7 @@ public class TreeAssemblyTests
         });
     }
 
+    /// <summary>验证部门树装配时同级节点按 OrderNum 升序排列。</summary>
     [Test]
     public void BuildTree_DeptSiblings_SortedByOrderNum()
     {
@@ -86,6 +90,7 @@ public class TreeAssemblyTests
         });
     }
 
+    /// <summary>验证 OrderNum 相同时按 Id 升序作为排序兜底。</summary>
     [Test]
     public void BuildTree_SameOrderNum_FallsBackToIdAscending()
     {

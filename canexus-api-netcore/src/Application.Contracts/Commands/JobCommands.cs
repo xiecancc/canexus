@@ -4,9 +4,10 @@ using Application.Contracts.Jobs;
 
 namespace Application.Contracts.Commands;
 /// <summary>创建定时任务命令（Cron 与任务类型校验；status=1 时创建后立即入调度）。</summary>
-/// <param name="Request">创建请求。</param>
 public sealed record JobCreateCommand : AggregateCreateCommand<JobInputRequest>
 {
+    /// <summary>构造创建定时任务命令。</summary>
+    /// <param name="request">创建请求。</param>
     public JobCreateCommand(JobInputRequest request) : base(request) { }
 }
 
@@ -25,11 +26,12 @@ public sealed record JobRestoreCommand(Guid Id, Guid Version) : AggregateRestore
 public sealed record JobRunOnceCommand(Guid Id) : Request;
 
 /// <summary>更新定时任务命令（按新定义重调度；分组变更时同步清理旧调度键）。</summary>
-/// <param name="Id">任务 Id。</param>
-/// <param name="Version">乐观锁版本号。</param>
-/// <param name="Request">更新请求。</param>
 public sealed record JobUpdateCommand : AggregateUpdateCommand<JobInputRequest>
 {
+    /// <summary>构造更新定时任务命令。</summary>
+    /// <param name="id">任务 Id。</param>
+    /// <param name="version">乐观锁版本号。</param>
+    /// <param name="request">更新请求。</param>
     public JobUpdateCommand(Guid id, Guid version, JobInputRequest request) : base(id, version, request) { }
 }
 

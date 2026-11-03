@@ -7,6 +7,7 @@ namespace API.Tests.Logging;
 [TestFixture]
 public class OperLogSanitizerTests
 {
+    /// <summary>验证敏感字段脱敏会掩码顶层敏感属性。</summary>
     [Test]
     public void MaskSensitiveFields_MasksTopLevelSensitiveProperty()
     {
@@ -20,6 +21,7 @@ public class OperLogSanitizerTests
         });
     }
 
+    /// <summary>验证敏感字段脱敏会掩码嵌套对象与数组元素内的敏感属性。</summary>
     [Test]
     public void MaskSensitiveFields_MasksNestedAndArrayItems()
     {
@@ -34,6 +36,7 @@ public class OperLogSanitizerTests
         });
     }
 
+    /// <summary>验证敏感字段脱敏对字段名大小写不敏感。</summary>
     [Test]
     public void MaskSensitiveFields_FieldNameCaseInsensitive()
     {
@@ -46,6 +49,7 @@ public class OperLogSanitizerTests
         });
     }
 
+    /// <summary>验证非法 JSON 文本脱敏时原样返回，不阻断日志写入。</summary>
     [Test]
     public void MaskSensitiveFields_InvalidJson_ReturnsOriginal()
     {
@@ -54,6 +58,7 @@ public class OperLogSanitizerTests
         Assert.That(OperLogSanitizer.MaskSensitiveFields(raw), Is.EqualTo(raw), "解析失败应原样返回，不阻断日志写入");
     }
 
+    /// <summary>验证超长文本截断到默认 2000 字符上限。</summary>
     [Test]
     public void Truncate_LongText_CutToLimit()
     {
@@ -66,6 +71,7 @@ public class OperLogSanitizerTests
         });
     }
 
+    /// <summary>验证短文本与空文本截断时按原样返回或返回空字符串。</summary>
     [Test]
     public void Truncate_ShortOrEmpty_ReturnsAsIsOrEmpty()
     {

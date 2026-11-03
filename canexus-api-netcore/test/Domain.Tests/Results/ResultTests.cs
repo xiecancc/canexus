@@ -6,6 +6,7 @@ namespace Domain.Tests.Results;
 [TestFixture]
 public class ResultTests
 {
+    /// <summary>验证无数据的成功响应返回成功码 200 与默认提示消息。</summary>
     [Test]
     public void Ok_NoData_ReturnsSuccessCodeAndDefaultMessage()
     {
@@ -21,6 +22,7 @@ public class ResultTests
         });
     }
 
+    /// <summary>验证带数据的成功响应返回泛型结果且数据载荷原样携带。</summary>
     [Test]
     public void Ok_WithData_ReturnsGenericResultWithData()
     {
@@ -36,6 +38,7 @@ public class ResultTests
         });
     }
 
+    /// <summary>验证未显式指定消息时成功响应使用默认消息。</summary>
     [Test]
     public void Ok_WithDefaultMessage_UsesDefaultMessage()
     {
@@ -45,6 +48,7 @@ public class ResultTests
         Assert.That(result.Message, Is.EqualTo("操作成功"));
     }
 
+    /// <summary>验证失败响应按入参返回错误码与消息，且标记为非成功。</summary>
     [Test]
     public void Fail_ReturnsErrorCodeAndMessage()
     {
@@ -59,6 +63,7 @@ public class ResultTests
         });
     }
 
+    /// <summary>验证失败响应支持携带任意自定义业务错误码。</summary>
     [Test]
     public void Fail_WithCustomCode_ReturnsCustomCode()
     {
@@ -72,6 +77,7 @@ public class ResultTests
         });
     }
 
+    /// <summary>验证成功码常量约定为 200。</summary>
     [Test]
     public void SuccessCode_IsTwoHundred()
     {

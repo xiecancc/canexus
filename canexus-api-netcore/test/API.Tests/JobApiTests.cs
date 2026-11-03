@@ -35,6 +35,7 @@ public class JobApiTests
     private static ICache _cache = null!;
     private static string _adminToken = null!;
 
+    /// <summary>测试套件初始化：启动测试宿主并准备种子数据。</summary>
     [OneTimeSetUp]
     public async Task OneTimeSetUpAsync()
     {
@@ -49,7 +50,8 @@ public class JobApiTests
                     configuration.AddJsonFile(Path.Combine(apiContentRoot, "appsettings.json"), optional: false, reloadOnChange: false);
                     configuration.AddInMemoryCollection(new Dictionary<string, string?>
                     {
-                        ["Database:ConnectionString"] = connectionString
+                        ["Database:ConnectionString"] = connectionString,
+                        ["RateLimit:Enabled"] = "false" // 集成测试共享 127.0.0.1 分区且高频请求，关闭限流避免不稳定
                     });
                 });
             });
@@ -60,6 +62,7 @@ public class JobApiTests
         _adminToken = await LoginAndGetAccessTokenAsync(AdminUserName, AdminPassword);
     }
 
+    /// <summary>测试套件清理：释放宿主与资源。</summary>
     [OneTimeTearDown]
     public void OneTimeTearDown()
     {
@@ -69,6 +72,7 @@ public class JobApiTests
         _factory.Dispose();
     }
 
+    /// <summary>验证定时任务全流程：创建暂停任务、立即执行产生日志、切换状态后再执行、最后删除任务。</summary>
     [Test]
     public async Task Job_CreatePaused_RunOnce_ProducesLog_ChangeStatus_RunAgain_Delete()
     {
@@ -137,6 +141,7 @@ public class JobApiTests
             "删除后分页不应再返回该任务");
     }
 
+    /// <summary>验证创建任务时非法 Cron 表达式与非法任务类型均被拒绝。</summary>
     [Test]
     public async Task Job_Create_InvalidCronAndInvalidJobType_Rejected()
     {
@@ -187,6 +192,7 @@ public class JobApiTests
         });
     }
 
+    /// <summary>验证更新任务后重新调度，且删除不存在的任务返回 404 业务错误码。</summary>
     [Test]
     public async Task Job_Update_ReschedulesAndDeleteMissingJobReturns404BusinessCode()
     {

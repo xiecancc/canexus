@@ -34,6 +34,7 @@ public class TreeMappingTests
         return services.BuildServiceProvider().GetRequiredService<IMapper>();
     }
 
+    /// <summary>验证菜单实体树递归映射为菜单树响应模型。</summary>
     [Test]
     public void MenuEntityTree_MapsRecursivelyToMenuTreeVO()
     {
@@ -59,6 +60,7 @@ public class TreeMappingTests
         });
     }
 
+    /// <summary>验证部门实体树递归映射并保留部门专属字段。</summary>
     [Test]
     public void DeptEntityTree_MapsRecursivelyAndKeepsDeptFields()
     {

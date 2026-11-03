@@ -55,6 +55,7 @@ public class SysConfigController(ISender sender) : ControllerBase
     /// <summary>更新参数配置（键名可变更，新旧键缓存均失效；内置参数可编辑）。</summary>
     /// <param name="id">参数 Id。</param>
     /// <param name="request">更新请求。</param>
+    /// <param name="version">乐观锁版本号。</param>
     /// <returns>统一响应。</returns>
     [HttpPut("{id:guid}/{version:guid}")]
     [RequirePermission("system:config:edit")]

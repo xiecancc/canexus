@@ -24,8 +24,7 @@ public abstract class DomainEvent
 /// 监听器经 <see cref="Domain"/> 直接读取实体状态，无需裸 Id 或弱类型载荷。
 /// </summary>
 /// <typeparam name="TDomain">领域实体类型。</typeparam>
-/// <param name="Domain">事件关联的领域实体。</param>
-/// <remarks>构造函数：由派生事件传入关联的领域实体。</remarks>
+/// <remarks>构造函数：由派生事件传入关联的领域实体 <paramref name="entity"/>。</remarks>
 /// <param name="entity">事件关联的领域实体。</param>
 public abstract class DomainEvent<TDomain>(TDomain entity) : DomainEvent
     where TDomain : DomainBase

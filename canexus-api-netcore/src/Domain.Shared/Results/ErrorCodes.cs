@@ -37,6 +37,9 @@ public static class ErrorCodes
     /// <summary>树形节点父级不合法（不可选自身或自己的后代）。</summary>
     public const int CommonTreeParentInvalid = 40006;
 
+    /// <summary>请求过于频繁（触发接口限流），请稍后重试。</summary>
+    public const int CommonTooManyRequests = 40007;
+
     // —— 认证段（401xx，对应 HTTP 401）——
 
     /// <summary>未登录 / 未认证。</summary>
@@ -206,6 +209,7 @@ public static class ErrorCodes
     {
         Result.SuccessCode => 200,
         AuthCaptchaError => 400,
+        CommonTooManyRequests => 429,
         >= 40100 and <= 40199 => 401,
         >= 40300 and <= 40399 => 403,
         >= 40400 and <= 40499 => 404,

@@ -34,6 +34,7 @@ public class NoticeApiTests
     private static ISqlSugarClient _db = null!;
     private static string _adminToken = null!;
 
+    /// <summary>测试套件初始化：启动测试宿主并走真实登录链路获取令牌。</summary>
     [OneTimeSetUp]
     public async Task OneTimeSetUpAsync()
     {
@@ -48,7 +49,8 @@ public class NoticeApiTests
                     configuration.AddJsonFile(Path.Combine(apiContentRoot, "appsettings.json"), optional: false, reloadOnChange: false);
                     configuration.AddInMemoryCollection(new Dictionary<string, string?>
                     {
-                        ["Database:ConnectionString"] = connectionString
+                        ["Database:ConnectionString"] = connectionString,
+                        ["RateLimit:Enabled"] = "false" // 集成测试共享 127.0.0.1 分区且高频请求，关闭限流避免不稳定
                     });
                 });
             });
@@ -77,6 +79,7 @@ public class NoticeApiTests
         _adminToken = loginBody.RootElement.GetProperty("data").GetProperty("accessToken").GetString()!;
     }
 
+    /// <summary>测试套件清理：释放宿主与资源。</summary>
     [OneTimeTearDown]
     public void OneTimeTearDown()
     {
@@ -87,6 +90,7 @@ public class NoticeApiTests
 
     // —— CRUD 全流程 ——
 
+    /// <summary>验证公告全流程：列表不返回正文、详情返回正文。</summary>
     [Test]
     public async Task Notice_FullFlow_ListWithoutContent_DetailWithContent()
     {
@@ -155,6 +159,7 @@ public class NoticeApiTests
 
     // —— 字段校验与不存在 ——
 
+    /// <summary>验证创建公告时非法字段被拒绝并返回 401002。</summary>
     [Test]
     public async Task Notice_CreateValidation_InvalidFieldsRejectedWith401002()
     {
@@ -235,6 +240,7 @@ public class NoticeApiTests
 
     // —— 最新公告（首页卡片）——
 
+    /// <summary>验证最新公告仅返回启用状态、按时间倒序且数量上限为 20。</summary>
     [Test]
     public async Task Notice_Latest_OnlyEnabledOrderedDescAndCappedAt20()
     {
@@ -298,6 +304,7 @@ public class NoticeApiTests
 
     // —— 认证要求（latest 不挂权限但仍需登录）——
 
+    /// <summary>验证未携带令牌访问最新公告接口返回统一的 401 响应。</summary>
     [Test]
     public async Task Notice_Latest_WithoutToken_ReturnsUnified401()
     {

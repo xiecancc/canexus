@@ -20,6 +20,7 @@ public class WriteCommandValidatorTests
         };
     }
 
+    /// <summary>验证更新命令的版本号为空时校验产生失败。</summary>
     [Test]
     public void Update_EmptyVersion_HasFailure()
     {
@@ -28,6 +29,7 @@ public class WriteCommandValidatorTests
         result.ShouldHaveValidationErrorFor(command => command.Version);
     }
 
+    /// <summary>验证更新命令的版本号非空时校验不产生任何失败。</summary>
     [Test]
     public void Update_NonEmptyVersion_NoFailures()
     {
@@ -36,6 +38,7 @@ public class WriteCommandValidatorTests
         result.ShouldNotHaveAnyValidationErrors();
     }
 
+    /// <summary>验证删除命令的版本号为空时校验产生失败。</summary>
     [Test]
     public void Delete_EmptyVersion_HasFailure()
     {

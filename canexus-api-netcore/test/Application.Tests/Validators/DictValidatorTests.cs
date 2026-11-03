@@ -23,6 +23,7 @@ public class DictValidatorTests
         });
     }
 
+    /// <summary>验证标签样式取值非法时校验产生失败。</summary>
     [Test]
     public void Validate_InvalidTagType_HasFailure()
     {
@@ -30,6 +31,7 @@ public class DictValidatorTests
         result.ShouldHaveValidationErrorFor(command => command.Request.TagType);
     }
 
+    /// <summary>验证状态取值非法时校验产生失败。</summary>
     [Test]
     public void Validate_InvalidStatus_HasFailure()
     {
@@ -37,6 +39,7 @@ public class DictValidatorTests
         result.ShouldHaveValidationErrorFor(command => command.Request.Status);
     }
 
+    /// <summary>验证标签样式与状态均合法时校验不产生任何失败。</summary>
     [Test]
     public void Validate_ValidFields_NoFailures()
     {

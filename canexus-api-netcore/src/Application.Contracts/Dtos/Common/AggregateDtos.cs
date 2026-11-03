@@ -86,6 +86,7 @@ public abstract class AggregateItemResponse
 
 #region 下拉框响应
 
+/// <summary>聚合下拉查询请求基类：下拉框等非分页全量查询的公共根（预留为后续筛选条件的挂载点）。</summary>
 public abstract class AggregateDropdownRequest
 {
 }

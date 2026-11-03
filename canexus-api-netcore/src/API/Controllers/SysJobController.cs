@@ -44,6 +44,7 @@ public class SysJobController(ISender sender) : ControllerBase
     /// <summary>更新定时任务（按新定义重调度）。</summary>
     /// <param name="id">任务 Id。</param>
     /// <param name="request">更新请求。</param>
+    /// <param name="version">乐观锁版本号。</param>
     /// <returns>统一响应。</returns>
     [HttpPut("{id:guid}/{version:guid}")]
     [RequirePermission("monitor:job:edit")]
@@ -83,6 +84,7 @@ public class SysJobController(ISender sender) : ControllerBase
     /// <summary>修改任务状态（1 运行入调度，0 暂停移出调度）。</summary>
     /// <param name="id">任务 Id。</param>
     /// <param name="request">状态请求。</param>
+    /// <param name="version">乐观锁版本号。</param>
     /// <returns>统一响应。</returns>
     [HttpPut("{id:guid}/{version:guid}/status")]
     [RequirePermission("monitor:job:changeStatus")]

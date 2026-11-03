@@ -11,6 +11,7 @@ namespace Application.Tests.Mappings;
 [TestFixture]
 public class MappingConfigurationTests
 {
+    /// <summary>验证全量映射配置的完整性校验不抛出异常。</summary>
     [Test]
     public void AutoMapperConfiguration_IsValid()
     {

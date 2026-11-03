@@ -39,6 +39,7 @@ public class SysOperLogController(ISender sender) : ControllerBase
 
     /// <summary>按 Id 删除单条操作日志（物理删除）。</summary>
     /// <param name="id">日志 Id。</param>
+    /// <param name="version">乐观锁版本号。</param>
     /// <returns>统一响应。</returns>
     [HttpDelete("{id:guid}/{version:guid}")]
     [RequirePermission("monitor:operlog:remove")]
