@@ -1,4 +1,5 @@
 
+using Asp.Versioning;
 using API.Authorization;
 using API.Logging;
 using Application.Contracts.Commands;
@@ -15,6 +16,7 @@ namespace API.Controllers;
 /// <remarks>构造函数。</remarks>
 /// <param name="sender">MediatR 请求发送器（CQRS 分发入口）。</param>
 [ApiController]
+[ApiVersion("1.0")]
 [Route("api/system/dict-type")]
 [Authorize]
 public class SysDictTypeController(ISender sender) : ControllerBase

@@ -1,0 +1,15 @@
+{
+  "Error_40000": "Invalid request.",
+  "Error_40001": "Request parameter validation failed.",
+  "Error_40002": "The requested data does not exist.",
+  "Error_40003": "Duplicate data (uniqueness conflict).",
+  "Error_40004": "Operation failed.",
+  "Error_40005": "The data has been modified by someone else (version conflict). Please refresh and try again.",
+  "Error_40006": "Invalid parent node for tree structure (cannot select itself or its descendant).",
+  "Error_40007": "Too many requests. Please try again later.",
+  "Error_40100": "Unauthorized. Please sign in.",
+  "Error_40102": "The token has expired. Please sign in again.",
+  "Error_40103": "Incorrect account or password.",
+  "Error_40104": "Incorrect captcha.",
+  "Error_50000": "Internal server error."
+}

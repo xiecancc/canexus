@@ -129,7 +129,11 @@ canexus-api-netcore/
 dotnet user-secrets set "Database:ConnectionString" "server=localhost;port=3306;database=super_admin;user id=root;password=你的密码;CharSet=utf8mb4;AllowPublicKeyRetrieval=true;SslMode=none" --project src/API
 dotnet user-secrets set "Jwt:Secret" "至少 32 字符的随机密钥" --project src/API
 
-# 2. 启动（首次启动自动建库建表 + 写入种子数据）
+# 2. 集成测试连接串（SUPER_ADMIN_TEST_CONN 用户环境变量，缺失时测试启动即报错）
+#    PowerShell（用户级，一次即可）：
+[Environment]::SetEnvironmentVariable("SUPER_ADMIN_TEST_CONN", "server=localhost;port=3306;database=super_admin_test;user id=root;password=你的密码;CharSet=utf8mb4;AllowPublicKeyRetrieval=true;SslMode=none", "User")
+
+# 3. 启动（首次启动自动建库建表 + 写入种子数据）
 dotnet run --project src/API
 
 # 服务地址：http://localhost:5000（launchSettings 默认）

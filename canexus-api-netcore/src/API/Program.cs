@@ -80,6 +80,12 @@ public class Program
             // 应用服务：认证、菜单路由、验证码、权限校验、数据范围过滤
             builder.Services.AddApplicationServices();
 
+            // API 版本化：默认 v1.0，未指定版本回退默认，响应头声明支持集（零破坏落法）
+            builder.Services.AddApiVersioningSupport();
+
+            // 请求本地化：zh-CN 默认 + en-US，按 Accept-Language 协商（业务异常消息随文化翻译）
+            builder.Services.AddApiLocalization();
+
             // 定时任务调度：Quartz 调度器与 IJobScheduleManager（基础设施层实现）
             builder.Services.AddScheduling();
 
@@ -103,6 +109,9 @@ public class Program
             });
 
             var app = builder.Build();
+
+            // 请求本地化中间件（须先于异常中间件：CurrentUICulture 按请求文化设置后，业务异常消息才能按文化翻译）
+            app.UseRequestLocalization();
 
             // 全局异常处理中间件最先注册，确保后续管道异常均被统一捕获
             app.UseMiddleware<GlobalExceptionHandlingMiddleware>();

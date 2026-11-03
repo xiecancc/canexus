@@ -1,6 +1,7 @@
 
 using Domain.Shared.Exceptions;
 using Domain.Shared.Json;
+using Domain.Shared.Localization;
 using Domain.Shared.Results;
 
 namespace API.Middlewares;
@@ -28,11 +29,13 @@ public sealed class GlobalExceptionHandlingMiddleware(RequestDelegate next, ILog
         }
         catch (BusinessException exception)
         {
-            // 业务异常：错误码映射 HTTP 状态，消息可直接返回给客户端
+            // 业务异常：错误码映射 HTTP 状态；消息经本地化器按请求文化翻译
+            // （未收录的错误码回退异常原始文案，渐进式收录见 Domain.Shared/Localization）
             var statusCode = ErrorCodes.GetHttpStatusCode(exception.Code);
+            var message = ErrorMessageLocalizer.Localize(exception.Code, exception.Message);
             logger.LogWarning("业务异常：{Code} - {Message}（TraceId：{TraceId}）",
-                exception.Code, exception.Message, context.TraceIdentifier);
-            await WriteResultAsync(context, statusCode, Result.Fail(exception.Code, exception.Message));
+                exception.Code, message, context.TraceIdentifier);
+            await WriteResultAsync(context, statusCode, Result.Fail(exception.Code, message));
         }
         catch (FluentValidation.ValidationException exception)
         {

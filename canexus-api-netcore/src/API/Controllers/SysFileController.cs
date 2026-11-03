@@ -1,3 +1,4 @@
+using Asp.Versioning;
 using API.Authorization;
 using API.Logging;
 using Application.Contracts.Commands;
@@ -16,6 +17,7 @@ namespace API.Controllers;
 /// <param name="sender">MediatR 请求发送器（CQRS 分发入口）。</param>
 /// <param name="fileStorage">文件存储端口（物理文件读写）。</param>
 [ApiController]
+[ApiVersion("1.0")]
 [Route("api/system/file")]
 [Authorize]
 public class SysFileController(ISender sender, IFileStorage fileStorage) : ControllerBase

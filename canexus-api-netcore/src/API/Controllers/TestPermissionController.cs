@@ -1,4 +1,5 @@
 
+using Asp.Versioning;
 using API.Authorization;
 using Domain.Shared.Results;
 using Microsoft.AspNetCore.Authorization;
@@ -10,6 +11,7 @@ namespace API.Controllers;
 /// 提供挂载 <see cref="RequirePermissionAttribute"/> 的受保护端点，验证 401 / 403 / 放行逻辑。
 /// </summary>
 [ApiController]
+[ApiVersion("1.0")]
 [Route("api/test-permissions")]
 [ApiExplorerSettings(IgnoreApi = true)]
 public class TestPermissionController : ControllerBase

@@ -1,4 +1,5 @@
 
+using Asp.Versioning;
 using Application.Contracts.Auth;
 using Application.Contracts.Commands;
 using Application.Contracts.Queries;
@@ -14,6 +15,7 @@ namespace API.Controllers;
 /// <remarks>构造函数。</remarks>
 /// <param name="sender">MediatR 请求发送器（CQRS 分发入口）。</param>
 [ApiController]
+[ApiVersion("1.0")]
 [Route("api/auth")]
 public class AuthController(ISender sender) : ControllerBase
 {

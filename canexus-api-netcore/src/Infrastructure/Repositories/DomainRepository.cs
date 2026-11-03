@@ -142,8 +142,15 @@ public class DomainRepository<TEntity>(ISqlSugarClient client) : IDomainReposito
     /// <inheritdoc />
     public virtual async Task<bool> InsertAsync(IEnumerable<TEntity> entities, CancellationToken cancellationToken = default)
     {
-        // 批量插入：单条多值 INSERT；Aop.DataExecuting 对每个实体生效（审计 / 主键填充）
-        return await client.Insertable(entities.ToList()).ExecuteCommandAsync(cancellationToken) > 0;
+        // 批量插入：单条多值 INSERT；Aop.DataExecuting 对每个实体生效（审计 / 主键填充）；
+        // 空集合直接短路（SqlSugar Insertable 对空集合抛参数异常，语义上空插入即无操作）
+        var materialized = entities as List<TEntity> ?? [.. entities];
+        if (materialized.Count == 0)
+        {
+            return false;
+        }
+
+        return await client.Insertable(materialized).ExecuteCommandAsync(cancellationToken) > 0;
     }
 
     /// <summary>
