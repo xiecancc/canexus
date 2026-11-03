@@ -143,12 +143,10 @@ public class OnlineUserApiTests
     [Test]
     public async Task Online_ForceLogout_RevokesSessionAndBlocksRefresh()
     {
-        // 独立登录产生一条可强退的会话（不占用套件级 _adminToken）
+        // 独立登录产生一条可强退的会话（不占用套件级 _adminToken）；按令牌串精确定位记录（并发夹具下不能按最新时间猜）
         var pair = await LoginAsync(AdminUserName, AdminPassword);
-        var adminId = (await _db.Queryable<SysUser>().Where(u => u.UserName == AdminUserName).FirstAsync()).Id;
         var token = await _db.Queryable<SysRefreshToken>()
-            .Where(t => t.UserId == adminId && t.RevokedAt == null)
-            .OrderBy(t => t.CreatedAt, OrderByType.Desc)
+            .Where(t => t.Token == pair.RefreshToken && t.RevokedAt == null)
             .FirstAsync();
         Assert.That(token, Is.Not.Null, "登录后应有活跃 refreshToken 记录");
 

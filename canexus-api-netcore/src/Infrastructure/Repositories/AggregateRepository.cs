@@ -5,6 +5,7 @@ using Domain.Repositories;
 using Domain.Services.Users;
 using Domain.Shared.Exceptions;
 using Domain.Shared.Results;
+using Infrastructure.DataAccess;
 using SqlSugar;
 
 namespace Infrastructure.Repositories;
@@ -29,9 +30,19 @@ public class AggregateRepository<TEntity>(ISqlSugarClient client, IUserContext c
     /// 可空语义下不记录操作人）。</summary>
     protected IUserContext CurrentUser => currentUser;
 
+    /// <summary>是否记录字段级变更日志（实体更新成功后对比快照写 sys_entity_change_log）；
+    /// 高频自写表（如刷新令牌轮换）可重写为 false 关闭。</summary>
+    protected virtual bool EntityChangeLogEnabled => true;
+
     /// <inheritdoc />
     public virtual async Task<bool> UpdateAsync(TEntity entity, CancellationToken cancellationToken = default)
     {
+        // 变更审计：更新前取数据库快照（与业务更新同连接，读到的即旧值），
+        // 更新成功后同事务写入字段级变更日志（事务回滚时日志一并回滚，不记录未发生的变更）
+        var oldEntity = EntityChangeLogEnabled
+            ? await Client.Queryable<TEntity>().FirstAsync(it => it.Id == entity.Id, cancellationToken)
+            : null;
+
         // 框架级乐观锁（Version 标记 IsEnableUpdateVersionValidation）：ExecuteCommandWithOptLock 自动生成
         // UPDATE ... WHERE Id = @id AND Version = 传入值，成功后自动轮换版本令牌，失败时回滚实体上的版本值；
         // 受影响 0 行说明库中版本已被他人推进，抛并发冲突业务异常。
@@ -45,6 +56,12 @@ public class AggregateRepository<TEntity>(ISqlSugarClient client, IUserContext c
             throw new BusinessException(
                 ErrorCodes.CommonConcurrencyConflict,
                 "数据已被他人修改（版本号不一致），请刷新后重试。");
+        }
+
+        var changeLogs = EntityChangeLogger.Build(oldEntity, entity, DateTime.UtcNow, CurrentUser.UserId);
+        if (changeLogs.Count > 0)
+        {
+            await Client.Insertable(changeLogs).ExecuteCommandAsync(cancellationToken);
         }
 
         return true;

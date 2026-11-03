@@ -13,6 +13,9 @@ namespace Infrastructure.Repositories;
 /// <param name="currentUser">当前用户上下文。</param>
 public class SysRefreshTokenRepository(ISqlSugarClient client, IUserContext currentUser) : AggregateRepository<SysRefreshToken>(client, currentUser), ISysRefreshTokenRepository
 {
+    /// <summary>刷新令牌为高频自写数据（轮换 / 吊销 / 过期清理），记录字段级变更日志无审计价值，关闭。</summary>
+    protected override bool EntityChangeLogEnabled => false;
+
     /// <inheritdoc />
     public virtual async Task<SysRefreshToken?> GetActiveByTokenAsync(string token, DateTime now, CancellationToken cancellationToken = default)
     {
