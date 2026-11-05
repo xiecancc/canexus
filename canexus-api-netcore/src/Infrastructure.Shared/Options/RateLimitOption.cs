@@ -24,7 +24,7 @@ public sealed class RateLimitOption : OptionBase
 
     /// <summary>是否使用 Redis 分布式限流：多副本共享同一 Redis 计数键，实现跨实例一致的限流配额（P1-A5）。
     /// <para>false（默认，开发 / 单副本）时为进程内限流；true 时需提供 <see cref="RedisConfiguration"/>，
-    /// 生产多副本部署建议开启（见部署文档 docker-compose）。</para>
+    /// 生产多副本部署建议开启。</para>
     /// </summary>
     public bool UseRedis { get; set; }
 

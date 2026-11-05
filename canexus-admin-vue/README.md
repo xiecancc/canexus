@@ -107,17 +107,6 @@ pnpm preview          # 本地预览构建产物
 
 如需临时跳过钩子（不推荐）：`git commit --no-verify` / `git push --no-verify`。
 
-### CI 流水线（GitHub Actions）
-
-工作流位于 `.github/workflows/ci.yml`，在 push（main / master）与 Pull Request 时触发，两个并行 Job：
-
-| Job | 环境 | 步骤 |
-| --- | --- | --- |
-| 前端检查与构建 | ubuntu + Node 26 + pnpm 12 | `pnpm install --frozen-lockfile` → `pnpm lint` → `pnpm type-check` → `pnpm test:unit run` → `pnpm build` |
-| 后端构建与测试 | ubuntu + .NET 10 SDK + MySQL 8 服务容器 | `dotnet restore` → `dotnet build` → `dotnet test`（集成测试经 `SUPER_ADMIN_TEST_CONN` 环境变量指向容器，库名 `super_admin_test`） |
-
-说明：Playwright E2E 依赖浏览器与后端服务，暂未纳入 CI，需要时可在工作流中追加 `npx playwright install --with-deps` 与后端启动步骤。
-
 ## 部署说明
 
 1. **构建**：`pnpm build`，产物输出至 `dist/`（纯静态文件）

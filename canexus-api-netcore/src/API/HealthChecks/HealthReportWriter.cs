@@ -4,7 +4,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 
 namespace API.HealthChecks;
-/// <summary>健康报告 JSON 响应写出器：替代默认的纯文本输出，供负载均衡 / 容器编排与监控采集解析。</summary>
+/// <summary>健康报告 JSON 响应写出器：替代默认的纯文本输出，供负载均衡与监控采集解析。</summary>
 public static class HealthReportWriter
 {
     /// <summary>JSON 序列化选项（camelCase，与全局 API 响应风格一致）。</summary>

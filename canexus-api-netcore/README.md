@@ -168,24 +168,9 @@ dotnet test test/API.Tests                # 仅 API 集成测试
    - MultiTenancy__Enabled — 多租户开关
    - Outbox__Enabled / Outbox__PollIntervalSeconds / Outbox__MaxAttempts — 领域事件 Outbox 投递 worker 启停与重试参数
    - FileStorage__MaxSizeMB — 上传上限（Kestrel 请求体上限自动对齐为 MaxSizeMB + 1MB）
-   - RateLimit__UseRedis / RateLimit__RedisConfiguration / RateLimit__RedisKeyPrefix — 分布式限流开关与 Redis 连接（多副本部署必须开启，见下）
+   - RateLimit__UseRedis / RateLimit__RedisConfiguration / RateLimit__RedisKeyPrefix — 分布式限流开关与 Redis 连接（多副本部署必须开启）
    - Cache__RedisEnabled / Cache__RedisConfiguration — 双层缓存 L2 分布式缓存开关与连接
    - 密钥缺失时应用启动即失败（Options 启动校验），不会带病运行
 3. **数据库**：首次启动自动建库建表并写入种子数据；已有库表结构由 CodeFirst 增量补齐（不修改已有列类型，跨大版本结构变更需重建或手工迁移）。迁移机制（P1-A3）：启动时将 CodeFirst 模型表清单登记为 `sys_schema_migration.baseline-v1`（幂等），增量迁移按 `MigrationId` 顺序在事务内执行（脚本与记录同事务，失败整体回滚）；模型新增表但未登记迁移时启动校验直接报错并指明表名
-4. **运行**：`dotnet API.dll`，或配置为 systemd / Windows 服务 / 容器；前端生产环境由 nginx 将 `/api` 反向代理到本服务
-
-### 容器化部署（P1-A5，一键启动 + 多副本限流一致）
-
-仓库根目录已提供 `Dockerfile` / `docker-compose.yml` / `.dockerignore`，一键拉起 MySQL + Redis + API：
-
-```bash
-# 可选：复制 .env 覆盖默认值（数据库密码 / 库名 / Jwt 密钥等，见 compose 文件内 ${VAR:-默认值}）
-docker compose up --build
-# 服务地址 http://localhost:8080；API 启动时自动建库建表并写入迁移基线
-```
-
-- **多副本限流一致**：compose 默认开启 `RateLimit__UseRedis=true`，限流计数键存 Redis（固定窗口、按客户端 IP 分区、窗口起点取 Redis 服务端时间），任意副本消耗的配额对全部副本可见；若关闭 UseRedis 则回退为进程内限流（仅单副本语义）
-- **双层缓存**：`Cache__RedisEnabled=true`，Redis 作为 L2 分布式缓存（L1 进程内存 + L2 Redis，键前缀 `super-admin:` 隔离命名空间）
-- **横向扩容**：`docker compose up --scale api=3` 即可起多副本（共用同一 MySQL / Redis）；限流与缓存状态均在 Redis，无副本间状态漂移
-- **安全提示**：生产环境必须通过 `.env` 或密钥管理系统注入 `JWT_SECRET` 与 `MYSQL_ROOT_PASSWORD`（默认值仅用于本地验证）；`RateLimit` 分区键取客户端 IP，若前端经 nginx 反代，需在宿主启用 ForwardedHeaders 中间件并配置 KnownProxies，否则所有客户端共享代理 IP 的配额
-- **健康检查**：API 内置 `/health`（全局限流豁免，容器编排 / LB 探针高频轮询不计入业务配额）
+4. **运行**：`dotnet API.dll`，或配置为 systemd / Windows 服务；前端生产环境由 nginx 将 `/api` 反向代理到本服务
+5. **多副本部署**：`RateLimit__UseRedis=true` 让限流计数存 Redis，跨实例共享配额（关闭时回退为单副本进程内语义）；`Cache__RedisEnabled=true` 启用 L2 分布式缓存；`/health` 已豁免全局限流，可直接用于负载均衡探针。若前端经 nginx 反代，需启用 `Forwarded:Enabled` 并配置 `Forwarded:KnownProxies`，否则所有客户端将共享代理 IP 的限流配额

@@ -46,7 +46,6 @@ type(可选范围): 描述
 | `perf` | 性能优化 |
 | `test` | 测试相关 |
 | `build` | 构建 / 依赖变更 |
-| `ci` | CI 配置变更 |
 | `chore` | 其他杂项 |
 | `revert` | 回滚提交 |
 
@@ -56,16 +55,15 @@ type(可选范围): 描述
 
 - **pre-commit**：前端 `oxlint --fix` + `oxfmt`、后端 `dotnet format`（lint-staged 自动修复并重新暂存，无法修复的问题会中断提交）
 - **pre-push**：前端类型检查（vue-tsc）、Vitest 单元测试、后端编译检查
-- **CI**：push 与 PR 均触发 GitHub Actions，前端（lint / 类型检查 / 单测 / 构建）与后端（build / test，含 MySQL 集成测试）并行执行
 
-请在提交前确保本地检查全部通过，减少 CI 往返。
+请在提交前确保本地检查全部通过。
 
 ## Pull Request 流程
 
 1. 从 `master` 拉出功能分支（如 `feat/domain-event-retry`）
 2. 开发并提交，遵循上述提交规范
 3. 同步更新受影响的文档（根 README 与子项目 README，见根 README「约定」）
-4. 发起 PR，填写模板中的各项内容，确保 CI 全绿
+4. 发起 PR，填写模板中的各项内容，确保本地检查全部通过
 5. 等待 Review，按意见修改后重新推送
 
 ## 反馈问题

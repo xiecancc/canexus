@@ -229,7 +229,7 @@ public static class DependencyExtensions
                 quartz["quartz.dataSource.default.provider"] = QuartzMySqlProvider.ProviderName;
             });
         // 优雅停机（P1-C）：主机停止时等待运行中的任务完成（受宿主关闭超时上限保护），避免任务被中途中断；
-        // 若部署侧关闭超时短于任务耗时时，应同时调大宿主 / 容器 stop timeout
+        // 若部署侧关闭超时短于任务耗时时，应同时调大部署侧的关闭超时
         services.AddQuartzHostedService(options => options.WaitForJobsToComplete = true);
 
         // 定时任务调度管理（依赖 scoped 仓储，随请求作用域创建）

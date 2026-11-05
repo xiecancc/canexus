@@ -158,7 +158,7 @@ public class SchemaMigrationTests
         });
     }
 
-    /// <summary>验证模型含未登记迁移的表时启动校验失败（CI 阻止只改实体不补迁移）。</summary>
+    /// <summary>验证模型含未登记迁移的表时启动校验失败（避免只改实体不补迁移）。</summary>
     [Test]
     public async Task Validation_ModelTableWithoutMigration_Throws()
     {

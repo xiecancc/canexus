@@ -12,7 +12,7 @@ namespace Infrastructure.DataAccess;
 /// <list type="bullet">
 /// <item>基线登记：迁移记录表无记录时，把 CodeFirst 模型当前全部表登记为 baseline-v1（不重建表，结构由 CodeFirst 同步）；重复执行幂等。</item>
 /// <item>增量应用：按 MigrationId 顺序执行未应用的迁移，脚本与记录写入同事务（失败整体回滚，生产可回滚）；重复执行幂等；重复 MigrationId 冲突即终止。</item>
-/// <item>启动校验：模型表须已登记（基线或任一已应用增量），否则抛异常阻止启动（CI 阻止只改实体不补迁移）。</item>
+/// <item>启动校验：模型表须已登记（基线或任一已应用增量），否则抛异常阻止启动（避免只改实体不补迁移）。</item>
 /// </list>
 /// <para>并发安全：多副本同时启动时，记录表唯一索引（MigrationId）保证只登记一次，重复键冲突视为已由他实例完成。</para>
 /// </summary>
@@ -125,7 +125,7 @@ public sealed class SchemaMigrator(ISqlSugarClient client, ILogger<SchemaMigrato
         }
     }
 
-    /// <summary>启动校验：模型表须已登记（基线或已应用增量），否则抛出指明缺失迁移的表（CI 阻止只改实体不补迁移）。</summary>
+    /// <summary>启动校验：模型表须已登记（基线或已应用增量），否则抛出指明缺失迁移的表（避免只改实体不补迁移）。</summary>
     /// <param name="modelTableNames">模型表名清单。</param>
     /// <param name="migrations">增量迁移清单（读取已应用记录的建表清单）。</param>
     /// <param name="cancellationToken">取消令牌。</param>

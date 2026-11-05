@@ -7,7 +7,7 @@ namespace Infrastructure.DataAccess;
 /// 数据库增量迁移定义（P1-A3）：以 MigrationId 唯一定义一次结构变更，
 /// 由 <see cref="SchemaMigrator"/> 按 ID 顺序在事务内应用（应用脚本与记录写入同事务，失败整体回滚）。
 /// <para>扩展约定：新增迁移实现本接口并注册进迁移清单；<see cref="CreatedTableNames"/> 声明本次建表，
-/// 供启动校验比对（模型新增表但未登记迁移时启动失败，CI 阻止只改实体不补迁移）。</para>
+/// 供启动校验比对（模型新增表但未登记迁移时启动失败，避免只改实体不补迁移）。</para>
 /// </summary>
 public interface ISchemaMigration
 {

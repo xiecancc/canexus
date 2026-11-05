@@ -1,9 +1,0 @@
-**/.git
-**/bin
-**/obj
-**/*.user
-**/appsettings.Development.json
-logs/
-uploads/
-.dockerignore
-README.md

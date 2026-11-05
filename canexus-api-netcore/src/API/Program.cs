@@ -207,7 +207,7 @@ public class Program
 
             app.MapControllers();
 
-            // 健康检查端点（匿名访问，供负载均衡 / 容器编排探针调用，JSON 报告便于监控采集）：
+            // 健康检查端点（匿名访问，供负载均衡 / 运维探针调用，JSON 报告便于监控采集）：
             // /health/live 仅进程存活自检；/health/ready 含数据库 / 缓存 / 调度器就绪探测
             app.MapHealthChecks("/health/live", new HealthCheckOptions
             {
