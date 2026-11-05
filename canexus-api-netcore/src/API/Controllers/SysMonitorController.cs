@@ -1,8 +1,9 @@
 
-using Asp.Versioning;
 using API.Authorization;
 using Application.Contracts.Monitor;
 using Application.Contracts.Queries;
+using Asp.Versioning;
+using Domain.Shared.Permissions;
 using Domain.Shared.Results;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
@@ -21,7 +22,7 @@ public class SysMonitorController(ISender sender) : ControllerBase
     /// <summary>获取服务器与进程运行信息（主机 / 运行时 / 内存 / GC / 线程 / 调度器概要）。</summary>
     /// <returns>运行信息快照。</returns>
     [HttpGet]
-    [RequirePermission("monitor:server:list")]
+    [RequirePermission(PermissionDefinitions.MonitorServerList)]
     public async Task<IActionResult> Server()
     {
         return Ok(Result.Ok(await sender.Send(new ServerMonitorQuery())));

@@ -4,8 +4,8 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using API;
 using Domain.Entities;
-using Domain.Shared.Results;
 using Domain.Services.Security;
+using Domain.Shared.Results;
 using Infrastructure.Shared.Caching;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
@@ -116,7 +116,11 @@ public class ApiVersioningI18nTests
         createRequest.Content = JsonContent.Create(new
         {
             userName,
-            nickName = "本地化探针", password = "Probe@2026", deptId = (await _db.Queryable<SysDept>().FirstAsync()).Id, email = "probe@example.com", phone = "13900001234",
+            nickName = "本地化探针",
+            password = "Probe@2026",
+            deptId = (await _db.Queryable<SysDept>().FirstAsync()).Id,
+            email = "probe@example.com",
+            phone = "13900001234",
             status = 1,
             roleIds = Array.Empty<Guid>()
         });

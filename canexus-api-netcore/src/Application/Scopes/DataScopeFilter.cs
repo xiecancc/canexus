@@ -3,6 +3,8 @@ using Domain.Entities;
 using Domain.Repositories;
 using Domain.Services.Users;
 using Domain.Shared.Enums;
+using Domain.Shared.Exceptions;
+using Domain.Shared.Results;
 
 namespace Application.Scopes;
 /// <summary>
@@ -19,6 +21,22 @@ public interface IDataScopeFilter
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>数据范围描述（范围类型 + 自定义 / 本部门及以下的部门 Id 集合）。</returns>
     public Task<UserDataScope> GetUserScopeAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 校验目标记录是否在当前用户数据范围内，越界抛出 <see cref="BusinessException"/>（AuthForbidden）。
+    /// <para>统一数据范围准入机制（P0-S7）：列表查询按范围收敛结果集（如 UserQueryPaged），
+    /// 详情 / 单条查询以本方法做越权准入判定，防止"列表看不到但按 Id 直读"的数据范围绕过。</para>
+    /// </summary>
+    /// <param name="deptId">目标记录的部门归属（Self 范围不校验）。</param>
+    /// <param name="ownerId">目标记录的业务归属人 Id（Self 范围须与当前用户一致）。</param>
+    /// <param name="creatorId">目标记录的创建人（可选；Self 范围与创建人一致时放行，与列表口径对齐）。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>表示异步操作的任务；越界时抛出业务异常。</returns>
+    public Task EnsureInScopeAsync(
+        Guid? deptId,
+        Guid? ownerId,
+        Guid? creatorId = null,
+        CancellationToken cancellationToken = default);
 }
 
 /// <summary>用户数据范围描述（供查询方构造过滤条件）。</summary>
@@ -54,6 +72,42 @@ public sealed class DataScopeFilter(
 
         _scope = await ResolveScopeAsync(cancellationToken);
         return _scope;
+    }
+
+    /// <inheritdoc />
+    public async Task EnsureInScopeAsync(
+        Guid? deptId,
+        Guid? ownerId,
+        Guid? creatorId = null,
+        CancellationToken cancellationToken = default)
+    {
+        var scope = await GetUserScopeAsync(cancellationToken);
+        if (scope.IsAll)
+        {
+            return;
+        }
+
+        var currentUserId = currentUser.UserId ?? Guid.Empty;
+        var allowed = scope.Scope switch
+        {
+            // 仅本人：业务归属人或创建人为当前用户（与列表查询的 Self 口径一致）
+            DataScope.Self => ownerId == currentUserId || creatorId == currentUserId,
+
+            // 本部门：目标记录部门与当前用户部门一致
+            DataScope.Dept => deptId is not null && deptId == currentUser.DeptId,
+
+            // 本部门及以下 / 自定义：目标记录部门在已解析的部门 Id 集合内
+            DataScope.DeptAndBelow or DataScope.Custom =>
+                deptId is not null && scope.DeptIds is not null && scope.DeptIds.Contains(deptId.Value),
+
+            // 未知范围值按拒绝处理（fail-closed）
+            _ => false,
+        };
+
+        if (!allowed)
+        {
+            throw new BusinessException(ErrorCodes.AuthForbidden, "无权访问该数据（超出数据范围）");
+        }
     }
 
     /// <summary>解析当前用户的数据范围：超管 → All；无角色 / 未认证 → Self；否则取启用角色中最宽松范围。</summary>

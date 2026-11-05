@@ -17,8 +17,11 @@ public interface ITokenService
     /// <param name="ip">签发来源 IP（可选，持久化到 refreshToken 记录，供在线会话列表展示）。</param>
     /// <param name="userAgent">签发来源 User-Agent（可选，同上）。</param>
     /// <param name="cancellationToken">取消令牌。</param>
+    /// <param name="sessionId">
+    /// 会话标识（可选）：刷新轮换时传入旧会话标识以保持设备级会话连续性；未传（登录）时自动生成新会话标识。
+    /// </param>
     /// <returns>令牌对（ExpiresIn 为 accessToken 有效期秒数）。</returns>
-    public Task<TokenPair> GenerateAsync(TokenSubject subject, string? ip = null, string? userAgent = null, CancellationToken cancellationToken = default);
+    public Task<TokenPair> GenerateAsync(TokenSubject subject, string? ip = null, string? userAgent = null, CancellationToken cancellationToken = default, Guid? sessionId = null);
 
     /// <summary>校验 accessToken：签名 / 签发者 / 受众 / 生命周期全部通过时返回认证主体，否则返回 null。</summary>
     /// <param name="accessToken">访问令牌。</param>
@@ -49,7 +52,8 @@ public sealed record TokenPair(string AccessToken, string RefreshToken, long Exp
 /// <param name="Token">刷新令牌串。</param>
 /// <param name="UserId">所属用户 Id。</param>
 /// <param name="ExpiresAt">过期时间。</param>
-public sealed record RefreshTokenInfo(Guid Id, string Token, Guid UserId, DateTime ExpiresAt);
+/// <param name="SessionId">会话标识（历史记录为 Guid.Empty）。</param>
+public sealed record RefreshTokenInfo(Guid Id, string Token, Guid UserId, DateTime ExpiresAt, Guid SessionId);
 
 /// <summary>令牌主题：发放令牌所需的用户身份信息。</summary>
 /// <param name="UserId">用户 Id（写入 sub claim）。</param>
@@ -58,10 +62,12 @@ public sealed record RefreshTokenInfo(Guid Id, string Token, Guid UserId, DateTi
 /// <param name="RoleIds">角色 Id 集合（每个写入一条 roleId claim）。</param>
 /// <param name="RoleKeys">角色权限字符串集合（每个写入一条 role claim）。</param>
 /// <param name="TenantId">租户 Id（写入 tenantId claim，可空）。</param>
+/// <param name="TokenVersion">用户当前令牌版本（写入 tokenVersion claim，请求期与缓存中的当前值比对）。</param>
 public sealed record TokenSubject(
     Guid UserId,
     string UserName,
     Guid? DeptId,
     IReadOnlyList<Guid> RoleIds,
     IReadOnlyList<string> RoleKeys,
-    Guid? TenantId);
+    Guid? TenantId,
+    int TokenVersion = 0);

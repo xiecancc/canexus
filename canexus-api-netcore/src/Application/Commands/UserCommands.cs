@@ -73,9 +73,10 @@ public sealed class UserCreateCommandHandler(
         {
             UserName = userName,
             NickName = request.NickName.Trim(),
-            // 密码缺省使用默认密码 123456（DTO 注释约定），BCrypt 存储
+            // 密码缺省使用默认密码（DTO 注释约定），BCrypt 存储；使用默认初始密码时强制首登改密
             PasswordHash = passwordHasher.Hash(
                 string.IsNullOrWhiteSpace(request.Password) ? UserConstants.DefaultPassword : request.Password),
+            MustChangePassword = string.IsNullOrWhiteSpace(request.Password),
             DeptId = request.DeptId,
             Email = request.Email,
             Phone = request.Phone,
@@ -104,10 +105,7 @@ public sealed class UserDeleteCommandHandler(
     {
         var user = await userRepository.GetAsync([it => it.Id == command.Id], cancellationToken)
             ?? throw new BusinessException(ErrorCodes.UserNotFound, $"用户 {command.Id} 不存在");
-        if (user.UserName == UserConstants.AdminUserName)
-        {
-            throw new BusinessException(ErrorCodes.UserAdminProtected, "内置超管账号 admin 不允许删除");
-        }
+        user.EnsureNotBuiltInAdmin("删除");
 
         if (currentUser.UserId == command.Id)
         {
@@ -171,6 +169,8 @@ public sealed class UserResetPasswordCommandHandler(
     protected override void MapToEntity(UserPasswordRequest request, SysUser entity)
     {
         entity.PasswordHash = PasswordHasher.Hash(request.Password);
+        // 管理员重置密码后，用户下次登录须强制改密
+        entity.MustChangePassword = true;
     }
 
     /// <inheritdoc />
@@ -194,7 +194,7 @@ public sealed class UserUpdateCommandHandler(
     {
         var request = command.Request;
         var user = await GetOrThrowAsync(command.Id, cancellationToken);
-        EnsureNotAdmin(user);
+        user.EnsureNotBuiltInAdmin("编辑");
 
         if (request.DeptId is not null && await deptRepository.CountAsync([d => d.Id == request.DeptId], cancellationToken) == 0)
         {
@@ -224,15 +224,6 @@ public sealed class UserUpdateCommandHandler(
     {
         return await userRepository.GetAsync([it => it.Id == id], cancellationToken)
             ?? throw new BusinessException(ErrorCodes.UserNotFound, $"用户 {id} 不存在");
-    }
-
-    /// <summary>内置超管账号保护：admin 拒绝编辑与状态变更。</summary>
-    private static void EnsureNotAdmin(SysUser user)
-    {
-        if (user.UserName == UserConstants.AdminUserName)
-        {
-            throw new BusinessException(ErrorCodes.UserAdminProtected, "内置超管账号 admin 不允许编辑");
-        }
     }
 }
 
@@ -282,10 +273,7 @@ public sealed class UserUpdateStatusCommandHandler(
     /// <inheritdoc />
     protected override Task ValidateAsync(UserStatusRequest request, SysUser entity, CancellationToken cancellationToken)
     {
-        if (entity.UserName == UserConstants.AdminUserName)
-        {
-            throw new BusinessException(ErrorCodes.UserAdminProtected, "内置超管账号 admin 不允许编辑");
-        }
+        entity.EnsureNotBuiltInAdmin("启停");
 
         if (request.Status is not (CommonStatus.Enabled or CommonStatus.Disabled))
         {

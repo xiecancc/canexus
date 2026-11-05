@@ -4,6 +4,9 @@ using Application.Abstractions;
 using Application.Contracts.Monitor;
 using Application.Contracts.Queries;
 using Domain.Services;
+using Infrastructure.Shared.Caching;
+using Infrastructure.Shared.Options;
+using Microsoft.Extensions.Options;
 
 namespace Application.Queries;
 /// <summary>服务器运行信息查询处理器：进程 / GC / 运行时快照 + 调度器概要聚合（只读，不含敏感配置）。</summary>
@@ -49,4 +52,55 @@ public sealed class ServerMonitorQueryHandler(ISchedulerInfoProvider schedulerIn
 
         return response;
     }
+}
+
+/// <summary>缓存运行信息查询处理器：Redis 概要（经 <see cref="ICacheMonitorProvider"/> 端口）+ TTL 档位配置快照（只读，不含敏感配置与键内容）。</summary>
+/// <remarks>构造函数。</remarks>
+/// <param name="cacheMonitorProvider">缓存运行信息提供者。</param>
+/// <param name="cacheMonitor">缓存配置监视器（读取 TTL 档位与 InstanceName 最新值）。</param>
+public sealed class CacheMonitorQueryHandler(
+    ICacheMonitorProvider cacheMonitorProvider,
+    IOptionsMonitor<CacheOption> cacheMonitor)
+    : QueryHandler<CacheMonitorQuery, CacheMonitorResponse>
+{
+    /// <inheritdoc />
+    protected override async Task<CacheMonitorResponse> HandleAsync(CacheMonitorQuery query, CancellationToken cancellationToken)
+    {
+        var option = cacheMonitor.CurrentValue;
+        var snapshot = await cacheMonitorProvider.GetSnapshotAsync(cancellationToken);
+
+        var response = new CacheMonitorResponse
+        {
+            RedisEnabled = option.RedisEnabled,
+            RedisConnected = option.RedisEnabled ? snapshot.Connected : null,
+            InstanceName = option.InstanceName,
+            RedisVersion = snapshot.RedisVersion,
+            UptimeDays = snapshot.UptimeDays,
+            ConnectedClients = snapshot.ConnectedClients,
+            UsedMemory = snapshot.UsedMemory,
+            MaxMemory = snapshot.MaxMemory,
+            TotalKeys = snapshot.TotalKeys,
+            KeyspaceHits = snapshot.KeyspaceHits,
+            KeyspaceMisses = snapshot.KeyspaceMisses,
+            HitRate = snapshot.KeyspaceHits is { } hits && snapshot.KeyspaceMisses is { } misses && hits + misses > 0
+                ? Math.Round(hits / (double)(hits + misses), 4)
+                : null,
+            OpsPerSec = snapshot.OpsPerSec,
+            Ttl = new CacheTtlSnapshotDto
+            {
+                Hot = ToTtlDto(option.Hot),
+                Medium = ToTtlDto(option.Medium),
+                Cold = ToTtlDto(option.Cold)
+            }
+        };
+
+        return response;
+    }
+
+    /// <summary>TTL 档位对转响应 DTO。</summary>
+    private static TtlPairDto ToTtlDto(CacheOption.TtlPair pair) => new()
+    {
+        LocalSeconds = pair.LocalSeconds,
+        DistributedSeconds = pair.DistributedSeconds
+    };
 }

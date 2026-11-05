@@ -30,3 +30,13 @@ public sealed record RoleUpdateCommand : AggregateUpdateCommand<RoleInputRequest
     /// <param name="request">更新请求。</param>
     public RoleUpdateCommand(Guid id, Guid version, RoleInputRequest request) : base(id, version, request) { }
 }
+
+/// <summary>修改角色状态命令（独立启停：停用后权限缓存由监听器全量失效即时生效；super_admin 拒绝启停）。</summary>
+public sealed record RoleUpdateStatusCommand : AggregateUpdateCommand<RoleStatusRequest>
+{
+    /// <summary>构造修改角色状态命令。</summary>
+    /// <param name="id">角色 Id。</param>
+    /// <param name="version">乐观锁版本号。</param>
+    /// <param name="request">状态请求。</param>
+    public RoleUpdateStatusCommand(Guid id, Guid version, RoleStatusRequest request) : base(id, version, request) { }
+}

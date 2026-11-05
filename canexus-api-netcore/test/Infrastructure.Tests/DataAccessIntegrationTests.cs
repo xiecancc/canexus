@@ -15,15 +15,11 @@ using SqlSugar;
 namespace Infrastructure.Tests;
 /// <summary>
 /// 数据访问层集成测试：连接真实 MySQL（默认库 super_admin_test）。
-/// <para>连接串可通过环境变量 SUPER_ADMIN_TEST_CONN 覆盖。</para>
+/// <para>连接串强制经环境变量 SUPER_ADMIN_TEST_CONN 注入（P1-R8：移除内置密码回退）。</para>
 /// </summary>
 [TestFixture]
 public class DataAccessIntegrationTests
 {
-    /// <summary>默认测试连接串（root 密码为本机约定值）。</summary>
-    private const string DefaultConnectionString =
-        "server=localhost;port=3306;database=super_admin_test;user id=root;password=***REMOVED***;CharSet=utf8mb4;AllowPublicKeyRetrieval=true;SslMode=none";
-
     private ServiceProvider _provider = null!;
     private ISqlSugarClient _client = null!;
     private IAggregateRepository<SoftDeleteTestEntity> _softDeleteRepository = null!;
@@ -37,13 +33,16 @@ public class DataAccessIntegrationTests
     [OneTimeSetUp]
     public async Task OneTimeSetUpAsync()
     {
-        var connectionString = Environment.GetEnvironmentVariable("SUPER_ADMIN_TEST_CONN") ?? DefaultConnectionString;
+        var connectionString = TestDatabaseSupport.TestConnectionString;
 
         // 复用生产注册入口（IConfiguration 重载），内存配置覆盖测试连接串
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
-                ["Database:ConnectionString"] = connectionString
+                ["Database:ConnectionString"] = connectionString,
+                // 迁移机制由 SchemaMigrationTests 在独立临时库验证；本夹具带测试实体（表集与共享库基线不同），
+                // 关闭迁移块避免对共享库 baseline 造成不一致（否则先跑者写的基线会让后跑宿主启动校验失败）
+                ["Database:MigrationsEnabled"] = "false"
             })
             .Build();
 

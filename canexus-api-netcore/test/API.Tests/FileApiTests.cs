@@ -147,6 +147,41 @@ public class FileApiTests
         });
     }
 
+    /// <summary>边界守卫：超过业务上限但未超过 Kestrel 线级上限（MaxSizeMB+1MB）时，由业务校验以 401203 拒绝。</summary>
+    [Test]
+    public async Task Upload_BetweenBusinessAndKestrelLimit_RejectedByBusinessRule()
+    {
+        var payload = new byte[1024 * 1024 + 512 * 1024]; // 1.5MB：超 1MB 业务上限，低于 2MB Kestrel 上限
+        var response = await UploadRawAsync("mid-size.txt", "text/plain", payload);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+            Assert.That(body.GetProperty("code").GetInt32(), Is.EqualTo(401203));
+        });
+    }
+
+    /// <summary>
+    /// 核心回归（P0-S3）：请求体超过 Kestrel 线级上限（按 FileStorage:MaxSizeMB+1MB 配置）时，
+    /// 必须在进入业务校验前以 413 拒绝并返回统一业务码 401203（修复前端点上限为 1GB，大载荷被完整缓冲后才被业务拒绝）。
+    /// </summary>
+    [Test]
+    public async Task Upload_BodyOverKestrelLimit_Returns413WithBusinessCode()
+    {
+        var payload = new byte[2 * 1024 * 1024 + 64 * 1024]; // 2MB+64KB：超过 MaxSizeMB=1 时的 Kestrel 上限 2MB
+        var response = await UploadRawAsync("wire-limit.txt", "text/plain", payload);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.RequestEntityTooLarge),
+                "超过 Kestrel 请求体上限应返回 413");
+            Assert.That(body.GetProperty("code").GetInt32(), Is.EqualTo(401203),
+                "413 响应应携带统一业务错误码 401203");
+        });
+    }
+
     /// <summary>验证软删除：删除后分页不可见，详情返回 401201。</summary>
     [Test]
     public async Task Delete_SoftHides_Metadata()

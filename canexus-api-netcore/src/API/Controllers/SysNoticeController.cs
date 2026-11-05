@@ -1,11 +1,12 @@
 
-using Asp.Versioning;
 using API.Authorization;
 using API.Logging;
 using Application.Contracts.Commands;
 using Application.Contracts.Notices;
 using Application.Contracts.Queries;
+using Asp.Versioning;
 using Domain.Shared.Enums;
+using Domain.Shared.Permissions;
 using Domain.Shared.Results;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
@@ -25,7 +26,7 @@ public class SysNoticeController(ISender sender) : ControllerBase
     /// <param name="request">分页与筛选条件。</param>
     /// <returns>分页结果。</returns>
     [HttpGet("page")]
-    [RequirePermission("system:notice:list")]
+    [RequirePermission(PermissionDefinitions.SystemNoticeList)]
     public async Task<IActionResult> Page([FromQuery] NoticePageRequest request)
     {
         return Ok(Result.Ok(await sender.Send(new NoticeQueryPaged(request))));
@@ -35,7 +36,7 @@ public class SysNoticeController(ISender sender) : ControllerBase
     /// <param name="id">公告 Id。</param>
     /// <returns>公告详情。</returns>
     [HttpGet("{id:guid}")]
-    [RequirePermission("system:notice:query")]
+    [RequirePermission(PermissionDefinitions.SystemNoticeQuery)]
     public async Task<IActionResult> GetById(Guid id)
     {
         return Ok(Result.Ok(await sender.Send(new NoticeQueryDetail(id))));
@@ -45,7 +46,7 @@ public class SysNoticeController(ISender sender) : ControllerBase
     /// <param name="request">创建请求。</param>
     /// <returns>新公告 Id。</returns>
     [HttpPost]
-    [RequirePermission("system:notice:add")]
+    [RequirePermission(PermissionDefinitions.SystemNoticeAdd)]
     [OperLog("通知公告", OperBusinessType.Add)]
     public async Task<IActionResult> Create([FromBody] NoticeInputRequest request)
     {
@@ -59,7 +60,7 @@ public class SysNoticeController(ISender sender) : ControllerBase
     /// <param name="version">乐观锁版本号。</param>
     /// <returns>统一响应。</returns>
     [HttpPut("{id:guid}/{version:guid}")]
-    [RequirePermission("system:notice:edit")]
+    [RequirePermission(PermissionDefinitions.SystemNoticeEdit)]
     [OperLog("通知公告", OperBusinessType.Update)]
     public async Task<IActionResult> Update(Guid id, Guid version, [FromBody] NoticeInputRequest request)
     {
@@ -72,7 +73,7 @@ public class SysNoticeController(ISender sender) : ControllerBase
     /// <returns>统一响应。</returns>
     /// <param name="version">乐观锁版本号（须与聚合当前版本一致才允许删除）。</param>
     [HttpDelete("{id:guid}/{version:guid}")]
-    [RequirePermission("system:notice:remove")]
+    [RequirePermission(PermissionDefinitions.SystemNoticeRemove)]
     [OperLog("通知公告", OperBusinessType.Delete)]
     public async Task<IActionResult> Delete(Guid id, Guid version)
     {
@@ -85,7 +86,7 @@ public class SysNoticeController(ISender sender) : ControllerBase
     /// <param name="version">乐观锁版本号（与删除相同的路由参数模式）。</param>
     /// <returns>统一响应。</returns>
     [HttpPatch("{id:guid}/{version:guid}/restore")]
-    [RequirePermission("system:notice:restore")]
+    [RequirePermission(PermissionDefinitions.SystemNoticeRestore)]
     [OperLog("通知公告", OperBusinessType.Restore)]
     public async Task<IActionResult> Restore(Guid id, Guid version)
     {
@@ -97,6 +98,7 @@ public class SysNoticeController(ISender sender) : ControllerBase
     /// <param name="count">返回条数（≤ 20，缺省 5）。</param>
     /// <returns>最新公告列表（不含正文）。</returns>
     [HttpGet("latest")]
+    [AllowAnyAuthenticated]
     public async Task<IActionResult> Latest([FromQuery] int count = 5)
     {
         return Ok(Result.Ok(await sender.Send(new NoticeQueryLatest(count))));

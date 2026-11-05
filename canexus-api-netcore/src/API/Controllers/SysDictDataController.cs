@@ -1,11 +1,12 @@
 
-using Asp.Versioning;
 using API.Authorization;
 using API.Logging;
 using Application.Contracts.Commands;
 using Application.Contracts.Dicts;
 using Application.Contracts.Queries;
+using Asp.Versioning;
 using Domain.Shared.Enums;
+using Domain.Shared.Permissions;
 using Domain.Shared.Results;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
@@ -25,7 +26,7 @@ public class SysDictDataController(ISender sender) : ControllerBase
     /// <param name="request">分页与筛选条件。</param>
     /// <returns>分页结果。</returns>
     [HttpGet("page")]
-    [RequirePermission("system:dict:list")]
+    [RequirePermission(PermissionDefinitions.SystemDictList)]
     public async Task<IActionResult> Page([FromQuery] DictDataPageRequest request)
     {
         return Ok(Result.Ok(await sender.Send(new DictDataQueryPaged(request))));
@@ -35,7 +36,7 @@ public class SysDictDataController(ISender sender) : ControllerBase
     /// <param name="dictType">字典类型。</param>
     /// <returns>字典数据简项列表。</returns>
     [HttpGet("type/{dictType}")]
-    [RequirePermission("system:dict:query")]
+    [RequirePermission(PermissionDefinitions.SystemDictQuery)]
     public async Task<IActionResult> GetByType(string dictType)
     {
         return Ok(Result.Ok(await sender.Send(new DictDataQueryByType(dictType))));
@@ -45,7 +46,7 @@ public class SysDictDataController(ISender sender) : ControllerBase
     /// <param name="request">创建请求。</param>
     /// <returns>新字典数据 Id。</returns>
     [HttpPost]
-    [RequirePermission("system:dict:add")]
+    [RequirePermission(PermissionDefinitions.SystemDictAdd)]
     [OperLog("字典数据", OperBusinessType.Add)]
     public async Task<IActionResult> Create([FromBody] DictDataInputRequest request)
     {
@@ -59,7 +60,7 @@ public class SysDictDataController(ISender sender) : ControllerBase
     /// <param name="version">乐观锁版本号。</param>
     /// <returns>统一响应。</returns>
     [HttpPut("{id:guid}/{version:guid}")]
-    [RequirePermission("system:dict:edit")]
+    [RequirePermission(PermissionDefinitions.SystemDictEdit)]
     [OperLog("字典数据", OperBusinessType.Update)]
     public async Task<IActionResult> Update(Guid id, Guid version, [FromBody] DictDataInputRequest request)
     {
@@ -72,7 +73,7 @@ public class SysDictDataController(ISender sender) : ControllerBase
     /// <returns>统一响应。</returns>
     /// <param name="version">乐观锁版本号（须与聚合当前版本一致才允许删除）。</param>
     [HttpDelete("{id:guid}/{version:guid}")]
-    [RequirePermission("system:dict:remove")]
+    [RequirePermission(PermissionDefinitions.SystemDictRemove)]
     [OperLog("字典数据", OperBusinessType.Delete)]
     public async Task<IActionResult> Delete(Guid id, Guid version)
     {
@@ -85,7 +86,7 @@ public class SysDictDataController(ISender sender) : ControllerBase
     /// <param name="version">乐观锁版本号（与删除相同的路由参数模式）。</param>
     /// <returns>统一响应。</returns>
     [HttpPatch("{id:guid}/{version:guid}/restore")]
-    [RequirePermission("system:dict:restore")]
+    [RequirePermission(PermissionDefinitions.SystemDictRestore)]
     [OperLog("字典数据", OperBusinessType.Restore)]
     public async Task<IActionResult> Restore(Guid id, Guid version)
     {

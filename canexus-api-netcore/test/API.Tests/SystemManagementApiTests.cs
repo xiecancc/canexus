@@ -236,16 +236,16 @@ public class SystemManagementApiTests
         Assert.That(newLogin.StatusCode, Is.EqualTo(HttpStatusCode.OK), "重置后新密码应可登录");
     }
 
-    /// <summary>验证创建用户使用默认密码 123456 后可登录。</summary>
+    /// <summary>验证创建用户使用默认密码（Aa123456）后可登录（新默认密码满足强度规则：6-20 位含字母与数字）。</summary>
     [Test]
-    public async Task User_Create_DefaultPassword_123456_CanLogin()
+    public async Task User_Create_DefaultPassword_CanLogin()
     {
-        // 创建时不传 password → 缺省 123456
+        // 创建时不传 password → 缺省默认初始密码
         var userName = NewUserName();
         await CreateUserAsync(userName: userName, password: null);
-        var response = await TryLoginAsync(userName, "123456");
+        var response = await TryLoginAsync(userName, "Aa123456");
 
-        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK), "缺省密码应为 123456");
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK), "缺省密码应为 Aa123456");
     }
 
     /// <summary>验证对 admin 用户执行禁用、删除等操作被拒绝并返回 400205。</summary>

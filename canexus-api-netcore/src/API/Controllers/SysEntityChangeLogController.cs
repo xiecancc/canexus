@@ -1,8 +1,9 @@
 
-using Asp.Versioning;
 using API.Authorization;
 using Application.Contracts.Audit;
 using Application.Contracts.Queries;
+using Asp.Versioning;
+using Domain.Shared.Permissions;
 using Domain.Shared.Results;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
@@ -22,7 +23,7 @@ public class SysEntityChangeLogController(ISender sender) : ControllerBase
     /// <param name="request">分页与筛选条件。</param>
     /// <returns>分页结果。</returns>
     [HttpGet("page")]
-    [RequirePermission("monitor:changelog:list")]
+    [RequirePermission(PermissionDefinitions.MonitorChangelogList)]
     public async Task<IActionResult> Page([FromQuery] EntityChangeLogPageRequest request)
     {
         return Ok(Result.Ok(await sender.Send(new EntityChangeLogQueryPaged(request))));

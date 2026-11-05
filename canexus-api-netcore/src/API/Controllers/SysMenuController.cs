@@ -1,11 +1,12 @@
 
-using Asp.Versioning;
 using API.Authorization;
 using API.Logging;
 using Application.Contracts.Commands;
 using Application.Contracts.Menus;
 using Application.Contracts.Queries;
+using Asp.Versioning;
 using Domain.Shared.Enums;
+using Domain.Shared.Permissions;
 using Domain.Shared.Results;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
@@ -26,7 +27,7 @@ public class SysMenuController(ISender sender) : ControllerBase
     /// <param name="status">状态。</param>
     /// <returns>菜单树。</returns>
     [HttpGet("tree")]
-    [RequirePermission("system:menu:list")]
+    [RequirePermission(PermissionDefinitions.SystemMenuList)]
     public async Task<IActionResult> Tree([FromQuery] string? keyword, [FromQuery] Domain.Shared.Enums.CommonStatus? status)
     {
         return Ok(Result.Ok(await sender.Send(new MenuQueryTree(keyword, status))));
@@ -36,7 +37,7 @@ public class SysMenuController(ISender sender) : ControllerBase
     /// <param name="id">菜单 Id。</param>
     /// <returns>菜单详情。</returns>
     [HttpGet("{id:guid}")]
-    [RequirePermission("system:menu:query")]
+    [RequirePermission(PermissionDefinitions.SystemMenuQuery)]
     public async Task<IActionResult> Get(Guid id)
     {
         return Ok(Result.Ok(await sender.Send(new MenuQueryDetail(id))));
@@ -46,7 +47,7 @@ public class SysMenuController(ISender sender) : ControllerBase
     /// <param name="request">创建请求。</param>
     /// <returns>新菜单 Id。</returns>
     [HttpPost]
-    [RequirePermission("system:menu:add")]
+    [RequirePermission(PermissionDefinitions.SystemMenuAdd)]
     [OperLog("菜单管理", OperBusinessType.Add)]
     public async Task<IActionResult> Create([FromBody] MenuInputRequest request)
     {
@@ -60,7 +61,7 @@ public class SysMenuController(ISender sender) : ControllerBase
     /// <param name="version">乐观锁版本号。</param>
     /// <returns>统一响应。</returns>
     [HttpPut("{id:guid}/{version:guid}")]
-    [RequirePermission("system:menu:edit")]
+    [RequirePermission(PermissionDefinitions.SystemMenuEdit)]
     [OperLog("菜单管理", OperBusinessType.Update)]
     public async Task<IActionResult> Update(Guid id, Guid version, [FromBody] MenuInputRequest request)
     {
@@ -73,7 +74,7 @@ public class SysMenuController(ISender sender) : ControllerBase
     /// <returns>统一响应。</returns>
     /// <param name="version">乐观锁版本号（须与聚合当前版本一致才允许删除）。</param>
     [HttpDelete("{id:guid}/{version:guid}")]
-    [RequirePermission("system:menu:remove")]
+    [RequirePermission(PermissionDefinitions.SystemMenuRemove)]
     [OperLog("菜单管理", OperBusinessType.Delete)]
     public async Task<IActionResult> Delete(Guid id, Guid version)
     {
@@ -86,7 +87,7 @@ public class SysMenuController(ISender sender) : ControllerBase
     /// <param name="version">乐观锁版本号（与删除相同的路由参数模式）。</param>
     /// <returns>统一响应。</returns>
     [HttpPatch("{id:guid}/{version:guid}/restore")]
-    [RequirePermission("system:menu:restore")]
+    [RequirePermission(PermissionDefinitions.SystemMenuRestore)]
     [OperLog("菜单管理", OperBusinessType.Restore)]
     public async Task<IActionResult> Restore(Guid id, Guid version)
     {

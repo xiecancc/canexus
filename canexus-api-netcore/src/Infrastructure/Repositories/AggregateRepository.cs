@@ -35,33 +35,80 @@ public class AggregateRepository<TEntity>(ISqlSugarClient client, IUserContext c
     protected virtual bool EntityChangeLogEnabled => true;
 
     /// <inheritdoc />
+    public virtual async Task<TEntity?> GetDeletedAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        // 清除软删除 / 租户全局过滤器后按主键取墓碑，再按当前登录用户的租户范围显式约束，
+        // 避免恢复前校验因默认查询过滤而读不到目标行，同时不放大跨租户读取范围。
+        var query = Client.Queryable<TEntity>()
+            .ClearFilter<TEntity>()
+            .Where(it => it.Id == id && it.IsDeleted);
+
+        if (CurrentUser.TenantId is { } tenantId)
+        {
+            query = query.Where(it => it.TenantId == tenantId);
+        }
+
+        return await query.FirstAsync(cancellationToken);
+    }
+
+    /// <inheritdoc />
     public virtual async Task<bool> UpdateAsync(TEntity entity, CancellationToken cancellationToken = default)
     {
         // 变更审计：更新前取数据库快照（与业务更新同连接，读到的即旧值），
-        // 更新成功后同事务写入字段级变更日志（事务回滚时日志一并回滚，不记录未发生的变更）
+        // 字段级变更日志与业务更新写入同一事务（事务回滚时日志一并回滚，不记录未发生的变更）
         var oldEntity = EntityChangeLogEnabled
             ? await Client.Queryable<TEntity>().FirstAsync(it => it.Id == entity.Id, cancellationToken)
             : null;
+        var changeLogs = EntityChangeLogger.Build(oldEntity, entity, DateTime.UtcNow, CurrentUser.UserId);
 
         // 框架级乐观锁（Version 标记 IsEnableUpdateVersionValidation）：ExecuteCommandWithOptLock 自动生成
         // UPDATE ... WHERE Id = @id AND Version = 传入值，成功后自动轮换版本令牌，失败时回滚实体上的版本值；
         // 受影响 0 行说明库中版本已被他人推进，抛并发冲突业务异常。
         // 更新人/更新时间仍由 Aop.DataExecuting 自动填充。
         // 注意：SqlSugar 的 ExecuteCommandWithOptLockAsync 暂无 CancellationToken 重载，取消令牌不向下传递。
-        var rows = await Client.Updateable(entity)
-            .ExecuteCommandWithOptLockAsync();
-
-        if (rows == 0)
+        if (Client.Ado.Transaction is not null)
         {
-            throw new BusinessException(
-                ErrorCodes.CommonConcurrencyConflict,
-                "数据已被他人修改（版本号不一致），请刷新后重试。");
+            // 已处于业务事务（UnitOfWork / TransactionBehavior）内：直接执行，随外层事务统一提交或回滚
+            var rows = await Client.Updateable(entity)
+                .ExecuteCommandWithOptLockAsync();
+            if (rows == 0)
+            {
+                throw new BusinessException(
+                    ErrorCodes.CommonConcurrencyConflict,
+                    "数据已被他人修改（版本号不一致），请刷新后重试。");
+            }
+
+            if (changeLogs.Count > 0)
+            {
+                await Client.Insertable(changeLogs).ExecuteCommandAsync(cancellationToken);
+            }
         }
-
-        var changeLogs = EntityChangeLogger.Build(oldEntity, entity, DateTime.UtcNow, CurrentUser.UserId);
-        if (changeLogs.Count > 0)
+        else
         {
-            await Client.Insertable(changeLogs).ExecuteCommandAsync(cancellationToken);
+            // 无外层事务（系统任务等直写路径）：更新与变更日志在同一自持事务内原子完成（P1-R8），
+            // 消除"更新成功但变更日志写入失败"产生无审计变更的窗口
+            var result = await Client.Ado.UseTranAsync(async () =>
+            {
+                var rows = await Client.Updateable(entity)
+                    .ExecuteCommandWithOptLockAsync();
+                if (rows == 0)
+                {
+                    throw new BusinessException(
+                        ErrorCodes.CommonConcurrencyConflict,
+                        "数据已被他人修改（版本号不一致），请刷新后重试。");
+                }
+
+                if (changeLogs.Count > 0)
+                {
+                    await Client.Insertable(changeLogs).ExecuteCommandAsync();
+                }
+            });
+
+            if (!result.IsSuccess)
+            {
+                throw result.ErrorException
+                    ?? new BusinessException(ErrorCodes.CommonConcurrencyConflict, "数据更新失败，请重试。");
+            }
         }
 
         return true;

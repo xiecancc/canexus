@@ -22,6 +22,18 @@ public sealed class RateLimitOption : OptionBase
     /// <summary>认证端点限流窗口时长（秒）。</summary>
     public int AuthWindowSeconds { get; set; } = 60;
 
+    /// <summary>是否使用 Redis 分布式限流：多副本共享同一 Redis 计数键，实现跨实例一致的限流配额（P1-A5）。
+    /// <para>false（默认，开发 / 单副本）时为进程内限流；true 时需提供 <see cref="RedisConfiguration"/>，
+    /// 生产多副本部署建议开启（见部署文档 docker-compose）。</para>
+    /// </summary>
+    public bool UseRedis { get; set; }
+
+    /// <summary>Redis 连接串（StackExchange.Redis 格式），仅 <see cref="UseRedis"/> 为 true 时生效。</summary>
+    public string RedisConfiguration { get; set; } = "localhost:6379";
+
+    /// <summary>限流 Redis 键前缀（多应用 / 多环境共享 Redis 时隔离命名空间）。</summary>
+    public string RedisKeyPrefix { get; set; } = "super-admin:rl:";
+
     /// <inheritdoc />
     public override void Validate()
     {
@@ -41,5 +53,12 @@ public sealed class RateLimitOption : OptionBase
         }
 
         EnsureGreaterThanZero(AuthWindowSeconds, nameof(AuthWindowSeconds), "RateLimit:AuthWindowSeconds 必须大于 0");
+
+        // Redis 分布式限流仅在显式开启时校验相关配置
+        if (UseRedis)
+        {
+            EnsureNotNullOrWhiteSpace(RedisConfiguration, nameof(RedisConfiguration), "RateLimit:UseRedis=true 时 RateLimit:RedisConfiguration 不能为空");
+            EnsureNotNullOrWhiteSpace(RedisKeyPrefix, nameof(RedisKeyPrefix), "RateLimit:RedisKeyPrefix 不能为空");
+        }
     }
 }

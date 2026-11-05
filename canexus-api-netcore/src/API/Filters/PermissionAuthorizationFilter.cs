@@ -12,10 +12,10 @@ namespace API.Filters;
 /// <summary>
 /// 全局权限过滤器：解析端点上的 <see cref="RequirePermissionAttribute"/>，校验当前用户权限。
 /// <list type="bullet">
-/// <item>无特性 → 放行；匿名端点（AllowAnonymous）→ 放行；</item>
-/// <item>未认证 → 401 统一响应（code 40100）；</item>
-/// <item>超管（roleKey=super_admin）→ 放行全部；</item>
-/// <item>无权限 → 403 统一响应（code 40300）。</item>
+/// <item>匿名端点（AllowAnonymous）→ 放行；</item>
+/// <item>带 [RequirePermission] → 未认证 401 统一响应（code 40100）；超管（roleKey=super_admin）放行；无权限 403（code 40300）；</item>
+/// <item>带 [AllowAnyAuthenticated] → 未认证 401；已认证放行；</item>
+/// <item>权限声明与豁免皆无 → 默认拒绝 403（P0 权限默认拒绝运行期兜底；正常应在启动期反向扫描即被拦截）。</item>
 /// </list>
 /// </summary>
 /// <remarks>构造函数。</remarks>
@@ -39,6 +39,26 @@ public sealed class PermissionAuthorizationFilter(
         var permission = context.HttpContext.GetEndpoint()?.Metadata.GetMetadata<RequirePermissionAttribute>();
         if (permission is null)
         {
+            // 登录即可豁免端点：要求已认证，不做细粒度权限校验
+            if (context.HttpContext.GetEndpoint()?.Metadata.GetMetadata<AllowAnyAuthenticatedAttribute>() is not null)
+            {
+                if (!currentUser.IsAuthenticated)
+                {
+                    context.Result = Unauthorized();
+                }
+
+                return;
+            }
+
+            // 默认拒绝（P0）：受保护端点必须声明权限或显式豁免；漏写声明的端点在此被拒绝，
+            // 与启动期反向扫描（PermissionsStartupValidator.FindUnauthorizedEndpoints）构成双保险
+            logger.LogError("权限默认拒绝：端点 {Path} 未声明 [RequirePermission] 也未声明豁免，已拒绝访问（应在启动期反向扫描中修复）",
+                context.HttpContext.Request.Path);
+            context.Result = new JsonResult(Result.Fail(Domain.Shared.Results.ErrorCodes.AuthForbidden,
+                "端点未声明访问策略，已默认拒绝"))
+            {
+                StatusCode = StatusCodes.Status403Forbidden
+            };
             return;
         }
 
@@ -71,4 +91,10 @@ public sealed class PermissionAuthorizationFilter(
         logger.LogWarning("权限校验拒绝：用户 {UserId} 无 {Permission} 权限（路径 {Path}）",
             userId, permission.Permission, context.HttpContext.Request.Path);
     }
+
+    /// <summary>401 统一响应。</summary>
+    private static JsonResult Unauthorized() => new(Result.Fail(Domain.Shared.Results.ErrorCodes.AuthUnauthorized, "未登录或令牌无效"))
+    {
+        StatusCode = StatusCodes.Status401Unauthorized
+    };
 }

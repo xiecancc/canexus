@@ -57,3 +57,17 @@ public sealed class RoleUpdateCommandValidator() :
 
 /// <summary>删除角色命令验证器（乐观锁版本号入口兜底）。</summary>
 public sealed class RoleDeleteCommandValidator() : DeleteCommandValidator<RoleDeleteCommand>;
+
+/// <summary>修改角色状态命令验证器：状态仅允许 1 启用 / 0 停用（super_admin 保护由处理器完成）。</summary>
+public sealed class RoleUpdateStatusCommandValidator : AbstractValidator<RoleUpdateStatusCommand>
+{
+    /// <summary>构造函数。</summary>
+    public RoleUpdateStatusCommandValidator()
+    {
+        RuleFor(command => command.Request.Status)
+            .Must(status => status is CommonStatus.Enabled or CommonStatus.Disabled)
+            .WithMessage("状态取值不合法：仅支持 1 启用 / 0 停用");
+
+        RuleFor(command => command.Version).NoEmptyRule("乐观锁版本号不能为空，请回传详情 / 列表接口返回的 Version");
+    }
+}

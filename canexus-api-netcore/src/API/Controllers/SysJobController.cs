@@ -1,11 +1,12 @@
 
-using Asp.Versioning;
 using API.Authorization;
 using API.Logging;
 using Application.Contracts.Commands;
 using Application.Contracts.Jobs;
 using Application.Contracts.Queries;
+using Asp.Versioning;
 using Domain.Shared.Enums;
+using Domain.Shared.Permissions;
 using Domain.Shared.Results;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
@@ -25,7 +26,7 @@ public class SysJobController(ISender sender) : ControllerBase
     /// <param name="request">分页与筛选条件。</param>
     /// <returns>分页结果。</returns>
     [HttpGet("page")]
-    [RequirePermission("monitor:job:list")]
+    [RequirePermission(PermissionDefinitions.MonitorJobList)]
     public async Task<IActionResult> Page([FromQuery] JobPageRequest request)
     {
         return Ok(Result.Ok(await sender.Send(new JobQueryPaged(request))));
@@ -35,7 +36,7 @@ public class SysJobController(ISender sender) : ControllerBase
     /// <param name="request">创建请求。</param>
     /// <returns>新任务 Id。</returns>
     [HttpPost]
-    [RequirePermission("monitor:job:add")]
+    [RequirePermission(PermissionDefinitions.MonitorJobAdd)]
     [OperLog("定时任务", OperBusinessType.Add)]
     public async Task<IActionResult> Create([FromBody] JobInputRequest request)
     {
@@ -49,7 +50,7 @@ public class SysJobController(ISender sender) : ControllerBase
     /// <param name="version">乐观锁版本号。</param>
     /// <returns>统一响应。</returns>
     [HttpPut("{id:guid}/{version:guid}")]
-    [RequirePermission("monitor:job:edit")]
+    [RequirePermission(PermissionDefinitions.MonitorJobEdit)]
     [OperLog("定时任务", OperBusinessType.Update)]
     public async Task<IActionResult> Update(Guid id, Guid version, [FromBody] JobInputRequest request)
     {
@@ -62,7 +63,7 @@ public class SysJobController(ISender sender) : ControllerBase
     /// <returns>统一响应。</returns>
     /// <param name="version">乐观锁版本号（须与聚合当前版本一致才允许删除）。</param>
     [HttpDelete("{id:guid}/{version:guid}")]
-    [RequirePermission("monitor:job:remove")]
+    [RequirePermission(PermissionDefinitions.MonitorJobRemove)]
     [OperLog("定时任务", OperBusinessType.Delete)]
     public async Task<IActionResult> Delete(Guid id, Guid version)
     {
@@ -75,7 +76,7 @@ public class SysJobController(ISender sender) : ControllerBase
     /// <param name="version">乐观锁版本号（与删除相同的路由参数模式）。</param>
     /// <returns>统一响应。</returns>
     [HttpPatch("{id:guid}/{version:guid}/restore")]
-    [RequirePermission("monitor:job:restore")]
+    [RequirePermission(PermissionDefinitions.MonitorJobRestore)]
     [OperLog("定时任务", OperBusinessType.Restore)]
     public async Task<IActionResult> Restore(Guid id, Guid version)
     {
@@ -89,7 +90,7 @@ public class SysJobController(ISender sender) : ControllerBase
     /// <param name="version">乐观锁版本号。</param>
     /// <returns>统一响应。</returns>
     [HttpPut("{id:guid}/{version:guid}/status")]
-    [RequirePermission("monitor:job:changeStatus")]
+    [RequirePermission(PermissionDefinitions.MonitorJobChangeStatus)]
     [OperLog("定时任务", OperBusinessType.Update)]
     public async Task<IActionResult> UpdateStatus(Guid id, Guid version, [FromBody] JobStatusRequest request)
     {
@@ -101,7 +102,7 @@ public class SysJobController(ISender sender) : ControllerBase
     /// <param name="id">任务 Id。</param>
     /// <returns>统一响应。</returns>
     [HttpPut("{id:guid}/run")]
-    [RequirePermission("monitor:job:run")]
+    [RequirePermission(PermissionDefinitions.MonitorJobRun)]
     [OperLog("定时任务", OperBusinessType.Update)]
     public async Task<IActionResult> RunOnce(Guid id)
     {

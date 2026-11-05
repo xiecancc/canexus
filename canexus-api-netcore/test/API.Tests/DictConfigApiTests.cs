@@ -353,9 +353,9 @@ public class DictConfigApiTests
     [Test]
     public async Task Config_BuiltIn_SeededAndDeleteRejected()
     {
-        // 种子参数按键取值
+        // 种子参数按键取值（值与 UserConstants.DefaultPassword 一致：Aa123456）
         var initPassword = await GetJsonAsync("/api/system/config/key/sys.user.initPassword");
-        Assert.That(initPassword.RootElement.GetProperty("data").GetString(), Is.EqualTo("123456"), "种子参数 sys.user.initPassword 应为 123456");
+        Assert.That(initPassword.RootElement.GetProperty("data").GetString(), Is.EqualTo("Aa123456"), "种子参数 sys.user.initPassword 应为 Aa123456");
 
         // 种子内置参数删除 → 400703
         var page = await GetJsonAsync("/api/system/config/page?keyword=sys.user.initPassword");

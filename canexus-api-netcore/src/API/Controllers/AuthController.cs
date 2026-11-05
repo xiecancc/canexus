@@ -1,8 +1,10 @@
 
-using Asp.Versioning;
+using API.Logging;
 using Application.Contracts.Auth;
 using Application.Contracts.Commands;
 using Application.Contracts.Queries;
+using Asp.Versioning;
+using Domain.Shared.Enums;
 using Domain.Shared.Results;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
@@ -62,16 +64,34 @@ public class AuthController(ISender sender) : ControllerBase
     /// <returns>统一响应。</returns>
     [HttpPost("logout")]
     [Authorize]
+    [API.Authorization.AllowWhileMustChangePassword]
+    [API.Authorization.AllowAnyAuthenticated]
     public async Task<IActionResult> Logout([FromBody] LogoutRequest? request)
     {
         await sender.Send(new AuthLogoutCommand(request?.RefreshToken));
         return Ok(Result.Ok(message: "退出成功"));
     }
 
+    /// <summary>自助修改密码（校验原密码 → 更新哈希 → 清除强制改密标记 → 吊销全部刷新令牌强制重新登录；敏感凭证变更留痕审计）。</summary>
+    /// <param name="request">修改密码请求。</param>
+    /// <returns>统一响应。</returns>
+    [HttpPost("change-password")]
+    [Authorize]
+    [API.Authorization.AllowWhileMustChangePassword]
+    [API.Authorization.AllowAnyAuthenticated]
+    [OperLog("认证授权", OperBusinessType.Update)]
+    public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordRequest request)
+    {
+        await sender.Send(new AuthChangePasswordCommand(request.OldPassword, request.NewPassword));
+        return Ok(Result.Ok(message: "密码修改成功，请重新登录"));
+    }
+
     /// <summary>获取当前登录用户信息（角色与权限标识，超管权限为 ["*:*:*"]）。</summary>
     /// <returns>用户信息。</returns>
     [HttpGet("user-info")]
     [Authorize]
+    [API.Authorization.AllowWhileMustChangePassword]
+    [API.Authorization.AllowAnyAuthenticated]
     public async Task<IActionResult> UserInfo()
     {
         return Ok(Result.Ok(await sender.Send(new UserQueryInfo())));
@@ -81,6 +101,8 @@ public class AuthController(ISender sender) : ControllerBase
     /// <returns>路由树。</returns>
     [HttpGet("routes")]
     [Authorize]
+    [API.Authorization.AllowWhileMustChangePassword]
+    [API.Authorization.AllowAnyAuthenticated]
     public async Task<IActionResult> Routes()
     {
         return Ok(Result.Ok(await sender.Send(new UserQueryRoutes())));

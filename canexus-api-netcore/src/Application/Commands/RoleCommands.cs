@@ -7,11 +7,28 @@ using Domain.Entities;
 using Domain.Events;
 using Domain.Repositories;
 using Domain.Services.Events;
-using Domain.Shared.Constants;
+using Domain.Shared.Enums;
 using Domain.Shared.Exceptions;
 using Domain.Shared.Results;
 
 namespace Application.Commands;
+/// <summary>角色命令的共享业务逻辑（roleKey 可用性校验，供创建与更新处理器复用）。</summary>
+internal static class RoleSupport
+{
+    /// <summary>校验 roleKey 可用：保留值由聚合守卫拦截，重复性由仓储查询校验。</summary>
+    public static async Task EnsureRoleKeyAvailableAsync(IAggregateRepository<SysRole> roleRepository, string roleKey, Guid? excludeId, CancellationToken cancellationToken)
+    {
+        SysRole.EnsureRoleKeyNotReserved(roleKey);
+
+        var duplicated = (await roleRepository.GetListAsync([r => r.RoleKey == roleKey], cancellationToken: cancellationToken))
+            .Any(r => r.Id != excludeId);
+        if (duplicated)
+        {
+            throw new BusinessException(ErrorCodes.RoleKeyDuplicate, $"角色权限字符「{roleKey}」已存在");
+        }
+    }
+}
+
 /// <summary>角色-菜单授权的共享业务逻辑（菜单存在性校验与全量替换，供角色命令处理器复用）。</summary>
 internal static class RoleMenuSupport
 {
@@ -58,7 +75,7 @@ public sealed class RoleCreateCommandHandler(
     {
         var request = command.Request;
         var roleKey = request.RoleKey.Trim();
-        await EnsureRoleKeyAvailableAsync(roleKey, excludeId: null, cancellationToken);
+        await RoleSupport.EnsureRoleKeyAvailableAsync(roleRepository, roleKey, excludeId: null, cancellationToken);
         await RoleMenuSupport.ValidateMenusAsync(menuRepository, request.MenuIds, cancellationToken);
 
         var role = mapper.Map<SysRole>(request);
@@ -69,23 +86,6 @@ public sealed class RoleCreateCommandHandler(
         await domainEventPublisher.PublishAsync(new RoleCreatedEvent(role), cancellationToken);
         return true;
     }
-
-    /// <summary>校验 roleKey 可用：不可使用保留值 super_admin，且不与其他角色重复。</summary>
-    private async Task EnsureRoleKeyAvailableAsync(string roleKey, Guid? excludeId, CancellationToken cancellationToken)
-    {
-        if (roleKey == RoleConstants.SuperAdminRoleKey)
-        {
-            throw new BusinessException(ErrorCodes.RoleKeyReserved, "角色权限字符 super_admin 为内置保留值，不可使用");
-        }
-
-        var duplicated = (await roleRepository.GetListAsync([r => r.RoleKey == roleKey], cancellationToken: cancellationToken))
-            .Any(r => r.Id != excludeId);
-        if (duplicated)
-        {
-            throw new BusinessException(ErrorCodes.RoleKeyDuplicate, $"角色权限字符「{roleKey}」已存在");
-        }
-    }
-
 }
 
 /// <summary>删除角色命令处理器。</summary>
@@ -101,10 +101,7 @@ public sealed class RoleDeleteCommandHandler(
     {
         var role = await roleRepository.GetAsync([it => it.Id == command.Id], cancellationToken)
             ?? throw new BusinessException(ErrorCodes.RoleNotFound, $"角色 {command.Id} 不存在");
-        if (role.RoleKey == RoleConstants.SuperAdminRoleKey)
-        {
-            throw new BusinessException(ErrorCodes.RoleProtected, "内置超管角色 super_admin 不允许删除");
-        }
+        role.EnsureNotSuperAdmin("删除");
 
         if (await userRoleRepository.CountAsync([ur => ur.RoleId == command.Id], cancellationToken) > 0)
         {
@@ -152,13 +149,10 @@ public sealed class RoleUpdateCommandHandler(
         var request = command.Request;
         var role = await roleRepository.GetAsync([it => it.Id == command.Id], cancellationToken)
             ?? throw new BusinessException(ErrorCodes.RoleNotFound, $"角色 {command.Id} 不存在");
-        if (role.RoleKey == RoleConstants.SuperAdminRoleKey)
-        {
-            throw new BusinessException(ErrorCodes.RoleProtected, "内置超管角色 super_admin 不允许编辑");
-        }
+        role.EnsureNotSuperAdmin("编辑");
 
         var roleKey = request.RoleKey.Trim();
-        await EnsureRoleKeyAvailableAsync(roleKey, excludeId: command.Id, cancellationToken);
+        await RoleSupport.EnsureRoleKeyAvailableAsync(roleRepository, roleKey, excludeId: command.Id, cancellationToken);
         await RoleMenuSupport.ValidateMenusAsync(menuRepository, request.MenuIds, cancellationToken);
 
         // 变更前捕获角色状态快照（实体随后被原位修改）
@@ -173,21 +167,43 @@ public sealed class RoleUpdateCommandHandler(
         await domainEventPublisher.PublishAsync(new RoleUpdatedEvent(before, role), cancellationToken);
         return true;
     }
+}
 
-    /// <summary>校验 roleKey 可用：不可使用保留值 super_admin，且不与其他角色重复。</summary>
-    private async Task EnsureRoleKeyAvailableAsync(string roleKey, Guid? excludeId, CancellationToken cancellationToken)
+/// <summary>修改角色状态命令处理器（独立启停流程：super_admin 保护 → 状态合法性校验 → 乐观锁校验 → 原位更新 → 发布修改事件）。</summary>
+/// <remarks>构造函数。</remarks>
+public sealed class RoleUpdateStatusCommandHandler(
+    IAggregateRepository<SysRole> roleRepository,
+    IDomainEventPublisher domainEventPublisher) : AggregateUpdateCommandHandler<RoleUpdateStatusCommand, RoleStatusRequest, SysRole>(roleRepository, domainEventPublisher)
+{
+    /// <inheritdoc />
+    protected override int NotFoundErrorCode => ErrorCodes.RoleNotFound;
+
+    /// <inheritdoc />
+    protected override string EntityDisplayName => "角色";
+
+    /// <inheritdoc />
+    protected override Task ValidateAsync(RoleStatusRequest request, SysRole entity, CancellationToken cancellationToken)
     {
-        if (roleKey == RoleConstants.SuperAdminRoleKey)
+        entity.EnsureNotSuperAdmin("启停");
+
+        if (request.Status is not (CommonStatus.Enabled or CommonStatus.Disabled))
         {
-            throw new BusinessException(ErrorCodes.RoleKeyReserved, "角色权限字符 super_admin 为内置保留值，不可使用");
+            throw new BusinessException(ErrorCodes.CommonInvalidRequest, "状态取值不合法：仅支持 1 启用 / 0 停用");
         }
 
-        var duplicated = (await roleRepository.GetListAsync([r => r.RoleKey == roleKey], cancellationToken: cancellationToken))
-            .Any(r => r.Id != excludeId);
-        if (duplicated)
-        {
-            throw new BusinessException(ErrorCodes.RoleKeyDuplicate, $"角色权限字符「{roleKey}」已存在");
-        }
+        return Task.CompletedTask;
     }
 
+    /// <inheritdoc />
+    protected override void MapToEntity(RoleStatusRequest request, SysRole entity)
+    {
+        entity.Status = request.Status;
+    }
+
+    /// <inheritdoc />
+    protected override DomainEvent CreateEvent(SysRole before, SysRole after)
+    {
+        // 关键节点发布角色修改领域事件（停用即时生效：PermissionCacheInvalidationHandler 全量失效权限缓存）
+        return new RoleUpdatedEvent(before, after);
+    }
 }

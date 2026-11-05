@@ -12,6 +12,9 @@ namespace API.Extensions;
 /// <summary>认证授权的依赖注册扩展。</summary>
 public static class AuthDependencyExtensions
 {
+    /// <summary>令牌撤销校验失败标记（写入 HttpContext.Items，由 OnChallenge 区分错误码）。</summary>
+    private const string TokenRevokedReasonKey = "Auth:TokenRevoked";
+
     /// <summary>
     /// 注册 JWT Bearer 认证与授权：
     /// <list type="bullet">
@@ -34,14 +37,30 @@ public static class AuthDependencyExtensions
                 options.MapInboundClaims = false;
                 options.Events = new JwtBearerEvents
                 {
+                    // 令牌撤销校验（P1-A）：验签通过后再比对用户令牌版本 / 会话吊销状态；
+                    // 失败即标记原因并拒绝认证，由 OnChallenge 返回明确的 401 错误码
+                    OnTokenValidated = async context =>
+                    {
+                        var guard = context.HttpContext.RequestServices.GetRequiredService<ITokenValidationGuard>();
+                        if (!await guard.ValidateAsync(context.Principal!, context.HttpContext.RequestAborted))
+                        {
+                            context.HttpContext.Items[TokenRevokedReasonKey] = true;
+                            context.Fail("令牌已撤销");
+                        }
+                    },
+
                     // 401 挑战：返回与全局一致的 { code, message, data } 结构
                     OnChallenge = async context =>
                     {
                         context.HandleResponse();
+                        var revoked = context.HttpContext.Items.ContainsKey(TokenRevokedReasonKey);
                         var expired = context.AuthenticateFailure is SecurityTokenExpiredException;
-                        var result = Result.Fail(
-                            expired ? ErrorCodes.AuthTokenExpired : ErrorCodes.AuthUnauthorized,
-                            expired ? "令牌已过期，请重新登录" : "未登录或令牌无效");
+                        var (code, message) = revoked
+                            ? (ErrorCodes.AuthTokenRevoked, "登录状态已失效，请重新登录")
+                            : expired
+                                ? (ErrorCodes.AuthTokenExpired, "令牌已过期，请重新登录")
+                                : (ErrorCodes.AuthUnauthorized, "未登录或令牌无效");
+                        var result = Result.Fail(code, message);
 
                         context.Response.StatusCode = StatusCodes.Status401Unauthorized;
                         context.Response.ContentType = "application/json;charset=utf-8";

@@ -1,5 +1,4 @@
 
-using System.Collections.Concurrent;
 using Infrastructure.Shared.Locking;
 using Infrastructure.Shared.Options;
 using Microsoft.Extensions.Logging;
@@ -21,8 +20,13 @@ public sealed class DistributedLock(IOptionsMonitor<CacheOption> monitor, ILogge
     /// <summary>锁键前缀（复用缓存实例名，避免与其他系统的 Redis 键空间冲突；最终格式：{instance}lock:{key}）。</summary>
     private string Prefix => monitor.CurrentValue.InstanceName + "lock:";
 
-    /// <summary>进程内锁池（Redis 未启用时的降级实现；键集合有界：按业务键维度，不随请求量增长）。</summary>
-    private readonly ConcurrentDictionary<string, SemaphoreSlim> _localLocks = new();
+    /// <summary>本地降级锁池条带数（P1-R8：固定容量条带锁——按键哈希取条带，容量恒定不随动态键增长；
+    /// 代价是同条带的不同键互斥，作为"正确性增强"的降级路径可接受）。</summary>
+    private const int LocalLockStripes = 64;
+
+    /// <summary>进程内锁池（Redis 未启用时的降级实现）：固定长度信号量条带，无字典增长问题。</summary>
+    private readonly SemaphoreSlim[] _localLocks =
+        [.. Enumerable.Range(0, LocalLockStripes).Select(_ => new SemaphoreSlim(1, 1))];
 
     /// <summary>Redis 连接（懒加载单例：与缓存层各自持有连接，锁使用频率低，独立连接避免相互影响）。</summary>
     private ConnectionMultiplexer? _redis;
@@ -64,10 +68,12 @@ public sealed class DistributedLock(IOptionsMonitor<CacheOption> monitor, ILogge
         }
     }
 
-    /// <summary>本地锁路径：进程内信号量（expiry 无意义——单进程内句柄必然确定性释放，进程崩溃锁即消失）。</summary>
+    /// <summary>本地锁路径：进程内信号量条带（expiry 无意义——单进程内句柄必然确定性释放，进程崩溃锁即消失）。</summary>
     private async Task<IAsyncDisposable?> AcquireLocalAsync(string key, TimeSpan? waitTimeout, CancellationToken cancellationToken)
     {
-        var semaphore = _localLocks.GetOrAdd(Prefix + key, _ => new SemaphoreSlim(1, 1));
+        // 按键哈希取条带（无符号化避免负哈希），条带内互斥、条带间并行，容量恒定
+        var stripe = (uint)string.GetHashCode(Prefix + key, StringComparison.Ordinal) % LocalLockStripes;
+        var semaphore = _localLocks[stripe];
         var acquired = await semaphore.WaitAsync(waitTimeout ?? TimeSpan.Zero, cancellationToken);
         return acquired ? new LocalLockHandle(semaphore) : null;
     }

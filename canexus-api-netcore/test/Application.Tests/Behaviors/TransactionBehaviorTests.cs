@@ -1,8 +1,11 @@
 
 using Application.Behaviors;
 using Application.Contracts.Abstractions;
+using Application.Events;
+using Domain.Entities;
 using Domain.Repositories;
 using MediatR;
+using Microsoft.Extensions.Logging.Abstractions;
 using NUnit.Framework;
 
 namespace Application.Tests.Behaviors;
@@ -38,6 +41,16 @@ public sealed record TestTransactionCommand : Request<bool>, ICommand;
 /// <summary>用于测试的读请求（不实现 ICommand 标记）。</summary>
 public sealed record TestTransactionQuery : Request<string>;
 
+/// <summary>用于测试的投递服务假实现：直接完成（本测试仅验证事务包裹语义，投递行为由集成测试覆盖）。</summary>
+public sealed class NoOpOutboxDeliveryService : IOutboxDeliveryService
+{
+    /// <inheritdoc />
+    public Task DeliverAsync(IReadOnlyList<OutboxMessage> messages, string? claimOwner, CancellationToken cancellationToken = default)
+    {
+        return Task.CompletedTask;
+    }
+}
+
 /// <summary>事务管道行为测试：写命令自动包裹事务、查询透放、异常原样上抛。</summary>
 public class TransactionBehaviorTests
 {
@@ -46,7 +59,7 @@ public class TransactionBehaviorTests
     public async Task Handle_Command_WrapsInTransactionAndReturnsResponse()
     {
         var unitOfWork = new RecordingUnitOfWork();
-        var behavior = new TransactionBehavior<TestTransactionCommand, bool>(unitOfWork);
+        var behavior = new TransactionBehavior<TestTransactionCommand, bool>(unitOfWork, new PendingOutboxDelivery(), new NoOpOutboxDeliveryService(), NullLogger<TransactionBehavior<TestTransactionCommand, bool>>.Instance);
         var next = new RequestHandlerDelegate<bool>(() => Task.FromResult(true));
 
         var response = await behavior.Handle(new TestTransactionCommand(), next, CancellationToken.None);
@@ -60,7 +73,7 @@ public class TransactionBehaviorTests
     public async Task Handle_Query_PassesThroughWithoutTransaction()
     {
         var unitOfWork = new RecordingUnitOfWork();
-        var behavior = new TransactionBehavior<TestTransactionQuery, string>(unitOfWork);
+        var behavior = new TransactionBehavior<TestTransactionQuery, string>(unitOfWork, new PendingOutboxDelivery(), new NoOpOutboxDeliveryService(), NullLogger<TransactionBehavior<TestTransactionQuery, string>>.Instance);
         var next = new RequestHandlerDelegate<string>(() => Task.FromResult("ok"));
 
         var response = await behavior.Handle(new TestTransactionQuery(), next, CancellationToken.None);
@@ -74,7 +87,7 @@ public class TransactionBehaviorTests
     public void Handle_CommandThrows_PropagatesException()
     {
         var unitOfWork = new RecordingUnitOfWork();
-        var behavior = new TransactionBehavior<TestTransactionCommand, bool>(unitOfWork);
+        var behavior = new TransactionBehavior<TestTransactionCommand, bool>(unitOfWork, new PendingOutboxDelivery(), new NoOpOutboxDeliveryService(), NullLogger<TransactionBehavior<TestTransactionCommand, bool>>.Instance);
         var next = new RequestHandlerDelegate<bool>(() => throw new InvalidOperationException("业务异常"));
 
         Assert.ThrowsAsync<InvalidOperationException>(

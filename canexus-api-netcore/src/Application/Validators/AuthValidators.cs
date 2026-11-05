@@ -26,3 +26,14 @@ public sealed class AuthRefreshTokenCommandValidator : AbstractValidator<AuthRef
         RuleFor(command => command.RefreshToken).NotBlankRule("刷新令牌不能为空");
     }
 }
+
+/// <summary>自助修改密码命令验证器：原密码非空、新密码满足强度规则（原密码正确性与用户存在性由处理器校验）。</summary>
+public sealed class AuthChangePasswordCommandValidator : AbstractValidator<AuthChangePasswordCommand>
+{
+    /// <summary>构造函数。</summary>
+    public AuthChangePasswordCommandValidator()
+    {
+        RuleFor(command => command.OldPassword).NotBlankRule("原密码不能为空");
+        RuleFor(command => command.NewPassword).PasswordRule();
+    }
+}

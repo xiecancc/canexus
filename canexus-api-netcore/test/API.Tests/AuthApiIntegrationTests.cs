@@ -2,6 +2,8 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using API;
 using Application.Commands;
@@ -407,6 +409,159 @@ public class AuthApiIntegrationTests
         });
     }
 
+    // —— 刷新令牌存储安全（P0-S2）——
+
+    /// <summary>核心回归：刷新令牌必须以 SHA-256 哈希存储，明文串不得命中任何记录（修复前明文直存）。</summary>
+    [Test]
+    public async Task RefreshToken_StoredAsSha256Hash_NotPlaintext()
+    {
+        var (_, tokens) = await LoginAsync(AdminUserName, AdminPassword);
+        Assert.That(tokens, Is.Not.Null);
+
+        var raw = tokens!.RefreshToken;
+        var expectedHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(raw))).ToLowerInvariant();
+
+        var plaintextHit = await _db.Queryable<SysRefreshToken>().AnyAsync(t => t.Token == raw);
+        Assert.That(plaintextHit, Is.False, "刷新令牌不得以明文形式存储（应按 SHA-256 哈希存储）");
+
+        var hashHit = await _db.Queryable<SysRefreshToken>().AnyAsync(t => t.Token == expectedHash);
+        Assert.That(hashHit, Is.True, "应以刷新令牌的 SHA-256 哈希值存储记录");
+    }
+
+    // —— 令牌撤销（P1-A）——
+
+    /// <summary>
+    /// 单设备登出：该会话 accessToken 下一次请求即 401（错误码 40107），同用户其他设备会话不受影响。
+    /// </summary>
+    [Test]
+    public async Task Logout_InvalidatesOnlyCurrentSessionAccessToken()
+    {
+        var (_, sessionA) = await LoginAsync(TestUserName, TestUserPassword);
+        var (_, sessionB) = await LoginAsync(TestUserName, TestUserPassword);
+        Assert.That(sessionA, Is.Not.Null);
+        Assert.That(sessionB, Is.Not.Null);
+
+        var logout = await PostJsonAsync("/api/auth/logout", new { refreshToken = sessionA!.RefreshToken }, sessionA.AccessToken);
+        Assert.That(logout.StatusCode, Is.EqualTo(HttpStatusCode.OK), "登出应成功");
+
+        var revoked = await SendAuthorizedAsync(HttpMethod.Get, "/api/auth/user-info", sessionA.AccessToken);
+        var revokedBody = await ReadBodyAsync(revoked);
+        var otherSession = await SendAuthorizedAsync(HttpMethod.Get, "/api/auth/user-info", sessionB!.AccessToken);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(revoked.StatusCode, Is.EqualTo(HttpStatusCode.Unauthorized), "登出会话的 accessToken 应立即失效");
+            Assert.That(revokedBody.RootElement.GetProperty("code").GetInt32(), Is.EqualTo(40107), "应返回令牌已撤销错误码");
+            Assert.That(otherSession.StatusCode, Is.EqualTo(HttpStatusCode.OK), "同用户其他设备会话不应被登出影响");
+        });
+    }
+
+    /// <summary>管理员按会话强制下线：目标会话 accessToken 下一次请求即 401，且不影响操作者自身会话。</summary>
+    [Test]
+    public async Task ForceLogout_InvalidatesTargetSessionAccessToken()
+    {
+        var (_, victim) = await LoginAsync(TestUserName, TestUserPassword);
+        Assert.That(victim, Is.Not.Null);
+
+        var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(victim!.RefreshToken))).ToLowerInvariant();
+        var session = await _db.Queryable<SysRefreshToken>().Where(it => it.Token == hash).FirstAsync();
+        Assert.That(session, Is.Not.Null, "应能按刷新令牌哈希反查到在线会话记录");
+
+        var revoke = await SendAuthorizedAsync(HttpMethod.Post, $"/api/monitor/online/{session!.Id}/revoke", _adminAccessToken);
+        Assert.That(revoke.StatusCode, Is.EqualTo(HttpStatusCode.OK), "强制下线应成功");
+
+        var revoked = await SendAuthorizedAsync(HttpMethod.Get, "/api/auth/user-info", victim.AccessToken);
+        var revokedBody = await ReadBodyAsync(revoked);
+        var adminStillValid = await SendAuthorizedAsync(HttpMethod.Get, "/api/auth/user-info", _adminAccessToken);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(revoked.StatusCode, Is.EqualTo(HttpStatusCode.Unauthorized), "被强制下线的会话 accessToken 应立即失效");
+            Assert.That(revokedBody.RootElement.GetProperty("code").GetInt32(), Is.EqualTo(40107));
+            Assert.That(adminStillValid.StatusCode, Is.EqualTo(HttpStatusCode.OK), "强制下线不应影响其他用户的会话");
+        });
+    }
+
+    /// <summary>自助改密：旧 accessToken 立即 401，之后旧密码不可登录、新密码可登录并正常访问。</summary>
+    [Test]
+    public async Task ChangePassword_InvalidatesOldAccessToken_NewLoginWorks()
+    {
+        const string newPassword = "test@4567";
+        var (_, tokens) = await LoginAsync(TestUserName, TestUserPassword);
+        Assert.That(tokens, Is.Not.Null);
+
+        try
+        {
+            var change = await PostJsonAsync(
+                "/api/auth/change-password",
+                new { oldPassword = TestUserPassword, newPassword },
+                tokens!.AccessToken);
+            Assert.That(change.StatusCode, Is.EqualTo(HttpStatusCode.OK), "改密应成功");
+
+            var revoked = await SendAuthorizedAsync(HttpMethod.Get, "/api/auth/user-info", tokens.AccessToken);
+            var revokedBody = await ReadBodyAsync(revoked);
+            Assert.Multiple(() =>
+            {
+                Assert.That(revoked.StatusCode, Is.EqualTo(HttpStatusCode.Unauthorized), "改密后旧 accessToken 应立即失效");
+                Assert.That(revokedBody.RootElement.GetProperty("code").GetInt32(), Is.EqualTo(40107));
+            });
+
+            var (newLogin, newTokens) = await LoginAsync(TestUserName, newPassword);
+            Assert.That(newLogin.StatusCode, Is.EqualTo(HttpStatusCode.OK), "新密码应可登录");
+            Assert.That(newTokens, Is.Not.Null);
+
+            var info = await SendAuthorizedAsync(HttpMethod.Get, "/api/auth/user-info", newTokens!.AccessToken);
+            Assert.That(info.StatusCode, Is.EqualTo(HttpStatusCode.OK), "新登录签发的 accessToken 应可正常访问");
+        }
+        finally
+        {
+            await EnsureTestUserAsync();
+            ClearLoginFailState(TestUserName);
+        }
+    }
+
+    /// <summary>停用用户：此前签发的 accessToken 下一次请求即 401（无需等待令牌自然过期）。</summary>
+    [Test]
+    public async Task DisableUser_InvalidatesExistingAccessToken()
+    {
+        var (_, tokens) = await LoginAsync(TestUserName, TestUserPassword);
+        Assert.That(tokens, Is.Not.Null);
+
+        var user = await _db.Queryable<SysUser>().Where(it => it.UserName == TestUserName).FirstAsync();
+        Assert.That(user, Is.Not.Null);
+
+        try
+        {
+            var disable = await SendJsonAuthorizedAsync(
+                HttpMethod.Put,
+                $"/api/system/user/{user!.Id}/{user.Version}/status",
+                new { status = 0 },
+                _adminAccessToken);
+            Assert.That(disable.StatusCode, Is.EqualTo(HttpStatusCode.OK), "停用用户应成功");
+
+            var revoked = await SendAuthorizedAsync(HttpMethod.Get, "/api/auth/user-info", tokens!.AccessToken);
+            var revokedBody = await ReadBodyAsync(revoked);
+            Assert.Multiple(() =>
+            {
+                Assert.That(revoked.StatusCode, Is.EqualTo(HttpStatusCode.Unauthorized), "用户停用后 accessToken 应立即失效");
+                Assert.That(revokedBody.RootElement.GetProperty("code").GetInt32(), Is.EqualTo(40107));
+            });
+        }
+        finally
+        {
+            await _db.Updateable<SysUser>()
+                .SetColumns(it => it.Status == CommonStatus.Enabled)
+                .Where(it => it.Id == user!.Id)
+                .ExecuteCommandAsync();
+
+            // 测试直接写库恢复状态不会触发领域事件：显式递增令牌版本并清理缓存，
+            // 否则后续用例会读到缓存的「已停用」状态而被误判为令牌已撤销（夹具共享同一测试用户）
+            using var scope = _factory.Services.CreateScope();
+            await scope.ServiceProvider.GetRequiredService<ITokenVersionService>().RevokeAllAsync(user!.Id);
+            ClearLoginFailState(TestUserName);
+        }
+    }
+
     // —— 测试辅助 ——
 
     /// <summary>准备无权限测试用户：test_user 角色（未分配菜单）+ testuser 用户，幂等。</summary>
@@ -513,6 +668,14 @@ public class AuthApiIntegrationTests
     private async Task<HttpResponseMessage> SendAuthorizedAsync(HttpMethod method, string url, string accessToken)
     {
         var request = new HttpRequestMessage(method, url);
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+        return await _httpClient.SendAsync(request);
+    }
+
+    /// <summary>带 token 且携带 JSON 请求体的请求（PUT / POST）。</summary>
+    private async Task<HttpResponseMessage> SendJsonAuthorizedAsync(HttpMethod method, string url, object payload, string accessToken)
+    {
+        var request = new HttpRequestMessage(method, url) { Content = JsonContent.Create(payload) };
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
         return await _httpClient.SendAsync(request);
     }

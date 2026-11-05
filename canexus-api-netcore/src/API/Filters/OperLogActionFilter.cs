@@ -5,6 +5,7 @@ using Domain.Entities;
 using Domain.Repositories;
 using Domain.Services.Users;
 using Domain.Shared.Json;
+using Infrastructure.Shared.Contexts;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Controllers;
 using Microsoft.AspNetCore.Mvc.Filters;
@@ -12,9 +13,11 @@ using Microsoft.AspNetCore.Mvc.Filters;
 namespace API.Filters;
 /// <summary>
 /// 全局操作日志过滤器（异步 ActionFilter）：解析端点上的 <see cref="OperLogAttribute"/>，
-/// 记录请求参数（敏感字段脱敏）、成功失败与异常消息、耗时、IP 与操作人，写入 sys_oper_log。
+/// 记录请求参数（敏感字段脱敏）、成功失败与异常消息、耗时、IP、操作人与链路 TraceId，写入 sys_oper_log。
 /// <list type="bullet">
-/// <item>无特性 → 直接放行不记录；</item>
+/// <item>无特性 → 直接放行不记录（写命令审计由 AuditLogBehavior 默认兜底）；</item>
+/// <item>带特性 → 在 MediatR 管道执行前标记接管（IOperationContext.MarkOperLogHandled），
+/// 管道默认审计据此跳过本请求，避免同一操作双份记录；</item>
 /// <item>异常（含业务异常）→ 记录 Status=0 与错误消息，异常继续向上抛由全局中间件统一响应；</item>
 /// <item>日志写入自身失败仅告警，不影响主流程响应。</item>
 /// </list>
@@ -22,8 +25,13 @@ namespace API.Filters;
 /// <remarks>构造函数。</remarks>
 /// <param name="operLogRepository">操作日志仓储。</param>
 /// <param name="currentUser">当前用户上下文。</param>
+/// <param name="operationContext">请求上下文（TraceId 读取 + 接管标记写入）。</param>
 /// <param name="logger">日志。</param>
-public sealed class OperLogActionFilter(IOperLogRepository operLogRepository, IUserContext currentUser, ILogger<OperLogActionFilter> logger) : IAsyncActionFilter
+public sealed class OperLogActionFilter(
+    IOperLogRepository operLogRepository,
+    IUserContext currentUser,
+    IOperationContext operationContext,
+    ILogger<OperLogActionFilter> logger) : IAsyncActionFilter
 {
     /// <inheritdoc />
     public async Task OnActionExecutionAsync(ActionExecutingContext context, ActionExecutionDelegate next)
@@ -34,6 +42,9 @@ public sealed class OperLogActionFilter(IOperLogRepository operLogRepository, IU
             await next();
             return;
         }
+
+        // 管道执行前标记接管：AuditLogBehavior（默认审计）据此跳过本请求，避免与过滤器重复记录
+        operationContext.MarkOperLogHandled();
 
         try
         {
@@ -59,6 +70,8 @@ public sealed class OperLogActionFilter(IOperLogRepository operLogRepository, IU
                 OperParam = operParam,
                 OperIp = context.HttpContext.Connection.RemoteIpAddress?.ToString(),
                 OperUserName = currentUser.UserName ?? string.Empty,
+                UserId = currentUser.UserId,
+                TraceId = operationContext.TraceId,
                 Status = exception is null
                     ? Domain.Shared.Enums.ExecutionStatus.Success
                     : Domain.Shared.Enums.ExecutionStatus.Failure,

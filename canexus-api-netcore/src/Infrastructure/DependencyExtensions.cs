@@ -14,12 +14,13 @@ using Infrastructure.Locking;
 using Infrastructure.Notifications;
 using Infrastructure.Repositories;
 using Infrastructure.Scheduling;
-using Infrastructure.Storage;
 using Infrastructure.Shared.Caching;
+using Infrastructure.Shared.Contexts;
 using Infrastructure.Shared.Filtering;
 using Infrastructure.Shared.Locking;
 using Infrastructure.Shared.Options;
 using Infrastructure.Shared.Tenants;
+using Infrastructure.Storage;
 using Infrastructure.Tenants;
 using Infrastructure.Users;
 using Microsoft.Extensions.Caching.Distributed;
@@ -99,8 +100,12 @@ public static class DependencyExtensions
         services.RegisterOption<CorsOption>(configuration, "Cors");
         services.RegisterOption<RateLimitOption>(configuration, "RateLimit");
         services.RegisterOption<HttpsOption>(configuration, "Https");
+        services.RegisterOption<ForwardedOption>(configuration, "Forwarded");
         services.RegisterOption<FileStorageOption>(configuration, "FileStorage");
         services.RegisterOption<MailOption>(configuration, "Mail");
+        services.RegisterOption<OutboxOption>(configuration, "Outbox");
+        services.RegisterOption<MultiTenancyOption>(configuration, "MultiTenancy");
+        services.RegisterOption<SchedulingOption>(configuration, "Scheduling");
 
         return services;
     }
@@ -125,6 +130,12 @@ public static class DependencyExtensions
 
         // 令牌主题工厂：登录成功与刷新令牌轮换共用的用户角色装载逻辑
         services.AddScoped<ITokenSubjectFactory, TokenSubjectFactory>();
+
+        // 令牌版本（安全戳）服务：用户级版本 + 会话级吊销集合，请求期经缓存校验（P1-A 令牌可撤销）
+        services.AddScoped<ITokenVersionService, Infrastructure.Auth.TokenVersionService>();
+
+        // 请求期令牌撤销校验：JwtBearer OnTokenValidated 事件调用，校验失败即 401
+        services.AddScoped<ITokenValidationGuard, Infrastructure.Auth.TokenValidationGuard>();
 
         // 图形验证码：无状态单例（验证码内容经 ICache 双层缓存存取）
         services.AddSingleton<ICaptchaService, CaptchaService>();
@@ -168,20 +179,67 @@ public static class DependencyExtensions
 
     #region 定时任务调度
 
-    /// <summary>注册定时任务调度能力：Quartz 调度器（Microsoft DI 作业工厂）、宿主服务与调度管理实现。</summary>
+    /// <summary>注册定时任务调度能力：Quartz 调度器（MySQL 持久化 JobStore + 集群模式）、宿主服务与调度管理实现。</summary>
     /// <param name="services">服务集合。</param>
     /// <returns>服务集合。</returns>
     public static IServiceCollection AddScheduling(this IServiceCollection services)
     {
-        // Quartz 调度器（Microsoft DI 作业工厂为默认行为，无需显式配置）+ 宿主服务（应用启动即启动调度器）
+        // Quartz 集群存储初始化（P1-A4）：幂等确保 QRTZ_ 表存在，必须先于调度器宿主启动
+        services.AddHostedService<QuartzSchemaInitializer>();
+
+        // Quartz 调度器：MySQL 持久化 JobStore（JobStoreTX）+ 集群模式（P1-A4）。
+        // 集群语义：任务定义 / 触发器 / 已触发记录全部持久化于共享 MySQL，实例间经 QRTZ_LOCKS 行锁竞争触发，
+        // 同一触发周期全局仅一个实例执行——双实例（多副本）部署任务不重复执行。
         services.AddQuartz();
-        services.AddQuartzHostedService(options => options.WaitForJobsToComplete = false);
+
+        // 调度配置默认值：未走宿主 RegisterOptions 的场景（如独立装配调度器的集成测试）回退到默认参数；
+        // 宿主启动时 RegisterOptions 已注册 SchedulingOption，此处 TryAdd 不会覆盖
+        services.TryAddSingleton(new SchedulingOption());
+        services.AddOptions<QuartzOptions>()
+            .Configure<SchedulingOption>((quartz, scheduling) =>
+            {
+                // 线程池显式配置（P1-C）：避免默认 10 线程与业务并发量错配导致的触发排队
+                quartz["quartz.threadPool.type"] = "Quartz.Simpl.DefaultThreadPool";
+                quartz["quartz.threadPool.threadCount"] = scheduling.ThreadCount.ToString();
+            });
+        services.AddOptions<QuartzOptions>()
+            .Configure<IOptions<DatabaseOption>>((quartz, databaseOptions) =>
+            {
+                QuartzMySqlProvider.EnsureRegistered();
+                var database = databaseOptions.Value;
+
+                quartz.SchedulerName = "SuperAdminScheduler";
+                // 集群实例 ID 自动生成（主机名 + 时间戳，多实例唯一）
+                quartz.SchedulerId = "AUTO";
+                quartz["quartz.jobStore.type"] = "Quartz.Impl.AdoJobStore.JobStoreTX";
+                // driverDelegateType：Quartz 3.22.9 的 StdAdoDelegate 存在布尔列读写不对称——写入侧以 "1"/"0" 落库，
+                // 而读取侧 GetBooleanFromDbValue 走 Convert.ToBoolean（仅认 "True"/"False"）抛 FormatException
+                //（实测 "String '1' was not recognized as a valid Boolean"，任务装载 / 触发器删除均受影响）。
+                // 采用自定义 SuperAdminMySqlDelegate：读取侧对称适配 "1"/"0"/"Y"/"N"，兼容存量与新增数据
+                quartz["quartz.jobStore.driverDelegateType"] = "Infrastructure.Scheduling.SuperAdminMySqlDelegate, Infrastructure";
+                quartz["quartz.jobStore.clustered"] = "true";
+                quartz["quartz.jobStore.clusterCheckinInterval"] = "15000";
+                quartz["quartz.jobStore.tablePrefix"] = "QRTZ_";
+                quartz["quartz.jobStore.dataSource"] = "default";
+                quartz["quartz.jobStore.useProperties"] = "false";
+                // 序列化器：非 RAM JobStore 必须显式指定；内置 binary 基于 BinaryFormatter（.NET 10 已移除，不可用），
+                // 采用 json（Quartz.Serialization.Json 独立包，Infrastructure 已引用）——JobDataMap 以 JSON 存 QRTZ_JOB_DETAILS.JOB_DATA
+                quartz["quartz.serializer.type"] = "json";
+                quartz["quartz.dataSource.default.connectionString"] = database.ConnectionString;
+                quartz["quartz.dataSource.default.provider"] = QuartzMySqlProvider.ProviderName;
+            });
+        // 优雅停机（P1-C）：主机停止时等待运行中的任务完成（受宿主关闭超时上限保护），避免任务被中途中断；
+        // 若部署侧关闭超时短于任务耗时时，应同时调大宿主 / 容器 stop timeout
+        services.AddQuartzHostedService(options => options.WaitForJobsToComplete = true);
 
         // 定时任务调度管理（依赖 scoped 仓储，随请求作用域创建）
         services.AddScoped<IJobScheduleManager, JobScheduleManager>();
 
         // 调度器运行信息提供者（监控端点消费）
         services.AddScoped<ISchedulerInfoProvider, SchedulerInfoProvider>();
+
+        // 缓存运行信息提供者（监控端点消费）
+        services.AddScoped<ICacheMonitorProvider, CacheMonitorProvider>();
 
         return services;
     }
@@ -258,6 +316,17 @@ public static class DependencyExtensions
         services.AddScoped<ISysRefreshTokenRepository, SysRefreshTokenRepository>();
         services.AddScoped<ILoginLogRepository, LoginLogRepository>();
         services.AddScoped<IJobLogRepository, JobLogRepository>();
+        services.AddScoped<IOutboxMessageRepository, OutboxMessageRepository>();
+        services.AddScoped<ITenantAccessValidator, TenantAccessValidator>();
+        services.AddSingleton<SchemaMigrator>();
+        // 增量迁移清单（P1-A3）：新增迁移按 ISchemaMigration 实现并在此追加
+        // 增量迁移清单（P1-A3）：新增迁移按 ISchemaMigration 实现并在此逐个注册
+        // （DbInitializer 以 IEnumerable<ISchemaMigration> 注入——逐个注册才能被 DI 集合解析发现；
+        // 注册 ISchemaMigration[] 单例会因 IEnumerable 特殊解析规则得到空集合）
+        services.AddSingleton<ISchemaMigration, Infrastructure.DataAccess.Migrations.AddPostTablesMigration>();
+        services.AddSingleton<ISchemaMigration, Infrastructure.DataAccess.Migrations.AddOperLogAuditColumnsMigration>();
+        // 请求上下文（P0 默认审计）：供 AuditLogBehavior 读取链路 TraceId、并与 OperLogActionFilter 协同去重
+        services.AddSingleton<IOperationContext, Infrastructure.Logging.HttpContextOperationContext>();
         services.AddSingleton<DbInitializer>();
 
         return services;

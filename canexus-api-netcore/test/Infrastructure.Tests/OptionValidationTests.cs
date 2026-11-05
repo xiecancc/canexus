@@ -187,6 +187,16 @@ public class OptionValidationTests
         Assert.That(ex!.Message, Does.Contain("不得小于 32 字符"));
     }
 
+    /// <summary>验证 JWT 密钥仍为模板默认不安全值时校验抛出异常（S3 启动强校验）。</summary>
+    [Test]
+    public void JwtOption_InsecureDefaultSecret_Throws()
+    {
+        var option = new JwtOption { Secret = JwtOption.InsecureDefaultSecret };
+
+        var ex = Assert.Throws<ArgumentException>(() => option.Validate());
+        Assert.That(ex!.Message, Does.Contain("默认不安全值"));
+    }
+
     /// <summary>验证 accessToken 有效期超过一天时校验抛出异常。</summary>
     [Test]
     public void JwtOption_AccessTokenMinutesExceedsOneDay_Throws()

@@ -7,6 +7,7 @@ using API;
 using Domain.Entities;
 using Domain.Services.Security;
 using Domain.Shared.Results;
+using Infrastructure.Security;
 using Infrastructure.Shared.Caching;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
@@ -143,10 +144,10 @@ public class OnlineUserApiTests
     [Test]
     public async Task Online_ForceLogout_RevokesSessionAndBlocksRefresh()
     {
-        // 独立登录产生一条可强退的会话（不占用套件级 _adminToken）；按令牌串精确定位记录（并发夹具下不能按最新时间猜）
+        // 独立登录产生一条可强退的会话（不占用套件级 _adminToken）；按令牌的 SHA-256 哈希精确定位记录（库表不存明文）
         var pair = await LoginAsync(AdminUserName, AdminPassword);
         var token = await _db.Queryable<SysRefreshToken>()
-            .Where(t => t.Token == pair.RefreshToken && t.RevokedAt == null)
+            .Where(t => t.Token == RefreshTokenHasher.Hash(pair.RefreshToken) && t.RevokedAt == null)
             .FirstAsync();
         Assert.That(token, Is.Not.Null, "登录后应有活跃 refreshToken 记录");
 

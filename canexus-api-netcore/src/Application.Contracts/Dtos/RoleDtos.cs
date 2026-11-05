@@ -85,4 +85,11 @@ public class RoleInputRequest : AggregateInputRequest
     public List<Guid> MenuIds { get; set; } = [];
 }
 
+/// <summary>修改角色状态请求（PUT /api/system/role/{id}/{version}/status；独立启停端点，仅提交状态字段）。</summary>
+public class RoleStatusRequest : AggregateInputRequest
+{
+    /// <summary>状态：启用（1），停用（0）。</summary>
+    public CommonStatus Status { get; set; } = CommonStatus.Enabled;
+}
+
 

@@ -1,4 +1,5 @@
 
+using API.Authorization;
 using API.Extensions;
 using API.Filters;
 using API.HealthChecks;
@@ -8,6 +9,7 @@ using Domain.Services;
 using Domain.Shared.Results;
 using Infrastructure;
 using Infrastructure.DataAccess;
+using Infrastructure.Shared.Options;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.Mvc;
 using Serilog;
@@ -36,9 +38,37 @@ public class Program
                 .ReadFrom.Services(services)
                 .Enrich.FromLogContext());
 
+            // JWT 密钥启动强校验（S3）：非 Development 环境缺失 / 为空 / 使用默认不安全值直接启动失败；
+            // Development 环境允许回退到开发专用密钥，但必须输出明确告警，不允许静默使用弱密钥。
+            var jwtSecret = builder.Configuration["Jwt:Secret"];
+            var insecureJwtSecret = string.IsNullOrWhiteSpace(jwtSecret)
+                || string.Equals(jwtSecret, JwtOption.InsecureDefaultSecret, StringComparison.Ordinal);
+            if (!builder.Environment.IsDevelopment())
+            {
+                if (insecureJwtSecret)
+                {
+                    Log.Fatal("启动失败：非 Development 环境 Jwt:Secret 未配置、为空或仍为默认不安全值 {DefaultSecret}", JwtOption.InsecureDefaultSecret);
+                    throw new InvalidOperationException(
+                        $"Jwt:Secret 未配置或仍为默认不安全值 {JwtOption.InsecureDefaultSecret}；非 Development 环境必须提供至少 32 位的独立随机密钥");
+                }
+            }
+            else if (insecureJwtSecret)
+            {
+                Log.Warning("当前为 Development 环境且 Jwt:Secret 未配置或仍为默认不安全值，已启用开发回退密钥；生产环境必须显式配置至少 32 位随机密钥");
+                builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
+                {
+                    ["Jwt:Secret"] = JwtOption.DevelopmentFallbackSecret
+                });
+            }
+
             // 配置选项：启动时统一注册全部 Option（继承 OptionBase，按类名约定映射配置节；
             // 绑定 + 校验 + 热加载 + 启动即验），不依赖任何业务注册，须先于业务模块执行
             builder.Services.RegisterOptions(builder.Configuration);
+
+            // 请求体上限与业务配置对齐：Kestrel 全局上限 = FileStorage:MaxSizeMB + 1MB（multipart 边界开销），
+            // 使超过业务上限的请求体在进入业务校验前即被线级拒绝（修复原先端点 [RequestSizeLimit] 1GB 与业务上限 10MB 错配）
+            var maxUploadMb = builder.Configuration.GetValue("FileStorage:MaxSizeMB", 10);
+            builder.WebHost.ConfigureKestrel(options => options.Limits.MaxRequestBodySize = (maxUploadMb + 1) * 1024L * 1024);
 
             // 控制器与全局过滤器：权限校验（RequirePermission）+ 操作日志（[OperLog] 特性）
             builder.Services.AddControllers(options =>
@@ -89,6 +119,9 @@ public class Program
             // 定时任务调度：Quartz 调度器与 IJobScheduleManager（基础设施层实现）
             builder.Services.AddScheduling();
 
+            // Outbox 后台投递 worker（P1-A2）：轮询待处理领域事件并投递（Outbox:Enabled 控制启停）
+            builder.Services.AddHostedService<BackgroundServices.OutboxDeliveryWorker>();
+
             // 健康检查：liveness / readiness 检查项（MySQL / 分布式缓存 / Quartz），经 MapHealthChecks 暴露
             builder.Services.AddApiHealthChecks();
 
@@ -110,11 +143,27 @@ public class Program
 
             var app = builder.Build();
 
+            // 启动期一致性校验（P2-B4）：扫描控制器 / Action 的 [RequirePermission] 声明，与集中注册表比对；
+            // 存在未声明权限即阻止启动（新增权限必须先在 PermissionDefinitions 集中声明）
+            PermissionsStartupValidator.Validate(typeof(Program).Assembly);
+
+            // 反向代理转发头解析（P0-S5）：部署在 Nginx / SLB 之后时（Forwarded:Enabled=true）解析 X-Forwarded-*，
+            // 还原真实客户端 IP 供限流分区与操作日志使用；须先于任何消费 RemoteIpAddress 的中间件挂载。
+            // 未启用时为空操作；仅可在可信代理后开启，KnownProxies 白名单外的转发头一律忽略
+            app.UseApiForwardedHeaders();
+
+            // TraceId 中间件最先注册（P2-B3）：生成请求链路 TraceId（响应头 X-Trace-Id），
+            // 供慢请求 / SQL / 事件投递日志关联；须在异常中间件之前，保证异常路径同样带链路标识
+            app.UseMiddleware<TraceIdMiddleware>();
+
             // 请求本地化中间件（须先于异常中间件：CurrentUICulture 按请求文化设置后，业务异常消息才能按文化翻译）
             app.UseRequestLocalization();
 
             // 全局异常处理中间件最先注册，确保后续管道异常均被统一捕获
             app.UseMiddleware<GlobalExceptionHandlingMiddleware>();
+            // 请求体大小上限（P0-S3）：Content-Length 超过 FileStorage:MaxSizeMB+1MB 直接 413，
+            // 与 Kestrel 线级上限（ConfigureKestrel）对齐，测试宿主（TestServer）行为一致
+            app.UseMiddleware<RequestBodyLimitMiddleware>();
 
             // 请求日志（结构化记录方法、路径、状态码与耗时）
             app.UseSerilogRequestLogging();
@@ -133,6 +182,10 @@ public class Program
 
             // 认证与授权中间件（顺序不可颠倒）
             app.UseAuthentication();
+            // 租户授权（P0-S1）：多租户开启时，认证后收敛并校验请求租户（须在 UseAuthentication 之后取 JWT 声明）
+            app.UseMiddleware<TenantAuthorizationMiddleware>();
+            // 强制改密拦截（P0-S4）：认证后拦截待改密用户的受保护端点访问（白名单端点放行）
+            app.UseMiddleware<MustChangePasswordMiddleware>();
             app.UseAuthorization();
 
             // Swagger 文档管道（仅开发环境：/openapi/v1.json + /swagger UI）

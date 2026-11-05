@@ -14,6 +14,19 @@ public interface ICommand
 }
 
 /// <summary>
+/// 用户数据范围写命令标记：管道行为（UserDataScopeBehavior）据此在处理器取得目标实体前
+/// 统一按当前用户数据范围做越权准入（更新 / 删除 / 恢复 / 改状态 / 重置密码 / 分配角色等），
+/// 越界抛 AuthForbidden（HTTP 403）。实现方须暴露目标用户 Id。
+/// <para>新增用户写命令时实现本标记即可自动纳入守卫，避免逐处漏写；确需绕过数据范围的场景
+/// 不应实现本标记（显式选择退出，而非隐式遗漏）。</para>
+/// </summary>
+public interface IUserDataScopeCommand
+{
+    /// <summary>目标用户 Id。</summary>
+    public Guid TargetUserId { get; }
+}
+
+/// <summary>
 /// 聚合写命令抽象基类（带载荷）：携带载荷 DTO 的写操作请求（响应统一为 bool，写操作成功与否），
 /// 载荷经 <see cref="Request"/> 暴露；创建 / 更新命令统一以本类为根，与查询侧
 /// <see cref="AggregateQuery{TRequest, TResponse}"/> 的「根 + 载荷属性」形态对称。

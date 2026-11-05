@@ -31,8 +31,11 @@ public sealed class PerformanceBehavior<TRequest, TResponse>(ILogger<Performance
         if (elapsedMs > SlowRequestThresholdMs)
         {
             var requestName = typeof(TRequest).Name;
-            logger.LogWarning("慢请求：{RequestName} 处理耗时 {ElapsedMs}ms（阈值 {ThresholdMs}ms）",
-                requestName, elapsedMs, SlowRequestThresholdMs);
+            // TraceId（P2-B3）：关联请求链路标识——经响应头 X-Trace-Id 取值即可在日志中一键
+            // 定位同一请求的全部 SQL / 事件投递日志（无请求上下文时输出占位符）
+            var traceId = Activity.Current?.TraceId.ToString() ?? "-";
+            logger.LogWarning("慢请求：{RequestName} 处理耗时 {ElapsedMs}ms（阈值 {ThresholdMs}ms）TraceId={TraceId}",
+                requestName, elapsedMs, SlowRequestThresholdMs, traceId);
         }
 
         return response;

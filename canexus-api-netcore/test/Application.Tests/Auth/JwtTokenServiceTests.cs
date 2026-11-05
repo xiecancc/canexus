@@ -6,6 +6,7 @@ using Domain.Repositories;
 using Domain.Services.Auth;
 using Domain.Shared.Paging;
 using Infrastructure.Auth;
+using Infrastructure.Security;
 using Infrastructure.Shared.Options;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -62,6 +63,10 @@ internal sealed class InMemoryRefreshTokenRepository : ISysRefreshTokenRepositor
         var result = (orderedQuery ?? query.OrderByDescending(e => e.CreatedAt)).ToList();
         return Task.FromResult(result);
     }
+
+    /// <inheritdoc />
+    public Task<SysRefreshToken?> GetDeletedAsync(Guid id, CancellationToken cancellationToken = default)
+        => Task.FromResult(_store.FirstOrDefault(it => it.Id == id && it.IsDeleted));
 
     /// <inheritdoc />
     public Task<SysRefreshToken?> GetAsync(
@@ -326,7 +331,7 @@ public class JwtTokenServiceTests
     private static readonly Guid TestRoleId1 = Guid.Parse("00000000-0000-0000-0000-000000000001");
     private static readonly Guid TestRoleId2 = Guid.Parse("00000000-0000-0000-0000-000000000002");
 
-    /// <summary>验证生成令牌对返回 accessToken 与 64 位刷新令牌，并将刷新令牌持久化。</summary>
+    /// <summary>验证生成令牌对返回 accessToken 与 64 位刷新令牌，并将刷新令牌以 SHA-256 哈希持久化（库表不存明文）。</summary>
     [Test]
     public async Task GenerateAsync_ReturnsPairAndPersistsRefreshToken()
     {
@@ -341,12 +346,13 @@ public class JwtTokenServiceTests
             Assert.That(pair.ExpiresIn, Is.EqualTo(120 * 60L), "expiresIn 应为 accessToken 有效期秒数");
         });
 
-        // refreshToken 已持久化：1 条记录，归属正确且未过期
+        // refreshToken 已持久化：1 条记录，归属正确且未过期；Token 列为 SHA-256 哈希而非明文
         Assert.That(_repository.Store, Has.Count.EqualTo(1));
         var persisted = _repository.Store.Single();
         Assert.Multiple(() =>
         {
-            Assert.That(persisted.Token, Is.EqualTo(pair.RefreshToken));
+            Assert.That(persisted.Token, Is.EqualTo(RefreshTokenHasher.Hash(pair.RefreshToken)),
+                "持久化的刷新令牌应为明文令牌的 SHA-256 哈希");
             Assert.That(persisted.UserId, Is.EqualTo(TestUserId));
             Assert.That(persisted.ExpiresAt, Is.GreaterThan(DateTime.UtcNow.AddDays(6.5)), "过期时间应按 RefreshTokenDays 配置");
             Assert.That(persisted.RevokedAt, Is.Null);

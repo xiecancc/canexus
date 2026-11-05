@@ -1,9 +1,12 @@
 
-using Asp.Versioning;
 using API.Authorization;
+using API.Logging;
 using Application.Contracts.Commands;
 using Application.Contracts.Logs;
 using Application.Contracts.Queries;
+using Asp.Versioning;
+using Domain.Shared.Enums;
+using Domain.Shared.Permissions;
 using Domain.Shared.Results;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
@@ -23,16 +26,17 @@ public class SysLoginLogController(ISender sender) : ControllerBase
     /// <param name="request">分页与筛选条件。</param>
     /// <returns>分页结果。</returns>
     [HttpGet("page")]
-    [RequirePermission("monitor:logininfor:list")]
+    [RequirePermission(PermissionDefinitions.MonitorLogininforList)]
     public async Task<IActionResult> Page([FromQuery] LoginLogPageRequest request)
     {
         return Ok(Result.Ok(await sender.Send(new LoginLogQueryPaged(request))));
     }
 
-    /// <summary>清空全部登录日志（物理删除，危险操作）。</summary>
+    /// <summary>清空全部登录日志（物理删除，危险操作；自身行为经 [OperLog] 留痕，保证清空动作可追溯）。</summary>
     /// <returns>统一响应。</returns>
     [HttpPost("clean")]
-    [RequirePermission("monitor:logininfor:clean")]
+    [RequirePermission(PermissionDefinitions.MonitorLogininforClean)]
+    [OperLog("登录日志", OperBusinessType.Clean)]
     public async Task<IActionResult> Clean()
     {
         await sender.Send(new LoginLogCleanCommand());
@@ -44,10 +48,24 @@ public class SysLoginLogController(ISender sender) : ControllerBase
     /// <param name="version">乐观锁版本号。</param>
     /// <returns>统一响应。</returns>
     [HttpDelete("{id:guid}/{version:guid}")]
-    [RequirePermission("monitor:logininfor:remove")]
+    [RequirePermission(PermissionDefinitions.MonitorLogininforRemove)]
+    [OperLog("登录日志", OperBusinessType.Delete)]
     public async Task<IActionResult> Delete(Guid id, Guid version)
     {
         await sender.Send(new LoginLogDeleteCommand(id, version));
         return Ok(Result.Ok(message: "删除成功"));
     }
+
+    /// <summary>导出登录日志（xlsx；复用列表同口径筛选，行数上限 10000）。</summary>
+    /// <param name="request">登录日志筛选条件（分页参数被忽略，全量按筛选拉取）。</param>
+    /// <returns>Excel 文件流。</returns>
+    [HttpGet("export")]
+    [RequirePermission(PermissionDefinitions.MonitorLogininforExport)]
+    [OperLog("登录日志", OperBusinessType.Export)]
+    public async Task<IActionResult> Export([FromQuery] LoginLogPageRequest request)
+    {
+        var file = await sender.Send(new LoginLogExportQuery(request));
+        return File(file.Content, file.ContentType, file.FileName);
+    }
+
 }

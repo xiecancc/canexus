@@ -3,6 +3,7 @@ using System.Collections.Concurrent;
 using System.Reflection;
 using Domain.Entities;
 using Domain.Services.Users;
+using Domain.Shared.Logging;
 using Infrastructure.Shared.Filtering;
 using Infrastructure.Shared.Options;
 using Infrastructure.Shared.Tenants;
@@ -66,18 +67,61 @@ internal static class SqlSugarClientFactory
             ConfigureExecutingAop(client, currentUser, tenantContext);
             ConfigureGlobalQueryFilters(client, options, dataFilter, tenantContext);
 
-            // SQL 执行日志：经 Serilog 统一输出执行的 SQL 与参数（调试用，结构化日志）；
-            // 开关读取监视器最新值，运行期改配置即可生效
-            if (monitor.CurrentValue.SqlLogEnabled)
+            // SQL 执行日志 + 慢查询日志（P1-R5）统一在 OnLogExecuting / OnLogExecuted 中组合：
+            // SqlSugar Aop 为单委托槽位，两类逻辑必须合并赋值（后者赋值会覆盖前者）。
+            // 1. 全量 SQL 日志：Database:SqlLogEnabled 开关（调试用，结构化日志）；
+            // 2. 慢查询日志：执行耗时超过 Database:SlowQueryLogMilliseconds（默认 500ms，0 = 关闭）的 SQL
+            //    以 Warning 记录（含耗时与 TraceId），生产环境无需开启全量日志即可定位慢 SQL。
+            // 两者均附带请求 TraceId（P2-B3）——慢接口可经响应头 X-Trace-Id 定位到本请求的全部 SQL 链路。
+            // 参数值经 SensitiveDataMasker 按参数名关键字脱敏（P0-S6）：密码哈希 / 令牌哈希等敏感列
+            // 不落明文日志，与操作日志（OperLogSanitizer）共用共享内核规则。
+            // 计时经 AsyncLocal 起止配对：OnLogExecuting 记录起始时间戳，OnLogExecuted 计算耗时
+            //（SqlSugarScope 按异步上下文隔离客户端，同一上下文内执行/完成一一对应，AsyncLocal 跨 Aop 天然隔离）
+            var slowThresholdMs = monitor.CurrentValue.SlowQueryLogMilliseconds;
+            var executingAt = slowThresholdMs > 0 ? new AsyncLocal<DateTimeOffset>() : null;
+
+            client.Aop.OnLogExecuting = (sql, parameters) =>
             {
-                client.Aop.OnLogExecuting = (sql, parameters) =>
+                executingAt?.Value = DateTimeOffset.UtcNow;
+
+                if (!monitor.CurrentValue.SqlLogEnabled)
                 {
-                    var parameterText = parameters.Length == 0
-                        ? string.Empty
-                        : $"\n    参数: {string.Join(", ", parameters.Select(p => $"{p.ParameterName}={p.Value}"))}";
-                    logger.LogInformation("[SqlSugar] {Sql}{Parameters}", sql, parameterText);
-                };
-            }
+                    return;
+                }
+
+                var parameterText = parameters.Length == 0
+                    ? string.Empty
+                    : $"\n    参数: {string.Join(", ", parameters.Select(p =>
+                        $"{p.ParameterName}={(SensitiveDataMasker.IsSensitiveParameter(p.ParameterName) ? SensitiveDataMasker.MaskText : p.Value)}"))}";
+                var traceId = System.Diagnostics.Activity.Current?.TraceId.ToString() ?? "-";
+                logger.LogInformation("[SqlSugar] {Sql}{Parameters} TraceId={TraceId}", sql, parameterText, traceId);
+            };
+
+            client.Aop.OnLogExecuted = (sql, _) =>
+            {
+                if (executingAt is null)
+                {
+                    return;
+                }
+
+                var startedAt = executingAt.Value;
+                if (startedAt == default)
+                {
+                    return;
+                }
+
+                var threshold = monitor.CurrentValue.SlowQueryLogMilliseconds;
+                var elapsed = DateTimeOffset.UtcNow - startedAt;
+                if (threshold <= 0 || elapsed.TotalMilliseconds < threshold)
+                {
+                    return;
+                }
+
+                var traceId = System.Diagnostics.Activity.Current?.TraceId.ToString() ?? "-";
+                logger.LogWarning(
+                    "[SqlSugar] 慢查询：{ElapsedMs:F0}ms（阈值 {ThresholdMs}ms）{Sql} TraceId={TraceId}",
+                    elapsed.TotalMilliseconds, threshold, sql, traceId);
+            };
         });
     }
 

@@ -13,7 +13,14 @@ namespace Infrastructure.DataAccess;
 /// <param name="client">SqlSugar 客户端。</param>
 /// <param name="options">数据访问配置。</param>
 /// <param name="logger">日志器（记录初始化过程）。</param>
-public sealed class DbInitializer(ISqlSugarClient client, DatabaseOption options, ILogger<DbInitializer> logger)
+/// <param name="migrator">数据库迁移器（基线登记 / 增量应用 / 启动校验）。</param>
+/// <param name="migrations">增量迁移清单。</param>
+public sealed class DbInitializer(
+    ISqlSugarClient client,
+    DatabaseOption options,
+    ILogger<DbInitializer> logger,
+    SchemaMigrator migrator,
+    IEnumerable<ISchemaMigration> migrations)
 {
     /// <summary>初始化数据库：按配置自动建库（AutoCreateTable）、同步表结构（AutoSyncStructure）。</summary>
     /// <param name="cancellationToken">取消令牌。</param>
@@ -79,9 +86,26 @@ public sealed class DbInitializer(ISqlSugarClient client, DatabaseOption options
                     alteredTables.Count, string.Join(", ", alteredTables));
             }
         }
+
+        // 迁移机制（P1-A3）：登记基线 → 应用增量 → 启动校验（模型新增表未登记迁移即阻止启动）
+        if (options.MigrationsEnabled)
+        {
+            var migrationTables = entityTypes
+                .Select(type => client.EntityMaintenance.GetEntityInfo(type).DbTableName)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(name => name, StringComparer.Ordinal)
+                .ToArray();
+            var migrationList = migrations.ToArray();
+
+            await migrator.EnsureBaselineAsync(migrationTables, cancellationToken);
+            await migrator.ApplyPendingAsync(migrationList, cancellationToken);
+            await migrator.ValidateModelAgainstMigrationsAsync(migrationTables, migrationList, cancellationToken);
+            logger.LogInformation("数据库迁移检查完成：基线已登记，增量 {IncrementalCount} 项",
+                migrationList.Length);
+        }
     }
 
-    /// <summary>判断类型是否为具体实体类型：类、非抽象、非泛型定义，且基类链中存在实体体系基类。</summary>
+    /// <summary>判断类型是否为具体实体类型：类、非抽象、非泛型定义，且基类链中存在实体体系基类（或为显式纳入的基础设施消息实体）。</summary>
     /// <param name="type">待判断类型。</param>
     /// <returns>是具体实体类型时返回 true。</returns>
     private static bool IsConcreteEntityType(Type type)
@@ -89,6 +113,13 @@ public sealed class DbInitializer(ISqlSugarClient client, DatabaseOption options
         if (!type.IsClass || type.IsAbstract || type.IsGenericTypeDefinition)
         {
             return false;
+        }
+
+        // 基础设施消息实体（P1-R3）：OutboxMessage 不继承 DomainBase 体系（无乐观锁 / 软删除 / 租户过滤语义），
+        // 但仍须参与 CodeFirst 建表，故显式纳入
+        if (type == typeof(OutboxMessage))
+        {
+            return true;
         }
 
         for (var current = type; current is not null && current != typeof(object); current = current.BaseType)

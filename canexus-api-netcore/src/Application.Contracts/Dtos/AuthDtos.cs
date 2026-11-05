@@ -41,6 +41,19 @@ public class TokenPairDto
 
     /// <summary>访问令牌有效期（秒）。</summary>
     public long ExpiresIn { get; set; }
+
+    /// <summary>是否须先修改初始密码（true 时前端应引导改密，改密完成前受保护端点会被拦截）。</summary>
+    public bool MustChangePassword { get; set; }
+}
+
+/// <summary>自助修改密码请求（登录后由本人调用 /api/auth/change-password）。</summary>
+public class ChangePasswordRequest
+{
+    /// <summary>原密码（首次强制改密时为初始密码）。</summary>
+    public string OldPassword { get; set; } = string.Empty;
+
+    /// <summary>新密码（须满足强度规则：6-20 位含字母与数字）。</summary>
+    public string NewPassword { get; set; } = string.Empty;
 }
 
 /// <summary>图形验证码结果。</summary>

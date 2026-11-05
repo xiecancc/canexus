@@ -5,6 +5,6 @@ public static class UserConstants
     /// <summary>内置管理员账号用户名（保留值：禁止删除，禁止修改用户名）。</summary>
     public const string AdminUserName = "admin";
 
-    /// <summary>创建用户时的缺省密码（与种子参数 sys.user.initPassword 的缺省值一致）。</summary>
-    public const string DefaultPassword = "123456";
+    /// <summary>创建用户时的缺省密码（与种子参数 sys.user.initPassword 的缺省值一致；满足密码强度规则：6-20 位含字母与数字）。</summary>
+    public const string DefaultPassword = "Aa123456";
 }

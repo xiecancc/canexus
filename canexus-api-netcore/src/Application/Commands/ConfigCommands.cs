@@ -58,11 +58,8 @@ public sealed class ConfigDeleteCommandHandler(
     /// <inheritdoc />
     protected override Task ValidateBeforeDeleteAsync(SysConfig entity, CancellationToken cancellationToken)
     {
-        if (entity.BuiltIn)
-        {
-            throw new BusinessException(ErrorCodes.ConfigBuiltInProtected, "内置参数不允许删除");
-        }
-
+        // 内置参数删除保护：聚合不变量守卫
+        entity.EnsureDeletable();
         return Task.CompletedTask;
     }
 

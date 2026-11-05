@@ -13,7 +13,7 @@ namespace Infrastructure.DataAccess;
 /// <list type="bullet">
 /// <item>默认部门树：总公司 / 研发部 / 市场部；</item>
 /// <item>超管角色 super_admin（DataScope=All）与 admin 用户（初始密码 admin123，BCrypt 存储）；</item>
-/// <item>完整菜单树（增量幂等，按名称 / path / perms 判重缺失才插入，同名菜单 / 按钮 component / perms 过时原位纠偏）：首页、系统管理（用户 / 角色 / 部门 / 菜单 / 字典 / 参数 / 通知公告 / 租户）、监控（操作日志 / 登录日志）、系统工具（定时任务，monitor:job），含按钮级权限标识；</item>
+/// <item>完整菜单树（增量幂等，按名称 / path / perms 判重缺失才插入，同名菜单 / 按钮 component / perms 过时原位纠偏）：首页、系统管理（用户 / 角色 / 岗位 / 部门 / 菜单 / 字典 / 参数 / 通知公告 / 租户）、监控（操作日志 / 登录日志 / 缓存监控）、系统工具（定时任务，monitor:job），含按钮级权限标识；</item>
 /// <item>字典（sys_normal_disable / sys_user_sex / sys_yes_no / sys_oper_type / sys_notice_type）、参数（初始密码 / 验证码开关）与示例通知公告按缺失项幂等追加。</item>
 /// </list>
 /// </summary>
@@ -153,7 +153,7 @@ public sealed class SeedDataInitializer(ISqlSugarClient client, IPasswordHasher 
             ("查询", "query"), ("新增", "add"), ("修改", "edit"), ("删除", "remove"), ("重置密码", "resetPwd"), ("导入", "import"), ("导出", "export"));
         await EnsureMenuAsync(Menu(MenuType.Menu, SeedId(102), "角色管理", "role", "system/role/index", "system:role:list", "peoples", order: 2, parentId: SeedId(100)));
         await EnsureButtonsAsync(SeedId(102), "system:role", "角色", startId: 1011,
-            ("查询", "query"), ("新增", "add"), ("修改", "edit"), ("删除", "remove"));
+            ("查询", "query"), ("新增", "add"), ("修改", "edit"), ("删除", "remove"), ("导出", "export"));
         await EnsureMenuAsync(Menu(MenuType.Menu, SeedId(103), "部门管理", "dept", "system/dept/index", "system:dept:list", "tree", order: 3, parentId: SeedId(100)));
         await EnsureButtonsAsync(SeedId(103), "system:dept", "部门", startId: 1021,
             ("查询", "query"), ("新增", "add"), ("修改", "edit"), ("删除", "remove"));
@@ -172,15 +172,19 @@ public sealed class SeedDataInitializer(ISqlSugarClient client, IPasswordHasher 
         await EnsureMenuAsync(Menu(MenuType.Menu, SeedId(108), "租户管理", "tenant", "system/tenant/index", "system:tenant:list", "tenant", order: 8, parentId: SeedId(100)));
         await EnsureButtonsAsync(SeedId(108), "system:tenant", "租户", startId: 1071,
             ("查询", "query"), ("新增", "add"), ("修改", "edit"), ("删除", "remove"));
+        await EnsureMenuAsync(Menu(MenuType.Menu, SeedId(109), "岗位管理", "post", "system/post/index", "system:post:list", "post", order: 9, parentId: SeedId(100)));
+        await EnsureButtonsAsync(SeedId(109), "system:post", "岗位", startId: 1081,
+            ("查询", "query"), ("新增", "add"), ("修改", "edit"), ("删除", "remove"));
 
         // 监控目录
         await EnsureMenuAsync(Menu(MenuType.Directory, SeedId(200), "监控", "monitor", null, icon: "monitor", order: 3));
         await EnsureMenuAsync(Menu(MenuType.Menu, SeedId(201), "操作日志", "operlog", "monitor/operlog/index", "monitor:operlog:list", "form", order: 1, parentId: SeedId(200)));
         await EnsureButtonsAsync(SeedId(201), "monitor:operlog", "操作日志", startId: 2011,
-            ("查询", "query"), ("删除", "remove"), ("清空", "clean"));
+            ("查询", "query"), ("删除", "remove"), ("清空", "clean"), ("导出", "export"));
         await EnsureMenuAsync(Menu(MenuType.Menu, SeedId(202), "登录日志", "logininfor", "monitor/logininfor/index", "monitor:logininfor:list", "logininfor", order: 2, parentId: SeedId(200)));
         await EnsureButtonsAsync(SeedId(202), "monitor:logininfor", "登录日志", startId: 2021,
-            ("查询", "query"), ("删除", "remove"), ("清空", "clean"));
+            ("查询", "query"), ("删除", "remove"), ("清空", "clean"), ("导出", "export"));
+        await EnsureMenuAsync(Menu(MenuType.Menu, SeedId(203), "缓存监控", "cache", "monitor/cache/index", "monitor:cache:list", "redis", order: 3, parentId: SeedId(200)));
 
         // 系统工具目录
         await EnsureMenuAsync(Menu(MenuType.Directory, SeedId(300), "系统工具", "tool", null, icon: "tool", order: 4));

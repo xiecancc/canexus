@@ -359,13 +359,21 @@ public class TenantEnabledApiTests
         _factory.Dispose();
     }
 
-    /// <summary>验证多租户开启时按租户头过滤并隔离各租户数据。</summary>
+    /// <summary>验证多租户开启时按租户头过滤并隔离各租户数据（请求租户须为真实存在且启用的租户，否则被租户授权中间件拒绝）。</summary>
     [Test]
     public async Task UserPage_WhenTenancyEnabled_TenantFilterIsolatesData()
     {
         var token = Guid.NewGuid().ToString("N")[..10];
         var userNameA = "a_" + token;
         var userNameB = "b_" + token;
+        // 租户授权中间件要求请求头租户存在、启用且未到期：直插两个真实租户（固定 Id + 唯一 key）。
+        // 插入前先清理可能残留的旧行（固定 Id 夹具的幂等保护，避免中断运行留下脏数据导致 1062）。
+        // 私有字段先提升为局部变量：SqlSugar 表达式树无法解析私有字段。
+        var tenantAId = TenantA;
+        var tenantBId = TenantB;
+        _db.Deleteable<SysTenant>().Where(t => t.Id == tenantAId || t.Id == tenantBId).ExecuteCommand();
+        await InsertTenantAsync(tenantAId, "iso-" + token + "-a");
+        await InsertTenantAsync(tenantBId, "iso-" + token + "-b");
         await InsertTenantUserAsync(userNameA, TenantA);
         await InsertTenantUserAsync(userNameB, TenantB);
 
@@ -404,6 +412,7 @@ public class TenantEnabledApiTests
         finally
         {
             _db.Deleteable<SysUser>().Where(u => u.UserName == userNameA || u.UserName == userNameB).ExecuteCommand();
+            _db.Deleteable<SysTenant>().Where(t => t.Id == tenantAId || t.Id == tenantBId).ExecuteCommand();
         }
     }
 
@@ -419,6 +428,19 @@ public class TenantEnabledApiTests
             PasswordHash = "test",
             TenantId = tenantId,
             Status = CommonStatus.Enabled
+        }).ExecuteCommandAsync();
+    }
+
+    /// <summary>直接写库插入启用且未到期的租户（供租户授权中间件校验通过）。</summary>
+    private async Task InsertTenantAsync(Guid tenantId, string tenantKey)
+    {
+        await _db.Insertable(new SysTenant
+        {
+            Id = tenantId,
+            TenantKey = tenantKey,
+            TenantName = "B9 隔离测试租户",
+            Status = CommonStatus.Enabled,
+            ExpireTime = DateTime.UtcNow.AddYears(10)
         }).ExecuteCommandAsync();
     }
 

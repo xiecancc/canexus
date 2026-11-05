@@ -1,11 +1,13 @@
-using Asp.Versioning;
 using API.Authorization;
 using API.Logging;
 using Application.Contracts.Commands;
 using Application.Contracts.Files;
 using Application.Contracts.Queries;
+using Asp.Versioning;
 using Domain.Services.Storage;
 using Domain.Shared.Enums;
+using Domain.Shared.Exceptions;
+using Domain.Shared.Permissions;
 using Domain.Shared.Results;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
@@ -22,19 +24,19 @@ namespace API.Controllers;
 [Authorize]
 public class SysFileController(ISender sender, IFileStorage fileStorage) : ControllerBase
 {
-    /// <summary>上传文件（multipart/form-data；扩展名白名单与大小上限校验失败返回 401202 / 401203）。</summary>
+    /// <summary>上传文件（multipart/form-data；扩展名白名单与大小上限校验失败返回 401202 / 401203；请求体上限经 Kestrel 按 FileStorage:MaxSizeMB 配置对齐）。
+    /// 未选择文件时抛业务异常（FileNotFound），由全局异常中间件统一映射 HTTP 状态（P1-R1：失败响应不再以 HTTP 200 包装）。</summary>
     /// <param name="file">上传文件。</param>
     /// <param name="bizCategory">业务用途分类（可空）。</param>
     /// <returns>文件 Id 与元数据摘要。</returns>
     [HttpPost("upload")]
-    [RequirePermission("system:file:upload")]
+    [RequirePermission(PermissionDefinitions.SystemFileUpload)]
     [OperLog("文件存储", OperBusinessType.Add)]
-    [RequestSizeLimit(1024L * 1024 * 1024)]
     public async Task<IActionResult> Upload(IFormFile file, [FromForm] string? bizCategory = null)
     {
         if (file is null || file.Length == 0)
         {
-            return Ok(Result.Fail(Domain.Shared.Results.ErrorCodes.FileNotFound, "请选择要上传的文件"));
+            throw new BusinessException(Domain.Shared.Results.ErrorCodes.FileNotFound, "请选择要上传的文件");
         }
 
         await using var stream = file.OpenReadStream();
@@ -46,7 +48,7 @@ public class SysFileController(ISender sender, IFileStorage fileStorage) : Contr
     /// <param name="request">分页与筛选条件。</param>
     /// <returns>分页结果。</returns>
     [HttpGet("page")]
-    [RequirePermission("system:file:list")]
+    [RequirePermission(PermissionDefinitions.SystemFileList)]
     public async Task<IActionResult> Page([FromQuery] FilePageRequest request)
     {
         return Ok(Result.Ok(await sender.Send(new FileQueryPaged(request))));
@@ -56,7 +58,7 @@ public class SysFileController(ISender sender, IFileStorage fileStorage) : Contr
     /// <param name="id">文件 Id。</param>
     /// <returns>文件详情。</returns>
     [HttpGet("{id:guid}")]
-    [RequirePermission("system:file:query")]
+    [RequirePermission(PermissionDefinitions.SystemFileQuery)]
     public async Task<IActionResult> GetById(Guid id)
     {
         return Ok(Result.Ok(await sender.Send(new FileQueryDetail(id))));
@@ -66,7 +68,7 @@ public class SysFileController(ISender sender, IFileStorage fileStorage) : Contr
     /// <param name="id">文件 Id。</param>
     /// <returns>文件流。</returns>
     [HttpGet("{id:guid}/download")]
-    [RequirePermission("system:file:download")]
+    [RequirePermission(PermissionDefinitions.SystemFileDownload)]
     public async Task<IActionResult> Download(Guid id)
     {
         var detail = await sender.Send(new FileQueryDetail(id));
@@ -82,7 +84,7 @@ public class SysFileController(ISender sender, IFileStorage fileStorage) : Contr
     /// <param name="version">乐观锁版本号。</param>
     /// <returns>统一响应。</returns>
     [HttpDelete("{id:guid}/{version:guid}")]
-    [RequirePermission("system:file:remove")]
+    [RequirePermission(PermissionDefinitions.SystemFileRemove)]
     [OperLog("文件存储", OperBusinessType.Delete)]
     public async Task<IActionResult> Delete(Guid id, Guid version)
     {

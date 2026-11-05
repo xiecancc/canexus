@@ -12,13 +12,15 @@ namespace Domain.Entities;
 public abstract class DomainBase
 {
     /// <summary>所属租户 Id；null 表示不归属任何租户（平台级数据）。插入时由数据访问层按当前租户上下文自动填充。</summary>
-    [SugarColumn(IsNullable = true)]
+    [SugarColumn(ColumnDescription = "所属租户 Id；null 表示不归属任何租户（平台级数据）。插入时由数据访问层按当前租户上下文自动填充。", IsNullable = true)]
     public virtual Guid? TenantId { get; set; }
 
     /// <summary>创建时间，由数据访问层自动填充。</summary>
+    [SugarColumn(ColumnDescription = "创建时间，由数据访问层自动填充。")]
     public virtual DateTime CreatedAt { get; set; }
 
     /// <summary>创建人（用户 Id），无登录上下文时由数据访问层填充为 <see cref="Guid.Empty"/>。</summary>
+    [SugarColumn(ColumnDescription = "创建人（用户 Id），无登录上下文时由数据访问层填充为 Guid.Empty。")]
     public virtual Guid CreatedBy { get; set; }
 
     /// <summary>

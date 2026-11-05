@@ -20,10 +20,14 @@ namespace Application.Queries;
 public sealed class UserQueryDetailHandler(
     IAggregateRepository<SysUser> userRepository,
     IDomainRepository<SysUserRole> userRoleRepository,
+    IDataScopeFilter dataScopeFilter,
     IMapper mapper) : AggregateQueryDetailHandler<UserQueryDetail, SysUser, UserDetailResponse>(userRepository, mapper)
 {
     /// <summary>用户-角色关联仓储（角色 Id 集合组装）。</summary>
     private IDomainRepository<SysUserRole> UserRoleRepository { get; } = userRoleRepository;
+
+    /// <summary>数据范围过滤（详情越权准入判定）。</summary>
+    private IDataScopeFilter DataScopeFilter { get; } = dataScopeFilter;
 
     /// <inheritdoc />
     protected override int NotFoundErrorCode => ErrorCodes.UserNotFound;
@@ -34,6 +38,10 @@ public sealed class UserQueryDetailHandler(
     /// <inheritdoc />
     protected override async Task EnrichAsync(UserDetailResponse response, SysUser entity, CancellationToken cancellationToken)
     {
+        // 数据范围准入判定（P0-S7）：与列表查询（UserQueryPaged）的 DataScope 口径一致，
+        // 防止 Self / Dept 范围用户绕过列表按 Id 直读任意用户详情（越界抛 AuthForbidden）
+        await DataScopeFilter.EnsureInScopeAsync(entity.DeptId, entity.Id, entity.CreatedBy, cancellationToken);
+
         response.RoleIds = [.. (await UserRoleRepository.GetListAsync([ur => ur.UserId == entity.Id], cancellationToken: cancellationToken))
             .Select(ur => ur.RoleId)
             .Distinct()];

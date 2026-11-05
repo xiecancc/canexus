@@ -1,6 +1,7 @@
 
-using Asp.Versioning;
 using API.Authorization;
+using Asp.Versioning;
+using Domain.Shared.Permissions;
 using Domain.Shared.Results;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -20,7 +21,7 @@ public class TestPermissionController : ControllerBase
     /// <returns>固定成功响应。</returns>
     [HttpGet("protected")]
     [Authorize]
-    [RequirePermission("test:protected:list")]
+    [RequirePermission(PermissionDefinitions.TestProtectedList)]
     public IActionResult Protected()
     {
         return Ok(Result.Ok("ok"));

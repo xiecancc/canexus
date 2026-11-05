@@ -23,6 +23,7 @@
     <PackageReference Include="Quartz" Version="3.22.9" />
     <PackageReference Include="Quartz.Extensions.DependencyInjection" Version="3.22.9" />
     <PackageReference Include="Quartz.Extensions.Hosting" Version="3.22.9" />
+    <PackageReference Include="Quartz.Serialization.Json" Version="3.22.9" />
     <PackageReference Include="SqlSugarCore" Version="5.1.4.221" />
     <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.5.0" />
   </ItemGroup>

@@ -16,7 +16,7 @@ public abstract class AggregateTreeBase<TAggregate> : AggregateBase
     public static readonly Guid RootParentId = Guid.Empty;
 
     /// <summary>父节点 Id；Guid.Empty 表示根节点。</summary>
-    [SugarColumn(IsNullable = true)]
+    [SugarColumn(ColumnDescription = "父节点 Id；Guid.Empty 表示根节点。")]
     public virtual Guid ParentId { get; set; }
 
     /// <summary>父节点引用（内存导航属性，不持久化；根节点为 null）。</summary>

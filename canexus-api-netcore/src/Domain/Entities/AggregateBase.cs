@@ -13,7 +13,7 @@ namespace Domain.Entities;
 public abstract class AggregateBase : DomainBase, IEquatable<AggregateBase>
 {
     /// <summary>主键 Id（全局统一 36 位 GUID，由数据访问层在插入时自动生成）。</summary>
-    [SugarColumn(IsPrimaryKey = true)]
+    [SugarColumn(ColumnDescription = "主键 Id（全局统一 36 位 GUID，由数据访问层在插入时自动生成）。", IsPrimaryKey = true)]
     public virtual Guid Id { get; set; }
 
     /// <summary>乐观并发版本令牌：插入时由默认值生成新 Guid，更新时由框架自动以旧值作更新条件并轮换为新 Guid
@@ -23,16 +23,19 @@ public abstract class AggregateBase : DomainBase, IEquatable<AggregateBase>
     public virtual Guid Version { get; set; } = Guid.NewGuid();
 
     /// <summary>最后更新时间，从未更新过为 null，由数据访问层自动填充。</summary>
+    [SugarColumn(ColumnDescription = "最后更新时间，从未更新过为 null，由数据访问层自动填充。", IsNullable = true)]
     public virtual DateTime? UpdatedAt { get; set; }
 
     /// <summary>最后更新人（用户 Id），从未更新过或无登录上下文时为 null，由数据访问层自动填充。</summary>
+    [SugarColumn(ColumnDescription = "最后更新人（用户 Id），从未更新过或无登录上下文时为 null，由数据访问层自动填充。", IsNullable = true)]
     public virtual Guid? UpdatedBy { get; set; }
 
     /// <summary>描述 / 备注。</summary>
-    [SugarColumn(IsNullable = true, Length = 500)]
+    [SugarColumn(ColumnDescription = "描述 / 备注。", IsNullable = true, Length = 500)]
     public virtual string? Description { get; set; }
 
     /// <summary>软删除标记：true 表示已删除，默认查询自动过滤。</summary>
+    [SugarColumn(ColumnDescription = "软删除标记：true 表示已删除，默认查询自动过滤。")]
     public virtual bool IsDeleted { get; set; }
 
     /// <summary>相等运算符。</summary>

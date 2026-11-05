@@ -1,11 +1,13 @@
 
-using Asp.Versioning;
 using API.Authorization;
 using API.Logging;
 using Application.Contracts.Commands;
 using Application.Contracts.Queries;
 using Application.Contracts.Users;
+using Asp.Versioning;
 using Domain.Shared.Enums;
+using Domain.Shared.Exceptions;
+using Domain.Shared.Permissions;
 using Domain.Shared.Results;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
@@ -25,7 +27,7 @@ public class SysUserController(ISender sender) : ControllerBase
     /// <param name="request">分页与筛选条件。</param>
     /// <returns>分页结果。</returns>
     [HttpGet("page")]
-    [RequirePermission("system:user:list")]
+    [RequirePermission(PermissionDefinitions.SystemUserList)]
     public async Task<IActionResult> Page([FromQuery] UserPageRequest request)
     {
         return Ok(Result.Ok(await sender.Send(new UserQueryPaged(request))));
@@ -35,17 +37,17 @@ public class SysUserController(ISender sender) : ControllerBase
     /// <param name="id">用户 Id。</param>
     /// <returns>用户详情。</returns>
     [HttpGet("{id:guid}")]
-    [RequirePermission("system:user:query")]
+    [RequirePermission(PermissionDefinitions.SystemUserQuery)]
     public async Task<IActionResult> Get(Guid id)
     {
         return Ok(Result.Ok(await sender.Send(new UserQueryDetail(id))));
     }
 
-    /// <summary>创建用户（用户名唯一；密码缺省 "123456"）。</summary>
+    /// <summary>创建用户（用户名唯一；密码缺省 "Aa123456"，使用缺省密码时首登强制改密）。</summary>
     /// <param name="request">创建请求。</param>
     /// <returns>新用户 Id。</returns>
     [HttpPost]
-    [RequirePermission("system:user:add")]
+    [RequirePermission(PermissionDefinitions.SystemUserAdd)]
     [OperLog("用户管理", OperBusinessType.Add)]
     public async Task<IActionResult> Create([FromBody] UserInputRequest request)
     {
@@ -53,17 +55,18 @@ public class SysUserController(ISender sender) : ControllerBase
         return Ok(Result.Ok(message: "创建成功"));
     }
 
-    /// <summary>批量导入用户（Excel/xlsx，multipart/form-data；全量成功才入库，行级错误随响应回执返回）。</summary>
+    /// <summary>批量导入用户（Excel/xlsx，multipart/form-data；全量成功才入库，行级错误随响应回执返回）。
+    /// 未选择文件时抛业务异常（UserImportFileInvalid），由全局异常中间件统一映射 HTTP 状态（P1-R1）。</summary>
     /// <param name="file">导入文件（列名：用户名 / 昵称 / 邮箱 / 手机号 / 部门Id / 初始密码）。</param>
     /// <returns>导入回执（总数 / 成功 / 失败 / 行级错误明细）。</returns>
     [HttpPost("import")]
-    [RequirePermission("system:user:import")]
+    [RequirePermission(PermissionDefinitions.SystemUserImport)]
     [OperLog("用户管理", OperBusinessType.Import)]
     public async Task<IActionResult> Import(IFormFile file)
     {
         if (file is null || file.Length == 0)
         {
-            return Ok(Result.Fail(ErrorCodes.UserImportFileInvalid, "请选择要导入的 Excel 文件"));
+            throw new BusinessException(ErrorCodes.UserImportFileInvalid, "请选择要导入的 Excel 文件");
         }
 
         await using var stream = file.OpenReadStream();
@@ -77,7 +80,7 @@ public class SysUserController(ISender sender) : ControllerBase
     /// <param name="version">乐观锁版本号。</param>
     /// <returns>统一响应。</returns>
     [HttpPut("{id:guid}/{version:guid}")]
-    [RequirePermission("system:user:edit")]
+    [RequirePermission(PermissionDefinitions.SystemUserEdit)]
     [OperLog("用户管理", OperBusinessType.Update)]
     public async Task<IActionResult> Update(Guid id, Guid version, [FromBody] UserInputRequest request)
     {
@@ -90,7 +93,7 @@ public class SysUserController(ISender sender) : ControllerBase
     /// <returns>统一响应。</returns>
     /// <param name="version">乐观锁版本号（须与聚合当前版本一致才允许删除）。</param>
     [HttpDelete("{id:guid}/{version:guid}")]
-    [RequirePermission("system:user:remove")]
+    [RequirePermission(PermissionDefinitions.SystemUserRemove)]
     [OperLog("用户管理", OperBusinessType.Delete)]
     public async Task<IActionResult> Delete(Guid id, Guid version)
     {
@@ -103,7 +106,7 @@ public class SysUserController(ISender sender) : ControllerBase
     /// <param name="version">乐观锁版本号（与删除相同的路由参数模式）。</param>
     /// <returns>统一响应。</returns>
     [HttpPatch("{id:guid}/{version:guid}/restore")]
-    [RequirePermission("system:user:restore")]
+    [RequirePermission(PermissionDefinitions.SystemUserRestore)]
     [OperLog("用户管理", OperBusinessType.Restore)]
     public async Task<IActionResult> Restore(Guid id, Guid version)
     {
@@ -117,7 +120,7 @@ public class SysUserController(ISender sender) : ControllerBase
     /// <param name="version">乐观锁版本号。</param>
     /// <returns>统一响应。</returns>
     [HttpPut("{id:guid}/{version:guid}/status")]
-    [RequirePermission("system:user:edit")]
+    [RequirePermission(PermissionDefinitions.SystemUserEdit)]
     [OperLog("用户管理", OperBusinessType.Update)]
     public async Task<IActionResult> UpdateStatus(Guid id, Guid version, [FromBody] UserStatusRequest request)
     {
@@ -131,7 +134,7 @@ public class SysUserController(ISender sender) : ControllerBase
     /// <param name="version">乐观锁版本号。</param>
     /// <returns>统一响应。</returns>
     [HttpPut("{id:guid}/{version:guid}/password")]
-    [RequirePermission("system:user:resetPwd")]
+    [RequirePermission(PermissionDefinitions.SystemUserResetPwd)]
     [OperLog("用户管理", OperBusinessType.Update)]
     public async Task<IActionResult> ResetPassword(Guid id, Guid version, [FromBody] UserPasswordRequest request)
     {
@@ -145,11 +148,24 @@ public class SysUserController(ISender sender) : ControllerBase
     /// <param name="version">乐观锁版本号。</param>
     /// <returns>统一响应。</returns>
     [HttpPut("{id:guid}/{version:guid}/roles")]
-    [RequirePermission("system:user:edit")]
+    [RequirePermission(PermissionDefinitions.SystemUserEdit)]
     [OperLog("用户管理", OperBusinessType.Grant)]
     public async Task<IActionResult> UpdateRoles(Guid id, Guid version, [FromBody] UserRolesRequest request)
     {
         await sender.Send(new UserUpdateRolesCommand(id, version, request));
         return Ok(Result.Ok(message: "角色分配成功"));
     }
+
+    /// <summary>导出用户列表（xlsx；复用列表同口径筛选与数据范围过滤，行数上限 10000）。</summary>
+    /// <param name="request">用户筛选条件（分页参数被忽略，全量按筛选拉取）。</param>
+    /// <returns>Excel 文件流。</returns>
+    [HttpGet("export")]
+    [RequirePermission(PermissionDefinitions.SystemUserExport)]
+    [OperLog("用户管理", OperBusinessType.Export)]
+    public async Task<IActionResult> Export([FromQuery] UserPageRequest request)
+    {
+        var file = await sender.Send(new UserExportQuery(request));
+        return File(file.Content, file.ContentType, file.FileName);
+    }
+
 }

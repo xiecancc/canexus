@@ -49,6 +49,16 @@ public sealed class GlobalExceptionHandlingMiddleware(RequestDelegate next, ILog
             logger.LogWarning("验证异常：{Message}（TraceId：{TraceId}）", message, context.TraceIdentifier);
             await WriteResultAsync(context, StatusCodes.Status400BadRequest, Result.Fail(ErrorCodes.CommonValidationFailed, message));
         }
+        catch (Microsoft.AspNetCore.Http.BadHttpRequestException exception)
+        {
+            // 请求体超出 Kestrel 线级上限（如上传文件超过 FileStorage:MaxSizeMB+1MB 边界）：映射为 413 + 统一业务码，
+            // 避免落入通用 500 分支并保证响应结构与业务校验失败一致
+            logger.LogWarning("请求体超出大小上限：{Reason}（TraceId：{TraceId}）", exception.Message, context.TraceIdentifier);
+            await WriteResultAsync(
+                context,
+                StatusCodes.Status413PayloadTooLarge,
+                Result.Fail(ErrorCodes.FileSizeExceeded, "上传文件大小超出上限"));
+        }
         catch (OperationCanceledException) when (context.RequestAborted.IsCancellationRequested)
         {
             // 客户端中途断开（RequestAborted 触发）导致的取消：非服务端错误，

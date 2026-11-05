@@ -37,7 +37,8 @@ public sealed class TokenSubjectFactory(
                 user.DeptId,
                 [],
                 [],
-                user.TenantId);
+                user.TenantId,
+                user.TokenVersion);
         }
 
         var roles = await roleRepository.GetListAsync([r => r.Status == CommonStatus.Enabled && roleIds.Contains(r.Id)], cancellationToken: cancellationToken);
@@ -47,6 +48,7 @@ public sealed class TokenSubjectFactory(
             user.DeptId,
             roles.Select(r => r.Id).ToList(),
             roles.Select(r => r.RoleKey).ToList(),
-            user.TenantId);
+            user.TenantId,
+            user.TokenVersion);
     }
 }

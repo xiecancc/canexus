@@ -60,10 +60,19 @@ public static class ErrorCodes
     /// <summary>刷新令牌无效或已过期。</summary>
     public const int AuthRefreshTokenInvalid = 40106;
 
+    /// <summary>登录状态已失效（令牌版本变更 / 会话被吊销 / 账号已停用或删除），需重新登录。</summary>
+    public const int AuthTokenRevoked = 40107;
+
     // —— 权限段（403xx，对应 HTTP 403）——
 
     /// <summary>无权限访问。</summary>
     public const int AuthForbidden = 40300;
+
+    /// <summary>跨租户访问被拒绝（请求头租户与登录用户所属租户不一致）。</summary>
+    public const int TenantForbidden = 40301;
+
+    /// <summary>首次登录须先修改初始密码，当前访问被拦截。</summary>
+    public const int MustChangePasswordRequired = 40302;
 
     // —— 用户模块段（4002xx，对应 HTTP 400）——
 
@@ -84,6 +93,9 @@ public static class ErrorCodes
 
     /// <summary>用户导入文件非法（空文件 / 无法解析 / 行数超上限）。</summary>
     public const int UserImportFileInvalid = 400207;
+
+    /// <summary>原密码错误（自助改密时旧密码校验失败）。</summary>
+    public const int UserPasswordError = 400208;
 
     // —— 角色模块段（4003xx，对应 HTTP 400）——
 
@@ -181,6 +193,12 @@ public static class ErrorCodes
     /// <summary>租户下存在归属用户，不允许删除。</summary>
     public const int TenantInUse = 400804;
 
+    /// <summary>租户已停用（不可用于登录或数据访问）。</summary>
+    public const int TenantDisabled = 400805;
+
+    /// <summary>租户已到期（不可用于登录或数据访问）。</summary>
+    public const int TenantExpired = 400806;
+
     // —— 定时任务模块段（4009xx，对应 HTTP 400）——
 
     /// <summary>定时任务不存在。</summary>
@@ -215,6 +233,20 @@ public static class ErrorCodes
 
     /// <summary>文件大小超出上限。</summary>
     public const int FileSizeExceeded = 401203;
+
+    // —— 岗位模块段（4013xx，对应 HTTP 400）——
+
+    /// <summary>岗位不存在。</summary>
+    public const int PostNotFound = 401301;
+
+    /// <summary>岗位编码重复（唯一性冲突）。</summary>
+    public const int PostCodeDuplicate = 401302;
+
+    /// <summary>岗位字段校验不通过（名称 / 编码必填、长度与取值合法）。</summary>
+    public const int PostRuleInvalid = 401303;
+
+    /// <summary>岗位仍被用户引用，不允许删除（须先解除用户-岗位关联）。</summary>
+    public const int PostInUse = 401304;
 
     // —— 系统段 ——
 

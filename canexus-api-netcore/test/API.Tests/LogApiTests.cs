@@ -198,12 +198,16 @@ public class LogApiTests
         var clean = await SendAsync(HttpMethod.Post, "/api/system/oper-log/clean", null);
         Assert.That(clean.StatusCode, Is.EqualTo(HttpStatusCode.OK));
 
+        // P0-S5 审计留痕：清空动作本身经 [OperLog] 写入一条清空记录（在清空执行后落库），
+        // 保证"谁在何时清空了日志"始终可追溯——清空后应恰好剩余这 1 条
         var page = await GetJsonAsync("/api/system/oper-log/page?pageIndex=1&pageSize=10");
         var data = page.RootElement.GetProperty("data");
         Assert.Multiple(() =>
         {
-            Assert.That(data.GetProperty("total").GetInt64(), Is.EqualTo(0), "清空后操作日志应为空（清空接口自身不记录日志）");
-            Assert.That(data.GetProperty("items").GetArrayLength(), Is.EqualTo(0));
+            Assert.That(data.GetProperty("total").GetInt64(), Is.EqualTo(1), "清空后应仅剩清空动作自身的审计日志");
+            Assert.That(data.GetProperty("items").GetArrayLength(), Is.EqualTo(1));
+            Assert.That(data.GetProperty("items")[0].GetProperty("title").GetString(), Is.EqualTo("操作日志"), "留痕记录应为操作日志模块");
+            Assert.That(data.GetProperty("items")[0].GetProperty("businessType").GetInt32(), Is.EqualTo(8), "业务类型应为清空（Clean=8）");
         });
     }
 

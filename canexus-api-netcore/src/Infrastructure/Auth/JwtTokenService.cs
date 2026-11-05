@@ -6,6 +6,7 @@ using System.Text;
 using Domain.Entities;
 using Domain.Repositories;
 using Domain.Services.Auth;
+using Infrastructure.Security;
 using Infrastructure.Shared.Options;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -13,7 +14,7 @@ using Microsoft.IdentityModel.Tokens;
 
 namespace Infrastructure.Auth;
 /// <summary>
-/// 基于 JWT 的令牌服务：发放 accessToken（HS256 签名）与 refreshToken（随机 64 位十六进制串，持久化到 sys_refresh_token 表）。
+/// 基于 JWT 的令牌服务：发放 accessToken（HS256 签名）与 refreshToken（随机 64 位十六进制串，仅以 SHA-256 哈希持久化到 sys_refresh_token 表）。
 /// <para>claims 约定：sub=用户 Id、unique_name=用户名、deptId=部门、roleId/role=角色、tenantId=租户。</para>
 /// </summary>
 /// <remarks>构造函数。</remarks>
@@ -57,10 +58,13 @@ public sealed class JwtTokenService(IOptionsMonitor<JwtOption> options, ISysRefr
     };
 
     /// <inheritdoc />
-    public async Task<TokenPair> GenerateAsync(TokenSubject subject, string? ip = null, string? userAgent = null, CancellationToken cancellationToken = default)
+    public async Task<TokenPair> GenerateAsync(TokenSubject subject, string? ip = null, string? userAgent = null, CancellationToken cancellationToken = default, Guid? sessionId = null)
     {
         var now = DateTime.UtcNow;
-        var claims = BuildClaims(subject);
+
+        // 会话标识：登录签发时新建；刷新轮换时沿用旧会话标识，保证同一设备的 accessToken / refreshToken 共享一个 sid
+        var sid = sessionId is { } existing && existing != Guid.Empty ? existing : Guid.NewGuid();
+        var claims = BuildClaims(subject, sid);
 
         var credentials = new SigningCredentials(
             new SymmetricSecurityKey(Encoding.UTF8.GetBytes(Options.Secret)),
@@ -76,15 +80,17 @@ public sealed class JwtTokenService(IOptionsMonitor<JwtOption> options, ISysRefr
 
         var accessToken = TokenHandler.WriteToken(jwt);
 
-        // refreshToken：密码学随机 32 字节转 64 位十六进制串，并持久化（过期时间按配置天数）
-        var refreshToken = Convert.ToHexString(RandomNumberGenerator.GetBytes(32)).ToLowerInvariant();
+        // refreshToken：64 位十六进制 = 32 位会话标识 + 32 位随机密钥（128 位熵），仅以 SHA-256 哈希持久化；
+        // 会话标识与 accessToken 的 sid 声明一致，支持按设备吊销而不影响同用户其他会话
+        var refreshToken = sid.ToString("N") + Convert.ToHexString(RandomNumberGenerator.GetBytes(16)).ToLowerInvariant();
         await refreshTokenRepository.InsertAsync(new SysRefreshToken
         {
-            Token = refreshToken,
+            Token = RefreshTokenHasher.Hash(refreshToken),
             UserId = subject.UserId,
             ExpiresAt = now.AddDays(Options.RefreshTokenDays),
             Ip = ip,
-            UserAgent = userAgent
+            UserAgent = userAgent,
+            SessionId = sid
         }, cancellationToken);
 
         return new TokenPair(accessToken, refreshToken, Options.AccessTokenMinutes * 60L);
@@ -109,19 +115,19 @@ public sealed class JwtTokenService(IOptionsMonitor<JwtOption> options, ISysRefr
     /// <inheritdoc />
     public async Task<RefreshTokenInfo?> GetActiveRefreshTokenAsync(string refreshToken, CancellationToken cancellationToken = default)
     {
-        var entity = await refreshTokenRepository.GetActiveByTokenAsync(refreshToken, DateTime.UtcNow, cancellationToken);
+        var entity = await refreshTokenRepository.GetActiveByTokenAsync(RefreshTokenHasher.Hash(refreshToken), DateTime.UtcNow, cancellationToken);
         if (entity is null)
         {
             return null;
         }
 
-        return new RefreshTokenInfo(entity.Id, entity.Token, entity.UserId, entity.ExpiresAt);
+        return new RefreshTokenInfo(entity.Id, entity.Token, entity.UserId, entity.ExpiresAt, entity.SessionId ?? Guid.Empty);
     }
 
     /// <inheritdoc />
     public async Task RevokeAsync(string refreshToken, CancellationToken cancellationToken = default)
     {
-        var entity = await refreshTokenRepository.GetActiveByTokenAsync(refreshToken, DateTime.UtcNow, cancellationToken);
+        var entity = await refreshTokenRepository.GetActiveByTokenAsync(RefreshTokenHasher.Hash(refreshToken), DateTime.UtcNow, cancellationToken);
         if (entity is null)
         {
             return;
@@ -132,12 +138,15 @@ public sealed class JwtTokenService(IOptionsMonitor<JwtOption> options, ISysRefr
     }
 
     /// <summary>构造 accessToken claims（未认证 claims 如 jti 不参与业务，略去）。</summary>
-    private List<Claim> BuildClaims(TokenSubject subject)
+    private List<Claim> BuildClaims(TokenSubject subject, Guid sessionId)
     {
         List<Claim> claims =
         [
             new(JwtRegisteredClaimNames.Sub, subject.UserId.ToString()),
-            new("unique_name", subject.UserName)
+            new("unique_name", subject.UserName),
+            // 用户级令牌版本与会话标识：请求期由 TokenValidationGuard 与缓存中的当前值比对，实现令牌可撤销
+            new("tokenVersion", subject.TokenVersion.ToString()),
+            new("sid", sessionId.ToString())
         ];
 
         if (subject.DeptId.HasValue)

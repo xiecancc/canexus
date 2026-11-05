@@ -17,6 +17,13 @@ namespace Domain.Repositories;
 public interface IAggregateRepository<TEntity> : IDomainRepository<TEntity>
     where TEntity : AggregateBase
 {
+    /// <summary>按主键读取软删除墓碑（绕过软删除过滤，按当前租户范围约束）；不存在或未被软删除时返回 null。
+    /// <para>供恢复类写操作在解除墓碑前做数据范围 / 越权准入校验（通用查询看不到墓碑，不能复用 GetAsync）。</para></summary>
+    /// <param name="id">主键。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>软删除的聚合墓碑；不存在或未删除时为 null。</returns>
+    public Task<TEntity?> GetDeletedAsync(Guid id, CancellationToken cancellationToken = default);
+
     /// <summary>更新聚合（全字段更新）；审计字段由框架自动填充，
     /// 并基于版本号做乐观并发校验——版本不一致时抛出并发冲突业务异常。</summary>
     /// <param name="entity">聚合（其 <see cref="AggregateBase.Version"/> 须为读取时的值）。</param>

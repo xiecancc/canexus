@@ -1,11 +1,12 @@
 
-using Asp.Versioning;
 using API.Authorization;
 using API.Logging;
 using Application.Contracts.Commands;
 using Application.Contracts.Configs;
 using Application.Contracts.Queries;
+using Asp.Versioning;
 using Domain.Shared.Enums;
+using Domain.Shared.Permissions;
 using Domain.Shared.Results;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
@@ -25,7 +26,7 @@ public class SysConfigController(ISender sender) : ControllerBase
     /// <param name="request">分页与筛选条件。</param>
     /// <returns>分页结果。</returns>
     [HttpGet("page")]
-    [RequirePermission("system:config:list")]
+    [RequirePermission(PermissionDefinitions.SystemConfigList)]
     public async Task<IActionResult> Page([FromQuery] ConfigPageRequest request)
     {
         return Ok(Result.Ok(await sender.Send(new ConfigQueryPaged(request))));
@@ -35,7 +36,7 @@ public class SysConfigController(ISender sender) : ControllerBase
     /// <param name="configKey">参数键名。</param>
     /// <returns>参数值字符串。</returns>
     [HttpGet("key/{configKey}")]
-    [RequirePermission("system:config:query")]
+    [RequirePermission(PermissionDefinitions.SystemConfigQuery)]
     public async Task<IActionResult> GetByKey(string configKey)
     {
         // 显式泛型参数：避免 string 实参被解析为非泛型 Ok(message) 重载导致 data 丢失
@@ -46,7 +47,7 @@ public class SysConfigController(ISender sender) : ControllerBase
     /// <param name="request">创建请求。</param>
     /// <returns>新参数 Id。</returns>
     [HttpPost]
-    [RequirePermission("system:config:add")]
+    [RequirePermission(PermissionDefinitions.SystemConfigAdd)]
     [OperLog("参数配置", OperBusinessType.Add)]
     public async Task<IActionResult> Create([FromBody] ConfigInputRequest request)
     {
@@ -60,7 +61,7 @@ public class SysConfigController(ISender sender) : ControllerBase
     /// <param name="version">乐观锁版本号。</param>
     /// <returns>统一响应。</returns>
     [HttpPut("{id:guid}/{version:guid}")]
-    [RequirePermission("system:config:edit")]
+    [RequirePermission(PermissionDefinitions.SystemConfigEdit)]
     [OperLog("参数配置", OperBusinessType.Update)]
     public async Task<IActionResult> Update(Guid id, Guid version, [FromBody] ConfigInputRequest request)
     {
@@ -73,7 +74,7 @@ public class SysConfigController(ISender sender) : ControllerBase
     /// <returns>统一响应。</returns>
     /// <param name="version">乐观锁版本号（须与聚合当前版本一致才允许删除）。</param>
     [HttpDelete("{id:guid}/{version:guid}")]
-    [RequirePermission("system:config:remove")]
+    [RequirePermission(PermissionDefinitions.SystemConfigRemove)]
     [OperLog("参数配置", OperBusinessType.Delete)]
     public async Task<IActionResult> Delete(Guid id, Guid version)
     {
@@ -86,7 +87,7 @@ public class SysConfigController(ISender sender) : ControllerBase
     /// <param name="version">乐观锁版本号（与删除相同的路由参数模式）。</param>
     /// <returns>统一响应。</returns>
     [HttpPatch("{id:guid}/{version:guid}/restore")]
-    [RequirePermission("system:config:restore")]
+    [RequirePermission(PermissionDefinitions.SystemConfigRestore)]
     [OperLog("参数配置", OperBusinessType.Restore)]
     public async Task<IActionResult> Restore(Guid id, Guid version)
     {

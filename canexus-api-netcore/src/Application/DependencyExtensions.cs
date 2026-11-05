@@ -14,7 +14,7 @@ namespace Application;
 /// <summary>应用层依赖注册扩展。</summary>
 public static class DependencyExtensions
 {
-    /// <summary>注册应用层能力：MediatR（CQRS 分发 + 领域事件通知）、Pipeline Behaviors（验证 / 日志 / 性能 / 事务）、FluentValidation 验证器、AutoMapper 映射、领域事件发布器、权限校验与数据范围过滤。</summary>
+    /// <summary>注册应用层能力：MediatR（CQRS 分发 + 领域事件通知）、Pipeline Behaviors（验证 / 数据范围守卫 / 日志 / 性能 / 事务）、FluentValidation 验证器、AutoMapper 映射、领域事件发布器、权限校验与数据范围过滤。</summary>
     /// <param name="services">服务集合。</param>
     /// <returns>服务集合。</returns>
     public static IServiceCollection AddApplicationServices(this IServiceCollection services)
@@ -24,9 +24,13 @@ public static class DependencyExtensions
         {
             configuration.RegisterServicesFromAssembly(Assembly.GetExecutingAssembly());
 
-            // Pipeline Behaviors：验证在最前（失败抛 ValidationException，不开启事务），
+            // Pipeline Behaviors：默认审计在最外层（含校验失败与事务回滚后的失败路径；[OperLog] 端点由
+            // OperLogActionFilter 接管去重），验证在最前（失败抛 ValidationException，不开启事务），
+            // 随后用户写命令数据范围守卫（取得目标实体后越权即 403，不进入处理器与事务），
             // 其后日志与性能监控，事务管道最内层（仅包裹处理器执行，写命令自动开启事务）
+            configuration.AddBehavior(typeof(IPipelineBehavior<,>), typeof(AuditLogBehavior<,>));
             configuration.AddBehavior(typeof(IPipelineBehavior<,>), typeof(ValidationBehavior<,>));
+            configuration.AddBehavior(typeof(IPipelineBehavior<,>), typeof(UserDataScopeBehavior<,>));
             configuration.AddBehavior(typeof(IPipelineBehavior<,>), typeof(LoggingBehavior<,>));
             configuration.AddBehavior(typeof(IPipelineBehavior<,>), typeof(PerformanceBehavior<,>));
             configuration.AddBehavior(typeof(IPipelineBehavior<,>), typeof(TransactionBehavior<,>));
@@ -44,8 +48,10 @@ public static class DependencyExtensions
         // FluentValidation：扫描本程序集注册全部验证器（Validators 目录），按请求类型注入验证管道
         services.AddValidatorsFromAssembly(typeof(DependencyExtensions).Assembly);
 
-        // 领域事件发布器：业务关键节点经此发布事件（监听器由上方 MediatR 扫描自动注册，见 Events 目录）
-        services.AddScoped<IDomainEventPublisher, MediatRDomainEventPublisher>();
+        // 领域事件发布器（P1-A2）：事务 Outbox——事件随业务事务持久化，提交后同步投递，失败由后台 worker 重试
+        services.AddScoped<IDomainEventPublisher, OutboxDomainEventPublisher>();
+        services.AddScoped<PendingOutboxDelivery>();
+        services.AddScoped<IOutboxDeliveryService, OutboxDeliveryService>();
 
         services.AddScoped<IPermissionChecker, PermissionChecker>();
 

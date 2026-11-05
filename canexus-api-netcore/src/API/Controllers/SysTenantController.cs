@@ -1,11 +1,12 @@
 
-using Asp.Versioning;
 using API.Authorization;
 using API.Logging;
 using Application.Contracts.Commands;
 using Application.Contracts.Queries;
 using Application.Contracts.Tenants;
+using Asp.Versioning;
 using Domain.Shared.Enums;
+using Domain.Shared.Permissions;
 using Domain.Shared.Results;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
@@ -25,7 +26,7 @@ public class SysTenantController(ISender sender) : ControllerBase
     /// <param name="request">分页与筛选条件。</param>
     /// <returns>分页结果。</returns>
     [HttpGet("page")]
-    [RequirePermission("system:tenant:list")]
+    [RequirePermission(PermissionDefinitions.SystemTenantList)]
     public async Task<IActionResult> Page([FromQuery] TenantPageRequest request)
     {
         return Ok(Result.Ok(await sender.Send(new TenantQueryPaged(request))));
@@ -34,7 +35,7 @@ public class SysTenantController(ISender sender) : ControllerBase
     /// <summary>查询启用状态的租户简易列表（下拉框等场景）。</summary>
     /// <returns>启用租户列表。</returns>
     [HttpGet("all")]
-    [RequirePermission("system:tenant:list")]
+    [RequirePermission(PermissionDefinitions.SystemTenantList)]
     public async Task<IActionResult> All()
     {
         return Ok(Result.Ok(await sender.Send(new TenantQueryDropdown())));
@@ -44,7 +45,7 @@ public class SysTenantController(ISender sender) : ControllerBase
     /// <param name="request">创建请求。</param>
     /// <returns>新租户 Id。</returns>
     [HttpPost]
-    [RequirePermission("system:tenant:add")]
+    [RequirePermission(PermissionDefinitions.SystemTenantAdd)]
     [OperLog("租户管理", OperBusinessType.Add)]
     public async Task<IActionResult> Create([FromBody] TenantInputRequest request)
     {
@@ -58,7 +59,7 @@ public class SysTenantController(ISender sender) : ControllerBase
     /// <param name="version">乐观锁版本号。</param>
     /// <returns>统一响应。</returns>
     [HttpPut("{id:guid}/{version:guid}")]
-    [RequirePermission("system:tenant:edit")]
+    [RequirePermission(PermissionDefinitions.SystemTenantEdit)]
     [OperLog("租户管理", OperBusinessType.Update)]
     public async Task<IActionResult> Update(Guid id, Guid version, [FromBody] TenantInputRequest request)
     {
@@ -71,7 +72,7 @@ public class SysTenantController(ISender sender) : ControllerBase
     /// <returns>统一响应。</returns>
     /// <param name="version">乐观锁版本号（须与聚合当前版本一致才允许删除）。</param>
     [HttpDelete("{id:guid}/{version:guid}")]
-    [RequirePermission("system:tenant:remove")]
+    [RequirePermission(PermissionDefinitions.SystemTenantRemove)]
     [OperLog("租户管理", OperBusinessType.Delete)]
     public async Task<IActionResult> Delete(Guid id, Guid version)
     {
@@ -84,7 +85,7 @@ public class SysTenantController(ISender sender) : ControllerBase
     /// <param name="version">乐观锁版本号（与删除相同的路由参数模式）。</param>
     /// <returns>统一响应。</returns>
     [HttpPatch("{id:guid}/{version:guid}/restore")]
-    [RequirePermission("system:tenant:restore")]
+    [RequirePermission(PermissionDefinitions.SystemTenantRestore)]
     [OperLog("租户管理", OperBusinessType.Restore)]
     public async Task<IActionResult> Restore(Guid id, Guid version)
     {

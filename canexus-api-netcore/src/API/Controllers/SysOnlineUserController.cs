@@ -1,9 +1,12 @@
 
-using Asp.Versioning;
 using API.Authorization;
+using API.Logging;
 using Application.Contracts.Commands;
 using Application.Contracts.Online;
 using Application.Contracts.Queries;
+using Asp.Versioning;
+using Domain.Shared.Enums;
+using Domain.Shared.Permissions;
 using Domain.Shared.Results;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
@@ -23,17 +26,18 @@ public class SysOnlineUserController(ISender sender) : ControllerBase
     /// <param name="request">分页与筛选条件。</param>
     /// <returns>分页结果。</returns>
     [HttpGet("page")]
-    [RequirePermission("monitor:online:list")]
+    [RequirePermission(PermissionDefinitions.MonitorOnlineList)]
     public async Task<IActionResult> Page([FromQuery] OnlineUserPageRequest request)
     {
         return Ok(Result.Ok(await sender.Send(new OnlineUserQueryPaged(request))));
     }
 
-    /// <summary>强制下线指定在线会话（吊销对应 refreshToken，会话将无法继续刷新令牌）。</summary>
+    /// <summary>强制下线指定在线会话（吊销对应 refreshToken，会话将无法继续刷新令牌；高危操作留痕审计）。</summary>
     /// <param name="tokenId">在线会话记录 Id。</param>
     /// <returns>统一响应。</returns>
     [HttpPost("{tokenId:guid}/revoke")]
-    [RequirePermission("monitor:online:forceLogout")]
+    [RequirePermission(PermissionDefinitions.MonitorOnlineForceLogout)]
+    [OperLog("在线会话", OperBusinessType.Force)]
     public async Task<IActionResult> ForceLogout(Guid tokenId)
     {
         await sender.Send(new OnlineForceLogoutCommand(tokenId));

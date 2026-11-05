@@ -19,3 +19,8 @@ public sealed record AuthLogoutCommand(string? RefreshToken) : Request, ICommand
 /// <param name="Ip">客户端 IP（可选，写入新 refreshToken 记录）。</param>
 /// <param name="UserAgent">浏览器 User-Agent（可选，写入新 refreshToken 记录）。</param>
 public sealed record AuthRefreshTokenCommand(string RefreshToken, string? Ip = null, string? UserAgent = null) : Request<TokenPairDto>, ICommand;
+
+/// <summary>自助修改密码命令（校验原密码 → 更新哈希 → 清除强制改密标记 → 吊销全部刷新令牌强制重新登录）。</summary>
+/// <param name="OldPassword">原密码。</param>
+/// <param name="NewPassword">新密码。</param>
+public sealed record AuthChangePasswordCommand(string OldPassword, string NewPassword) : Request<bool>, ICommand;

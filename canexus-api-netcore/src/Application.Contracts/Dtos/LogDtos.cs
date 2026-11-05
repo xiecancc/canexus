@@ -52,6 +52,12 @@ public class OperLogPagedResponse : AggregatePagedResponse
     /// <summary>操作人用户名。</summary>
     public string? OperUserName { get; set; }
 
+    /// <summary>操作人用户 Id（未认证时为空）。</summary>
+    public Guid? UserId { get; set; }
+
+    /// <summary>请求链路 TraceId（与响应头 X-Trace-Id 同值，可按链路关联慢请求 / SQL / 事件日志）。</summary>
+    public string? TraceId { get; set; }
+
     /// <summary>操作状态：成功（1），失败（0）。</summary>
     public ExecutionStatus Status { get; set; }
 

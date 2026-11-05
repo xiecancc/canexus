@@ -1,11 +1,12 @@
 
-using Asp.Versioning;
 using API.Authorization;
 using API.Logging;
 using Application.Contracts.Commands;
 using Application.Contracts.Depts;
 using Application.Contracts.Queries;
+using Asp.Versioning;
 using Domain.Shared.Enums;
+using Domain.Shared.Permissions;
 using Domain.Shared.Results;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
@@ -26,7 +27,7 @@ public class SysDeptController(ISender sender) : ControllerBase
     /// <param name="status">状态。</param>
     /// <returns>部门树。</returns>
     [HttpGet("tree")]
-    [RequirePermission("system:dept:list")]
+    [RequirePermission(PermissionDefinitions.SystemDeptList)]
     public async Task<IActionResult> Tree([FromQuery] string? keyword, [FromQuery] Domain.Shared.Enums.CommonStatus? status)
     {
         return Ok(Result.Ok(await sender.Send(new DeptQueryTree(keyword, status))));
@@ -36,7 +37,7 @@ public class SysDeptController(ISender sender) : ControllerBase
     /// <param name="id">部门 Id。</param>
     /// <returns>部门详情。</returns>
     [HttpGet("{id:guid}")]
-    [RequirePermission("system:dept:query")]
+    [RequirePermission(PermissionDefinitions.SystemDeptQuery)]
     public async Task<IActionResult> Get(Guid id)
     {
         return Ok(Result.Ok(await sender.Send(new DeptQueryDetail(id))));
@@ -46,7 +47,7 @@ public class SysDeptController(ISender sender) : ControllerBase
     /// <param name="request">创建请求。</param>
     /// <returns>新部门 Id。</returns>
     [HttpPost]
-    [RequirePermission("system:dept:add")]
+    [RequirePermission(PermissionDefinitions.SystemDeptAdd)]
     [OperLog("部门管理", OperBusinessType.Add)]
     public async Task<IActionResult> Create([FromBody] DeptInputRequest request)
     {
@@ -60,7 +61,7 @@ public class SysDeptController(ISender sender) : ControllerBase
     /// <param name="version">乐观锁版本号。</param>
     /// <returns>统一响应。</returns>
     [HttpPut("{id:guid}/{version:guid}")]
-    [RequirePermission("system:dept:edit")]
+    [RequirePermission(PermissionDefinitions.SystemDeptEdit)]
     [OperLog("部门管理", OperBusinessType.Update)]
     public async Task<IActionResult> Update(Guid id, Guid version, [FromBody] DeptInputRequest request)
     {
@@ -73,7 +74,7 @@ public class SysDeptController(ISender sender) : ControllerBase
     /// <returns>统一响应。</returns>
     /// <param name="version">乐观锁版本号（须与聚合当前版本一致才允许删除）。</param>
     [HttpDelete("{id:guid}/{version:guid}")]
-    [RequirePermission("system:dept:remove")]
+    [RequirePermission(PermissionDefinitions.SystemDeptRemove)]
     [OperLog("部门管理", OperBusinessType.Delete)]
     public async Task<IActionResult> Delete(Guid id, Guid version)
     {
@@ -86,7 +87,7 @@ public class SysDeptController(ISender sender) : ControllerBase
     /// <param name="version">乐观锁版本号（与删除相同的路由参数模式）。</param>
     /// <returns>统一响应。</returns>
     [HttpPatch("{id:guid}/{version:guid}/restore")]
-    [RequirePermission("system:dept:restore")]
+    [RequirePermission(PermissionDefinitions.SystemDeptRestore)]
     [OperLog("部门管理", OperBusinessType.Restore)]
     public async Task<IActionResult> Restore(Guid id, Guid version)
     {
