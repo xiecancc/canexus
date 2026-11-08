@@ -230,6 +230,9 @@ public static class PermissionDefinitions
     /// <summary>系统-租户-恢复。</summary>
     public const string SystemTenantRestore = "system:tenant:restore";
 
+    /// <summary>系统-租户-平台切换：平台用户携带 X-Tenant-Id 收敛到其他租户数据范围的显式权限位。</summary>
+    public const string SystemTenantSwitch = "system:tenant:switch";
+
     /// <summary>系统-公告通知-列表。</summary>
     public const string SystemNoticeList = "system:notice:list";
 
@@ -262,11 +265,6 @@ public static class PermissionDefinitions
 
     /// <summary>系统-文件-删除。</summary>
     public const string SystemFileRemove = "system:file:remove";
-
-    // —— test：受保护端点探针（权限链路测试专用）——
-
-    /// <summary>测试-受保护端点-列表。</summary>
-    public const string TestProtectedList = "test:protected:list";
 
     /// <summary>全部已声明权限（由常量反射生成，恒与常量集合一致）。</summary>
     public static readonly IReadOnlyCollection<string> All = typeof(PermissionDefinitions)

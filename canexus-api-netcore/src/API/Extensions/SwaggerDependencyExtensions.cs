@@ -20,6 +20,23 @@ public static class SwaggerDependencyExtensions
     {
         services.AddOpenApi(options =>
         {
+            // 控制器动作的 CancellationToken 由框架从 HttpContext.RequestAborted 绑定，不是客户端可传契约；
+            // 从文档参数中剔除，避免 OpenAPI 把取消令牌误列为查询参数（前后端契约保持不变）
+            options.AddOperationTransformer((operation, _, _) =>
+            {
+                if (operation.Parameters is { Count: > 0 })
+                {
+                    for (var index = operation.Parameters.Count - 1; index >= 0; index--)
+                    {
+                        if (string.Equals(operation.Parameters[index].Name, "cancellationToken", StringComparison.OrdinalIgnoreCase))
+                        {
+                            operation.Parameters.RemoveAt(index);
+                        }
+                    }
+                }
+
+                return Task.CompletedTask;
+            });
             options.AddDocumentTransformer((document, _, _) =>
             {
                 document.Components ??= new OpenApiComponents();
@@ -51,7 +68,8 @@ public static class SwaggerDependencyExtensions
     {
         if (app.Environment.IsDevelopment())
         {
-            app.MapOpenApi();
+            // MapOpenApi 注册的是 minimal API 端点，须显式匿名放行，否则会被 FallbackPolicy 默认拒绝挡住文档加载
+            app.MapOpenApi().AllowAnonymous();
             app.UseSwaggerUI(options =>
             {
                 options.SwaggerEndpoint("/openapi/v1.json", "Super Admin API v1");

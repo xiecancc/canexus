@@ -37,3 +37,16 @@ public sealed class AuthChangePasswordCommandValidator : AbstractValidator<AuthC
         RuleFor(command => command.NewPassword).PasswordRule();
     }
 }
+
+/// <summary>登出命令验证器（写命令入口覆盖：刷新令牌可空，但不得为纯空白）。</summary>
+/// <remarks>构造函数。</remarks>
+public sealed class AuthLogoutCommandValidator : AbstractValidator<AuthLogoutCommand>
+{
+    /// <summary>构造函数：装配刷新令牌规则。</summary>
+    public AuthLogoutCommandValidator()
+    {
+        RuleFor(command => command.RefreshToken)
+            .Must(token => token is null || !string.IsNullOrWhiteSpace(token))
+            .WithMessage("刷新令牌不得为空白字符串");
+    }
+}

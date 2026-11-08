@@ -1,9 +1,10 @@
 
-using Domain.Shared.Json;
+using API.Middlewares;
 using Domain.Shared.Results;
 using Infrastructure.Auth;
 using Infrastructure.Shared.Options;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
@@ -61,10 +62,8 @@ public static class AuthDependencyExtensions
                                 ? (ErrorCodes.AuthTokenExpired, "令牌已过期，请重新登录")
                                 : (ErrorCodes.AuthUnauthorized, "未登录或令牌无效");
                         var result = Result.Fail(code, message);
-
-                        context.Response.StatusCode = StatusCodes.Status401Unauthorized;
-                        context.Response.ContentType = "application/json;charset=utf-8";
-                        await context.Response.WriteAsync(JsonHelper.Serialize(result));
+                        await UnifiedResponseWriter.WriteResultAsync(
+                            context.HttpContext, StatusCodes.Status401Unauthorized, result);
                     }
                 };
             });
@@ -78,7 +77,12 @@ public static class AuthDependencyExtensions
                     monitor.CurrentValue,
                     () => monitor.CurrentValue.Secret));
 
-        services.AddAuthorization();
+        // 默认拒绝（P0）：未显式标注 [AllowAnonymous] 的端点（含新增 minimal API）一律要求已认证，
+        // 与 MVC 全局 PermissionAuthorizationFilter 构成双保险；健康检查端点在 Program.cs 显式放行
+        services.AddAuthorization(options =>
+            options.FallbackPolicy = new AuthorizationPolicyBuilder()
+                .RequireAuthenticatedUser()
+                .Build());
         return services;
     }
 }

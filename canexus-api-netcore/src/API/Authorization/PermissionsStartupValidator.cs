@@ -139,10 +139,13 @@ public static class PermissionsStartupValidator
         }
     }
 
-    /// <summary>枚举类型上的 Action 方法：公开实例方法（仅本类声明），且带 HTTP 方法特性（GET / POST / PUT / DELETE / PATCH / HEAD / OPTIONS）。</summary>
+    /// <summary>
+    /// 枚举类型上的 Action 方法：公开实例方法（含从基类继承的 Action，避免漏扫继承端点），
+    /// 且带 HTTP 方法特性（GET / POST / PUT / DELETE / PATCH / HEAD / OPTIONS）。
+    /// </summary>
     private static IEnumerable<MethodInfo> GetActionMethods(Type type)
     {
-        foreach (var method in type.GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly))
+        foreach (var method in type.GetMethods(BindingFlags.Public | BindingFlags.Instance))
         {
             if (method.GetCustomAttributes<HttpMethodAttribute>(inherit: true).Any())
             {

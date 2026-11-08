@@ -45,6 +45,8 @@ public sealed class JwtTokenService(IOptionsMonitor<JwtOption> options, ISysRefr
         ValidateAudience = true,
         ValidAudience = options.Audience,
         ValidateIssuerSigningKey = true,
+        // 固定验签算法：拒绝 alg 被篡改为 none / HS384 / RS256 等非预期值的令牌
+        ValidAlgorithms = [SecurityAlgorithms.HmacSha256],
         IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(options.Secret)),
         // 动态密钥解析：每次验签调用 secretProvider 取最新配置（优先于静态 IssuerSigningKey）
         IssuerSigningKeyResolver = secretProvider is null

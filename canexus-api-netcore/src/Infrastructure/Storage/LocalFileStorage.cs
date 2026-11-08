@@ -8,7 +8,8 @@ namespace Infrastructure.Storage;
 
 /// <summary>
 /// 本地磁盘文件存储实现。
-/// <para>安全策略：扩展名白名单 + 大小上限校验（违规抛业务异常，不落盘）；
+/// <para>安全策略：扩展名白名单 + 内容签名 / MIME 白名单双向校验（忽略客户端声明的 ContentType）
+/// + 三道大小上限校验（违规抛业务异常，不落盘）；
 /// 存储文件名随机化（GUID + 原扩展名）杜绝路径穿越与同名覆盖；
 /// 相对路径固定为「日期分桶 / 存储文件名」两级结构，且定位时拒绝包含「..」片段的路径。</para>
 /// </summary>
@@ -40,16 +41,51 @@ public class LocalFileStorage(IOptions<FileStorageOption> options) : IFileStorag
                 $"不支持的文件类型：'{extension}'（允许的扩展名：{string.Join("、", Option.AllowedExtensions)}）");
         }
 
-        if (content.CanSeek)
+        var maxBytes = (long)Option.MaxSizeMB * 1024 * 1024;
+        // 第一道：可 seek 的流在读取前即按声明长度拒绝（Kestrel 线级上限之外 earliest 的业务拦截）
+        if (content.CanSeek && content.Length > maxBytes)
         {
-            if (content.Length > (long)Option.MaxSizeMB * 1024 * 1024)
-            {
-                throw new BusinessException(
-                    ErrorCodes.FileSizeExceeded,
-                    $"文件大小超出上限（最大 {Option.MaxSizeMB} MB）");
-            }
+            throw FileTooLarge();
         }
 
+        // 第二道：边读边限（不可 seek 流同样生效），同时把内容缓冲到内存供签名检测与落盘复用
+        using var buffer = new MemoryStream();
+        var chunk = new byte[64 * 1024];
+        long total = 0;
+        while (true)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var read = await content.ReadAsync(chunk.AsMemory(), cancellationToken);
+            if (read == 0)
+            {
+                break;
+            }
+
+            total += read;
+            if (total > maxBytes)
+            {
+                throw FileTooLarge();
+            }
+
+            buffer.Write(chunk, 0, read);
+        }
+
+        if (total == 0)
+        {
+            throw new BusinessException(ErrorCodes.FileExtensionNotAllowed, "文件内容为空或类型无法识别");
+        }
+
+        // 类型判定只认文件头：签名族必须与扩展名同族，且 MIME 只取内置白名单推导值
+        var header = buffer.GetBuffer().AsSpan(0, (int)Math.Min(total, 512));
+        var family = FileContentInspector.Detect(header);
+        if (!FileContentInspector.TryResolveMime(extension, family, out var detectedContentType))
+        {
+            throw new BusinessException(
+                ErrorCodes.FileExtensionNotAllowed,
+                $"不支持的文件类型：'.{extension}' 与文件内容不符（实测内容格式 {family}）");
+        }
+
+        buffer.Position = 0;
         var storedName = $"{Guid.NewGuid():N}.{extension}";
         var bucket = DateTime.UtcNow.ToString("yyyyMM/dd");
         var relativePath = $"{bucket}/{storedName}";
@@ -62,12 +98,7 @@ public class LocalFileStorage(IOptions<FileStorageOption> options) : IFileStorag
         try
         {
             await using var target = File.Create(fullPath);
-            if (content.CanSeek)
-            {
-                content.Position = 0;
-            }
-
-            await content.CopyToAsync(target, cancellationToken);
+            await buffer.CopyToAsync(target, cancellationToken);
         }
         catch
         {
@@ -75,17 +106,15 @@ public class LocalFileStorage(IOptions<FileStorageOption> options) : IFileStorag
             throw;
         }
 
-        // 写后复核实际大小（流不可 seek 时唯一可靠的大小校验点）
+        // 第三道：写后复核实际落盘大小
         var written = new FileInfo(fullPath).Length;
-        if (written > (long)Option.MaxSizeMB * 1024 * 1024)
+        if (written > maxBytes)
         {
             TryCleanup(fullPath);
-            throw new BusinessException(
-                ErrorCodes.FileSizeExceeded,
-                $"文件大小超出上限（最大 {Option.MaxSizeMB} MB）");
+            throw FileTooLarge();
         }
 
-        return new FileSaveResult(storedName, relativePath);
+        return new FileSaveResult(storedName, relativePath, detectedContentType, written);
     }
 
     /// <inheritdoc />
@@ -142,6 +171,15 @@ public class LocalFileStorage(IOptions<FileStorageOption> options) : IFileStorag
         {
             // 清理失败不阻断主流程：半成品文件由运维清理
         }
+    }
+
+    /// <summary>构造统一的文件大小超限业务异常。</summary>
+    /// <returns>业务异常。</returns>
+    private BusinessException FileTooLarge()
+    {
+        return new BusinessException(
+            ErrorCodes.FileSizeExceeded,
+            $"文件大小超出上限（最大 {Option.MaxSizeMB} MB）");
     }
 
     /// <summary>校验内容流非空。</summary>

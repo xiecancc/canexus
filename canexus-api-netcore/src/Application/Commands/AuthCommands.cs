@@ -16,10 +16,22 @@ using Infrastructure.Shared.Caching;
 using Infrastructure.Shared.Locking;
 using Infrastructure.Shared.Options;
 using Infrastructure.Shared.Tenants;
+using Microsoft.Extensions.Logging;
 
 namespace Application.Commands;
 /// <summary>账号密码登录命令处理器。</summary>
-/// <remarks>构造函数。</remarks>
+/// <remarks>构造函数。登录日志写入失败仅告警，不阻断认证（见 WriteLoginLogAsync）。</remarks>
+/// <param name="userRepository">用户聚合仓储。</param>
+/// <param name="loginLogRepository">登录日志仓储。</param>
+/// <param name="captchaService">验证码服务。</param>
+/// <param name="tokenService">令牌服务。</param>
+/// <param name="tokenSubjectFactory">令牌主体工厂。</param>
+/// <param name="passwordHasher">口令哈希校验。</param>
+/// <param name="cache">失败计数缓存。</param>
+/// <param name="distributedLock">失败计数分布式锁。</param>
+/// <param name="tenantAccessValidator">租户准入校验。</param>
+/// <param name="tenantContext">当前租户上下文。</param>
+/// <param name="logger">日志器（登录日志写入失败仅告警）。</param>
 public sealed class AuthLoginCommandHandler(
     IAggregateRepository<SysUser> userRepository,
     ILoginLogRepository loginLogRepository,
@@ -29,7 +41,9 @@ public sealed class AuthLoginCommandHandler(
     IPasswordHasher passwordHasher,
     ICache cache,
     IDistributedLock distributedLock,
-    ITenantAccessValidator tenantAccessValidator) : RequestHandler<AuthLoginCommand, TokenPairDto>
+    ITenantAccessValidator tenantAccessValidator,
+    ITenantContext tenantContext,
+    ILogger<AuthLoginCommandHandler> logger) : RequestHandler<AuthLoginCommand, TokenPairDto>
 {
     /// <summary>登录失败计数缓存 key 前缀（key 格式：{prefix}{userName}）。</summary>
     public const string LoginFailCacheKeyPrefix = "auth:login-fail:";
@@ -63,6 +77,15 @@ public sealed class AuthLoginCommandHandler(
         var user = (await userRepository.GetListAsync([u => u.UserName == request.UserName], cancellationToken: cancellationToken))
             .FirstOrDefault();
         if (user is null || !passwordHasher.Verify(request.Password, user.PasswordHash))
+        {
+            await RecordLoginFailAsync(request.UserName, command.Ip, command.UserAgent, cancellationToken);
+            throw new BusinessException(ErrorCodes.AuthAccountOrPasswordError, "账号或密码错误");
+        }
+
+        // 3.1 租户归属校验：请求头指定的租户须与账号归属一致；不依赖 QueryFilter 是否作用于当前 ORM 查询，
+        // 统一按「账号或密码错误」拒绝，避免泄露其他租户下同名账号的存在性。
+        // 未携带租户头（平台范围 / 多租户关闭）时保持既有登录语义。
+        if (tenantContext.TenantId is { } requestedTenant && user.TenantId != requestedTenant)
         {
             await RecordLoginFailAsync(request.UserName, command.Ip, command.UserAgent, cancellationToken);
             throw new BusinessException(ErrorCodes.AuthAccountOrPasswordError, "账号或密码错误");
@@ -150,7 +173,7 @@ public sealed class AuthLoginCommandHandler(
     /// <param name="msg">结果描述。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <param name="independent">是否经独立连接写入（失败审计路径须为 true，存活于事务回滚之外）。</param>
-    private Task WriteLoginLogAsync(string userName, string? ip, string? userAgent, bool success, string msg, CancellationToken cancellationToken, bool independent = false)
+    private async Task WriteLoginLogAsync(string userName, string? ip, string? userAgent, bool success, string msg, CancellationToken cancellationToken, bool independent = false)
     {
         var log = new SysLoginLog
         {
@@ -163,9 +186,27 @@ public sealed class AuthLoginCommandHandler(
             Msg = msg,
             LoginTime = DateTime.UtcNow
         };
-        return independent
-            ? loginLogRepository.InsertIndependentAsync(log, cancellationToken)
-            : loginLogRepository.InsertAsync(log, cancellationToken);
+
+        try
+        {
+            // 登录日志属审计旁路：日志库不可用 / 写入失败不得顶替认证结果（尤其失败路径应抛业务异常而非日志异常）
+            if (independent)
+            {
+                await loginLogRepository.InsertIndependentAsync(log, cancellationToken);
+            }
+            else
+            {
+                await loginLogRepository.InsertAsync(log, cancellationToken);
+            }
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            logger.LogWarning(exception, "写入登录日志失败：账号 {UserName}，结果 {Success}", userName, success);
+        }
     }
 }
 

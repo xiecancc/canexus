@@ -31,8 +31,9 @@ public sealed class FileUploadCommandHandler(
             FileName = command.FileName,
             StoredName = saved.StoredName,
             RelativePath = saved.RelativePath,
-            ContentType = command.ContentType,
-            SizeBytes = command.Content.CanSeek ? command.Content.Length : 0,
+            // 落库 MIME 只取内容签名推导值，忽略客户端声明（T-14）；大小取实际落盘字节数
+            ContentType = saved.DetectedContentType,
+            SizeBytes = saved.SizeBytes,
             StorageProvider = LocalFileStorageProvider,
             BizCategory = command.BizCategory
         };

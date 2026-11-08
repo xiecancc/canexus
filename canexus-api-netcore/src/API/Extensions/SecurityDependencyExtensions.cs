@@ -1,8 +1,8 @@
 
 using System.Net;
 using System.Threading.RateLimiting;
+using API.Middlewares;
 using API.RateLimiting;
-using Domain.Shared.Json;
 using Domain.Shared.Results;
 using Infrastructure.Shared.Options;
 using Microsoft.AspNetCore.Builder;
@@ -15,7 +15,6 @@ using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
-using Microsoft.Extensions.Primitives;
 using StackExchange.Redis;
 
 namespace API.Extensions;
@@ -122,17 +121,23 @@ public static class SecurityDependencyExtensions
                 limiter.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
                 limiter.OnRejected = static async (context, cancellationToken) =>
                 {
-                    context.HttpContext.Response.StatusCode = StatusCodes.Status429TooManyRequests;
-                    context.HttpContext.Response.ContentType = "application/json;charset=utf-8";
-
-                    // 租约元数据提供 Retry-After 时透传给客户端（fixed/sliding window 均会携带）
+                    // 租约元数据提供 Retry-After 时透传给客户端（fixed/sliding window 均会携带）；
+                    // 作为附加头交给统一写入器，避免 Response.Clear() 把先设置的头清空
+                    Dictionary<string, string>? headers = null;
                     if (context.Lease.TryGetMetadata(MetadataName.RetryAfter, out var retryAfter))
                     {
-                        context.HttpContext.Response.Headers.RetryAfter = new StringValues(((int)retryAfter.TotalSeconds).ToString());
+                        headers = new Dictionary<string, string>
+                        {
+                            ["Retry-After"] = ((int)retryAfter.TotalSeconds).ToString()
+                        };
                     }
 
-                    await context.HttpContext.Response.WriteAsync(
-                        JsonHelper.Serialize(Result.Fail(ErrorCodes.CommonTooManyRequests, "请求过于频繁，请稍后重试")), cancellationToken);
+                    await UnifiedResponseWriter.WriteResultAsync(
+                        context.HttpContext,
+                        StatusCodes.Status429TooManyRequests,
+                        Result.Fail(ErrorCodes.CommonTooManyRequests, "请求过于频繁，请稍后重试"),
+                        headers,
+                        cancellationToken);
                 };
 
                 // 认证端点策略：按客户端 IP 分区的固定窗口

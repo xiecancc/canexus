@@ -22,7 +22,7 @@ public class SysFile : AggregateBase
     [SugarColumn(Length = 512, ColumnDescription = "相对存储根目录的路径")]
     public virtual string RelativePath { get; set; } = string.Empty;
 
-    /// <summary>内容类型（MIME，来自上传方声明）。</summary>
+    /// <summary>内容类型（MIME，由文件内容签名 + 内置白名单推导，不采信上传方声明）。</summary>
     [SugarColumn(Length = 128, IsNullable = true, ColumnDescription = "内容类型 MIME")]
     public virtual string? ContentType { get; set; }
 

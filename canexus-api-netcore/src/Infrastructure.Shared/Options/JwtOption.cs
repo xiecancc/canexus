@@ -1,3 +1,5 @@
+using System.Text;
+
 namespace Infrastructure.Shared.Options;
 
 /// <summary>JWT 认证配置项（绑定配置节 Jwt）。</summary>
@@ -15,13 +17,13 @@ public sealed class JwtOption : OptionBase
     /// <summary>受众。</summary>
     public string Audience { get; set; } = "SuperAdmin";
 
-    /// <summary>accessToken 有效期（分钟）。</summary>
-    public int AccessTokenMinutes { get; set; } = 120;
+    /// <summary>accessToken 有效期（分钟）：短时令牌，限制改密 / 停用后的旧令牌可用窗口。</summary>
+    public int AccessTokenMinutes { get; set; } = 30;
 
     /// <summary>refreshToken 有效期（天）。</summary>
     public int RefreshTokenDays { get; set; } = 7;
 
-    /// <summary>签名密钥（HS256，长度不小于 32 字符）。</summary>
+    /// <summary>签名密钥（HS256；按 UTF-8 编码后的字节数不少于 32 字节）。</summary>
     public string Secret { get; set; } = string.Empty;
 
     /// <inheritdoc />
@@ -29,11 +31,13 @@ public sealed class JwtOption : OptionBase
     {
         EnsureNotNullOrWhiteSpace(Issuer, nameof(Issuer), "Jwt:Issuer 不能为空");
         EnsureNotNullOrWhiteSpace(Audience, nameof(Audience), "Jwt:Audience 不能为空");
-        EnsureInRange(AccessTokenMinutes, 1, 1_440, nameof(AccessTokenMinutes), "AccessTokenMinutes 必须在 1-1440 分钟（一天）之间");
+        EnsureInRange(AccessTokenMinutes, 15, 30, nameof(AccessTokenMinutes), "AccessTokenMinutes 必须在 15-30 分钟之间（短时令牌）");
         EnsureInRange(RefreshTokenDays, 1, 365, nameof(RefreshTokenDays), "RefreshTokenDays 必须在 1-365 天之间");
         EnsureNotNullOrWhiteSpace(Secret, nameof(Secret), "Jwt:Secret 不能为空");
         Ensure(Secret != InsecureDefaultSecret, nameof(Secret),
             $"Jwt:Secret 不能使用默认不安全值 {InsecureDefaultSecret}，请配置独立的随机密钥");
-        EnsureMinLength(Secret, 32, nameof(Secret), "Jwt:Secret 长度不得小于 32 字符");
+        // 验签密钥实际取 Encoding.UTF8.GetBytes(Secret)，按字节数而非字符数校验（HS256 要求 ≥256 位）
+        Ensure(Encoding.UTF8.GetByteCount(Secret) >= 32, nameof(Secret),
+            "Jwt:Secret 按 UTF-8 编码后不得少于 32 字节，请配置独立的随机密钥");
     }
 }
