@@ -30,6 +30,9 @@ const isEdit = ref(false)
 /** 当前编辑的参数 ID */
 const editId = ref('')
 
+/** 当前编辑参数的乐观锁版本号（取自行数据，写请求回传至 URL） */
+const editVersion = ref('')
+
 /** 提交中 */
 const submitting = ref(false)
 
@@ -69,6 +72,7 @@ const rules: FormRules = {
 async function open(mode: 'create' | 'edit', row?: ConfigVO): Promise<void> {
   isEdit.value = mode === 'edit'
   editId.value = row?.id ?? ''
+  editVersion.value = row?.version ?? ''
   Object.assign(form, getDefaultForm(), {
     configName: row?.configName ?? '',
     configKey: row?.configKey ?? '',
@@ -95,7 +99,7 @@ async function handleSubmit(): Promise<void> {
       description: form.description.trim(),
     }
     if (isEdit.value) {
-      await updateConfigApi(editId.value, data)
+      await updateConfigApi(editId.value, editVersion.value, data)
       ElMessage.success('修改成功')
     } else {
       await createConfigApi(data)

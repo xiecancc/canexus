@@ -47,7 +47,9 @@ const {
 
 /** 行内切换运行 / 暂停：成功轻提示，失败由组合式回滚（错误提示在请求层） */
 async function handleStatusChange(row: JobVO): Promise<void> {
-  const success = await commitStatusToggle(row, (status) => updateJobStatusApi(row.id, status))
+  const success = await commitStatusToggle(row, (status) =>
+    updateJobStatusApi(row.id, row.version, status),
+  )
   if (success) {
     ElMessage.success(row.status === 1 ? '已恢复运行' : '已暂停')
   }
@@ -81,7 +83,7 @@ async function handleDelete(row: JobVO): Promise<void> {
   if (!confirmed) {
     return
   }
-  await deleteJobApi(row.id)
+  await deleteJobApi(row.id, row.version)
   ElMessage.success('删除成功')
   if (items.value.length === 1 && pageIndex.value > 1) {
     pageIndex.value -= 1

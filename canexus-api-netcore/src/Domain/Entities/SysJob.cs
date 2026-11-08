@@ -32,4 +32,13 @@ public class SysJob : AggregateBase
     /// <summary>是否允许并发执行（false 时以 DisallowConcurrentExecution 包装器入调度）。</summary>
     [SugarColumn(ColumnDescription = "是否允许并发执行（false 时以 DisallowConcurrentExecution 包装器入调度）。")]
     public virtual bool Concurrent { get; set; }
+
+    /// <summary>
+    /// 作业参数（JSON 对象，仅扁平标量键值；由 <see cref="Domain.Shared.Jobs.JobParameters"/> 统一解析）。
+    /// <para>入调度时逐项写入 Quartz 原生 <c>JobDataMap</c>，目标 IJob 从 <c>MergedJobDataMap</c> 读取；
+    /// 不引入自研参数绑定 / 重试 / 超时框架——重试与恢复沿用 Quartz 的
+    /// <c>RequestRecovery</c> / misfire 策略 / <c>CancellationToken</c>。</para>
+    /// </summary>
+    [SugarColumn(ColumnDescription = "作业参数（JSON 对象，扁平标量键值；写入 Quartz JobDataMap）。", IsNullable = true, Length = 2000)]
+    public virtual string? ParametersJson { get; set; }
 }

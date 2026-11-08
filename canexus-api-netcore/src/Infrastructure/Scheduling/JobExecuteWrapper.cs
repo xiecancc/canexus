@@ -5,13 +5,15 @@ using Domain.Repositories;
 using Domain.Services;
 using Domain.Shared.Enums;
 using Domain.Shared.Exceptions;
+using Domain.Shared.Jobs;
 using Domain.Shared.Results;
 using Microsoft.Extensions.Logging;
 using Quartz;
 
 namespace Infrastructure.Scheduling;
 /// <summary>
-/// 调度包装任务：按 JobDataMap 中的 jobId 从库中加载任务定义，反射解析目标 IJob 类型并执行；
+/// 调度包装任务：按 JobDataMap 中的 jobId 从库中加载任务定义，经 JobTypeResolver 白名单注册表
+/// 取得目标 IJob 类型并执行（不反射任意 CLR 类型）；作业参数由 Quartz 原生 MergedJobDataMap 透传给目标作业；
 /// 执行前后统一写执行日志（SysJobLog），异常信息截断 2000 字符。
 /// </summary>
 /// <remarks>构造函数（由 Quartz 的 Microsoft DI 作业工厂按执行作用域创建）。</remarks>
@@ -24,8 +26,8 @@ public class JobExecuteWrapper(
     /// <summary>异常信息列宽上限。</summary>
     private const int ExceptionMaxLength = 2000;
 
-    /// <summary>任务主键在 JobDataMap 中的键名。</summary>
-    public const string JobIdKey = "jobId";
+    /// <summary>任务主键在 JobDataMap 中的键名（与 <see cref="JobParameters"/> 的保留键口径统一）。</summary>
+    public const string JobIdKey = JobParameters.JobIdKey;
 
     /// <summary>执行包装任务：解析目标 IJob、计时执行并记录执行日志。</summary>
     /// <param name="context">执行上下文。</param>

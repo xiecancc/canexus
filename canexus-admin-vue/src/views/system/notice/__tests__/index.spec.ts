@@ -37,6 +37,7 @@ window.ResizeObserver ??= ResizeObserverStub as unknown as typeof ResizeObserver
 function makeNotice(partial: Partial<NoticeVO>): NoticeVO {
   return {
     id: '00000000-0000-0000-0000-000000000001',
+    version: '00000000-0000-0000-0000-000000000001',
     title: '系统升级公告',
     noticeType: 2,
     content: '今晚 23:00 升级',

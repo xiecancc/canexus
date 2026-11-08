@@ -3,16 +3,16 @@
  *
  * 流程：
  * - 白名单（/login）直接放行
- * - 无令牌 → /login?redirect=完整路径
- * - 已登录访问 /login → 跳转首页
+ * - 无令牌 → /login?redirect=完整路径（改密页不携带回跳，避免改密后回到受限页）
+ * - 待改密用户（后端 40302）→ 仅允许停留在 /change-password，其余页面一律收敛到改密页
  * - 已登录且动态路由未加载 → 拉取用户信息与路由表，addRoute 注册后以 replace 重新进入
  * - 路由级权限：meta.perms 存在且用户无对应权限 → 403 页
  */
 import type { Router } from 'vue-router'
-import { LOGIN_ROUTE_PATH } from './constants'
+import { CHANGE_PASSWORD_ROUTE_PATH, LOGIN_ROUTE_PATH } from './constants'
 import { usePermission } from '@/composables/usePermission'
 import { useAuthStore } from '@/stores/auth'
-import { getAccessToken } from '@/utils/token'
+import { getAccessToken, getMustChangePassword } from '@/utils/token'
 
 /** 免登录白名单 */
 const WHITE_LIST = [LOGIN_ROUTE_PATH]
@@ -25,13 +25,28 @@ export function setupRouterGuard(router: Router): void {
       return true
     }
 
-    // 无令牌：携带回跳地址前往登录页
+    const isChangePasswordPage = to.path === CHANGE_PASSWORD_ROUTE_PATH
+
+    // 无令牌：携带回跳地址前往登录页；改密页须已登录，不保留回跳避免改密后落回受限页
     if (!getAccessToken()) {
-      return { path: '/login', query: { redirect: to.fullPath }, replace: true }
+      return isChangePasswordPage
+        ? { path: LOGIN_ROUTE_PATH, replace: true }
+        : { path: LOGIN_ROUTE_PATH, query: { redirect: to.fullPath }, replace: true }
+    }
+
+    // 待改密用户：后端 MustChangePasswordMiddleware 会以 40302 拦截所有受保护端点，
+    // 必须在拉取用户信息 / 动态路由之前收敛，避免连锁失败
+    if (getMustChangePassword()) {
+      return isChangePasswordPage ? true : { path: CHANGE_PASSWORD_ROUTE_PATH, replace: true }
+    }
+
+    // 主动改密：改密页是独立静态路由，不依赖后端菜单与路由表
+    if (isChangePasswordPage) {
+      return true
     }
 
     // 已登录访问登录页：回首页
-    if (to.path === '/login') {
+    if (to.path === LOGIN_ROUTE_PATH) {
       return { path: '/', replace: true }
     }
 

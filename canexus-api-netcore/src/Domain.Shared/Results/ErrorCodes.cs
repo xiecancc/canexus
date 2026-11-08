@@ -10,6 +10,12 @@ namespace Domain.Shared.Results;
 /// 用户 = 4002xx、角色 = 4003xx、菜单 = 4004xx、部门 = 4005xx……后续模块按序追加；</item>
 /// <item><c>50000</c>：系统内部错误，对应 HTTP 500。</item>
 /// </list>
+/// <para>段位约定（T5 #12）：
+/// 段内编号不要求连续——已分配但未使用的编号（如 40101、400203）是预留空位，可继续使用，不视为缺口；
+/// 跨租户拒绝（<see cref="TenantForbidden"/>）归入 403xx 权限段而非 4008xx 租户段，因其语义是授权失败而非业务校验失败；
+/// 新增错误码时须同步补充 <c>Domain.Shared/Localization/ErrorMessages_zh-CN.json</c> 与
+/// <c>ErrorMessages_en-US.json</c> 的 <c>Error_{code}</c> 键——
+/// 启动期 <c>ErrorMessageResourceValidator</c> 会校验两者与常量集合完全一致，缺失即阻止启动。</para>
 /// </summary>
 public static class ErrorCodes
 {

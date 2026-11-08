@@ -127,6 +127,16 @@ public sealed class JwtTokenService(IOptionsMonitor<JwtOption> options, ISysRefr
     }
 
     /// <inheritdoc />
+    public async Task<RevokedRefreshTokenInfo?> FindRevokedRefreshTokenAsync(string refreshToken, CancellationToken cancellationToken = default)
+    {
+        var entity = await refreshTokenRepository.GetRevokedByTokenAsync(
+            RefreshTokenHasher.Hash(refreshToken), DateTime.UtcNow, cancellationToken);
+        return entity is null
+            ? null
+            : new RevokedRefreshTokenInfo(entity.UserId, entity.SessionId ?? Guid.Empty, entity.RevokedAt ?? DateTime.UtcNow);
+    }
+
+    /// <inheritdoc />
     public async Task RevokeAsync(string refreshToken, CancellationToken cancellationToken = default)
     {
         var entity = await refreshTokenRepository.GetActiveByTokenAsync(RefreshTokenHasher.Hash(refreshToken), DateTime.UtcNow, cancellationToken);

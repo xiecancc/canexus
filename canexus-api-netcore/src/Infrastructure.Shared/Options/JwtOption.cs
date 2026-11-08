@@ -23,6 +23,16 @@ public sealed class JwtOption : OptionBase
     /// <summary>refreshToken 有效期（天）。</summary>
     public int RefreshTokenDays { get; set; } = 7;
 
+    /// <summary>
+    /// 是否额外把 refreshToken 写入 HttpOnly + Secure + SameSite=Strict Cookie（默认关闭）。
+    /// <para>关闭时维持既有契约（前端从响应体取令牌并自行存储）；开启后前端可逐步迁移为
+    /// 「不落 localStorage、刷新/登出由浏览器自动携带 Cookie」，响应体仍返回 refreshToken 以保持兼容。</para>
+    /// </summary>
+    public bool RefreshTokenCookieEnabled { get; set; }
+
+    /// <summary>refreshToken Cookie 名称（仅在 <see cref="RefreshTokenCookieEnabled"/> 开启时使用）。</summary>
+    public string RefreshTokenCookieName { get; set; } = "super-admin-refresh";
+
     /// <summary>签名密钥（HS256；按 UTF-8 编码后的字节数不少于 32 字节）。</summary>
     public string Secret { get; set; } = string.Empty;
 
@@ -33,6 +43,11 @@ public sealed class JwtOption : OptionBase
         EnsureNotNullOrWhiteSpace(Audience, nameof(Audience), "Jwt:Audience 不能为空");
         EnsureInRange(AccessTokenMinutes, 15, 30, nameof(AccessTokenMinutes), "AccessTokenMinutes 必须在 15-30 分钟之间（短时令牌）");
         EnsureInRange(RefreshTokenDays, 1, 365, nameof(RefreshTokenDays), "RefreshTokenDays 必须在 1-365 天之间");
+        if (RefreshTokenCookieEnabled)
+        {
+            EnsureNotNullOrWhiteSpace(RefreshTokenCookieName, nameof(RefreshTokenCookieName),
+                "启用 refreshToken Cookie 时 Jwt:RefreshTokenCookieName 不能为空");
+        }
         EnsureNotNullOrWhiteSpace(Secret, nameof(Secret), "Jwt:Secret 不能为空");
         Ensure(Secret != InsecureDefaultSecret, nameof(Secret),
             $"Jwt:Secret 不能使用默认不安全值 {InsecureDefaultSecret}，请配置独立的随机密钥");

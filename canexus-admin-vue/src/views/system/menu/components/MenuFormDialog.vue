@@ -43,6 +43,9 @@ const isEdit = ref(false)
 /** 当前编辑的菜单 ID */
 const editId = ref('')
 
+/** 当前编辑菜单的乐观锁版本号（取自行数据，写请求回传至 URL） */
+const editVersion = ref('')
+
 /** 提交中 */
 const submitting = ref(false)
 
@@ -101,6 +104,7 @@ const rules = computed<FormRules>(() => ({
 const parentOptions = computed<MenuVO[]>(() => [
   {
     id: EMPTY_GUID,
+    version: '',
     parentId: '',
     menuType: 1,
     menuName: '顶级菜单',
@@ -149,6 +153,7 @@ watch(
 function open(mode: 'create' | 'edit', row?: MenuVO, parentId?: string): void {
   isEdit.value = mode === 'edit'
   editId.value = row?.id ?? ''
+  editVersion.value = row?.version ?? ''
   Object.assign(form, getDefaultForm(), {
     parentId: mode === 'edit' ? (row?.parentId ?? EMPTY_GUID) : (parentId ?? EMPTY_GUID),
   })
@@ -193,7 +198,7 @@ async function handleSubmit(): Promise<void> {
       status: form.status,
     }
     if (isEdit.value) {
-      await updateMenuApi(editId.value, data)
+      await updateMenuApi(editId.value, editVersion.value, data)
       ElMessage.success('修改成功')
     } else {
       await createMenuApi(data)

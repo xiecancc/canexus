@@ -4,6 +4,7 @@ using Application.Contracts.Jobs;
 using Application.Validators.Common;
 using Domain.Services;
 using Domain.Shared.Exceptions;
+using Domain.Shared.Jobs;
 using Domain.Shared.Results;
 using FluentValidation;
 
@@ -37,6 +38,17 @@ public class JobRequestValidator<TRequest> : AbstractValidator<TRequest>
             .WithMessage("任务分组长度不能超过 50 个字符");
 
         RuleFor(request => request.Status).StatusRule("状态取值不合法：仅支持 1 运行 / 0 暂停");
+
+        // 作业参数：与入调度时的 JobParameters.Parse 共用同一校验口径，非法 JSON 在写入前即被拦截
+        RuleFor(request => request.ParametersJson)
+            .Custom((json, context) =>
+            {
+                var problem = JobParameters.Validate(json);
+                if (problem is not null)
+                {
+                    context.AddFailure(problem);
+                }
+            });
 
         RuleFor(request => request)
             .Custom((request, context) =>

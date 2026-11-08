@@ -10,6 +10,7 @@ import type { FormInstance, FormRules } from 'element-plus'
 import { Key, Lock, Platform, User } from '@element-plus/icons-vue'
 import type { CaptchaResponse } from '@/api/auth'
 import { getCaptchaApi } from '@/api/auth'
+import { CHANGE_PASSWORD_ROUTE_PATH } from '@/router/constants'
 import { useAuthStore } from '@/stores/auth'
 
 /** 记住账号存储键 */
@@ -63,7 +64,7 @@ async function handleLogin(): Promise<void> {
   }
   loading.value = true
   try {
-    await authStore.login({
+    const result = await authStore.login({
       userName: form.userName.trim(),
       password: form.password,
       captchaId: captcha.value.captchaId,
@@ -74,6 +75,12 @@ async function handleLogin(): Promise<void> {
       localStorage.setItem(REMEMBER_KEY, form.userName.trim())
     } else {
       localStorage.removeItem(REMEMBER_KEY)
+    }
+    // 后端返回强制改密标记：受保护端点会被 40302 拦截，先引导改密再进入后台
+    if (result.mustChangePassword === true) {
+      ElMessage.warning('首次登录须先修改初始密码')
+      router.push(CHANGE_PASSWORD_ROUTE_PATH)
+      return
     }
     ElMessage.success(`欢迎回来，${form.userName.trim()}`)
     router.push(resolveRedirectTarget())

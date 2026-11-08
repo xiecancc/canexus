@@ -7,8 +7,9 @@ namespace Domain.Shared.Localization;
 /// <summary>
 /// 错误消息本地化器（轻量 JSON 资源实现，替代 resx + WinForms 资源工具链）。
 /// <para>资源约定：<c>Localization/ErrorMessages.{culture}.json</c>（嵌入资源），
-/// 键为 <c>Error_{错误码}</c>（如 Error_40005）；zh-CN 为默认资源（无文化后缀回退），
-/// 查找顺序：请求文化 → 默认资源 → 调用方提供的原始消息兜底（未收录的错误码原样返回，渐进式收录）。</para>
+/// 键为 <c>Error_{错误码}</c>（如 Error_40005）。
+/// 查找顺序：默认文化（zh）直接返回调用方原始文案（保留动态诊断细节）；
+/// 非默认文化按 请求文化 → 语言回退 → zh-CN 默认资源 → 原始文案兜底。</para>
 /// </summary>
 public static class ErrorMessageLocalizer
 {
@@ -28,12 +29,24 @@ public static class ErrorMessageLocalizer
     }
 
     /// <summary>按指定文化本地化错误码消息（供测试与特殊场景显式指定文化）。</summary>
+    /// <remarks>
+    /// 默认文化（zh）直接返回调用方原始文案而非资源表文本：部分错误码的消息携带动态细节
+    /// （如「不支持的文件类型：'.exe'（允许的扩展名：…）」「内容签名与声明扩展名不符」），
+    /// 资源表是静态文案，覆盖后会丢失排查所需的上下文；原始文案本就以中文书写，
+    /// 即为默认语言的正确呈现。非默认文化按 资源 → zh 资源 → 原始文案 回退，
+    /// 保证 en-US 等语言始终有英文呈现（EX-01 本地化覆盖缺口的目标即在此）。
+    /// </remarks>
     /// <param name="culture">目标文化（取 CurrentUICulture，由请求本地化中间件按 Accept-Language 设置）。</param>
     /// <param name="errorCode">业务错误码。</param>
     /// <param name="fallback">兜底消息。</param>
     /// <returns>本地化后的消息。</returns>
     public static string Localize(CultureInfo culture, int errorCode, string fallback)
     {
+        if (string.Equals(culture.TwoLetterISOLanguageName, "zh", StringComparison.OrdinalIgnoreCase))
+        {
+            return fallback;
+        }
+
         var key = $"Error_{errorCode}";
 
         // 精确文化 → 语言回退（zh-CN 匹配 zh 资源不存在时）→ 默认资源 → 兜底

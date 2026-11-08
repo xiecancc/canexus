@@ -12,10 +12,18 @@ public static class JobTypeResolver
     /// <summary>内置示例空任务的稳定标识（写入 sys_job.job_type 的合法值）。</summary>
     public const string NoOpJobKey = "noop";
 
-    /// <summary>允许写入的稳定标识 → 业务作业类型。</summary>
+    /// <summary>日志保留清理作业的稳定标识（四类日志按 RetentionDays 参数回收）。</summary>
+    public const string LogRetentionJobKey = "log-retention";
+
+    /// <summary>过期刷新令牌清理作业的稳定标识（DI 注入专属仓储，无参数）。</summary>
+    public const string RefreshTokenCleanupJobKey = "refresh-token-cleanup";
+
+    /// <summary>允许写入的稳定标识 → 业务作业类型。新增业务作业只需在此登记，无需改写入侧校验与执行侧解析。</summary>
     private static readonly Dictionary<string, Type> AllowedJobs = new(StringComparer.Ordinal)
     {
-        [NoOpJobKey] = typeof(NoOpJob)
+        [NoOpJobKey] = typeof(NoOpJob),
+        [LogRetentionJobKey] = typeof(LogRetentionJob),
+        [RefreshTokenCleanupJobKey] = typeof(RefreshTokenCleanupJob)
     };
 
     /// <summary>历史类型名 → 业务作业类型：仅供执行存量数据时兼容，写入侧一律拒绝。</summary>

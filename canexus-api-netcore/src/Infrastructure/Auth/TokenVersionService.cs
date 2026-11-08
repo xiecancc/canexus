@@ -12,6 +12,9 @@ namespace Infrastructure.Auth;
 /// 正常情况下单次请求只读进程内存，不回源数据库；版本递增后清除缓存并按 Redis 广播失效其他实例。
 /// <para>会话级吊销使用缓存集合（key 含 sid），TTL 覆盖 accessToken 生命周期 + 5 分钟安全余量；
 /// Redis 不可用时降级为进程内缓存，单副本部署行为一致，多副本部署需要 Redis 才能即时跨实例生效。</para>
+/// <para>吊销状态为「单向标记」：只有被吊销的会话才写入 true，未吊销状态不进缓存。
+/// 因此不存在「其他实例 L1 缓存 false → 登出后仍放行至 TTL 过期」的窗口，
+/// 也不依赖 Pub/Sub 广播的可靠性；多副本下由 L2 统一视图保证下一次请求即读到 true。</para>
 /// </summary>
 /// <remarks>构造函数。</remarks>
 /// <param name="client">SqlSugar 客户端（版本递增使用独立连接，避免受调用方事务状态影响）。</param>
@@ -88,8 +91,8 @@ public sealed class TokenVersionService(ISqlSugarClient client, ICache cache, IO
 
         var ttl = TimeSpan.FromMinutes(options.CurrentValue.AccessTokenMinutes + 5);
 
-        // 先删后写：删除操作会广播其他实例清除 L1 中的 false 缓存，再写入 true 保证下一次请求读到吊销状态
-        await cache.RemoveAsync(SessionRevokeCacheKeyPrefix + sessionId, cancellationToken);
+        // 只写吊销标记（true）：未吊销状态不缓存，故无需「先删后写」清掉其他实例的 false，
+        // 也不存在删除与写入之间并发请求回源写回 false 的竞态。L2 为跨实例的权威视图。
         await cache.SetAsync(
             SessionRevokeCacheKeyPrefix + sessionId,
             true,
@@ -105,10 +108,8 @@ public sealed class TokenVersionService(ISqlSugarClient client, ICache cache, IO
             return false;
         }
 
-        return await cache.GetOrCreateAsync(
-            SessionRevokeCacheKeyPrefix + sessionId,
-            _ => ValueTask.FromResult(false),
-            CacheTtl.Hot,
-            cancellationToken);
+        // 只读不回源（ICache.GetAsync 已用 HybridCache flags 禁止写入 factory 结果）：
+        // 缓存中不存在即「未吊销」，不会把 false 固化在 L1 / L2 里。
+        return await cache.GetAsync<bool>(SessionRevokeCacheKeyPrefix + sessionId, cancellationToken);
     }
 }

@@ -59,7 +59,7 @@ async function handleDelete(row: DictTypeVO): Promise<void> {
   if (!confirmed) {
     return
   }
-  await deleteDictTypeApi(row.id)
+  await deleteDictTypeApi(row.id, row.version)
   ElMessage.success('删除成功')
   if (items.value.length === 1 && pageIndex.value > 1) {
     pageIndex.value -= 1

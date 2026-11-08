@@ -23,6 +23,9 @@ const visible = ref(false)
 /** 当前用户 ID（GUID 字符串） */
 const userId = ref('')
 
+/** 当前用户的乐观锁版本号（取自行数据，写请求回传至 URL） */
+const version = ref('')
+
 /** 角色选项加载中 */
 const loading = ref(false)
 
@@ -42,6 +45,7 @@ const selectedRoleIds = ref<string[]>([])
  */
 async function open(row: UserVO): Promise<void> {
   userId.value = row.id
+  version.value = row.version
   selectedRoleIds.value = row.roles.map((item) => item.id)
   visible.value = true
   loading.value = true
@@ -58,7 +62,7 @@ async function open(row: UserVO): Promise<void> {
 async function handleSubmit(): Promise<void> {
   submitting.value = true
   try {
-    await updateUserRolesApi(userId.value, selectedRoleIds.value)
+    await updateUserRolesApi(userId.value, version.value, selectedRoleIds.value)
     ElMessage.success('分配角色成功')
     visible.value = false
     emit('success')

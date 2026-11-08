@@ -63,20 +63,20 @@ canexus-api-netcore/
 │   │   ├── Commands/               # 写操作请求定义：{Entity}Commands.cs（仅命令 record，不含实现）
 │   │   └── Queries/                # 读操作请求定义：{Entity}Queries.cs（仅查询 record，不含实现）
 │   ├── Domain/                     # 领域层：实体、仓储接口、领域服务端口
-│   │   ├── Entities/               # DomainBase（创建审计 + 租户归属，无主键）/ AggregateBase / AggregateTreeBase 基类 + 17 个 Sys* 实体（关联表继承 DomainBase，业务字段联合主键）
+│   │   ├── Entities/               # DomainBase（创建审计 + 租户归属，无主键）/ AggregateBase / AggregateTreeBase 基类 + 21 个 Sys* 实体 + 2 个基础设施实体（SchemaMigrationRecord / OutboxMessage；共 23 个具体实体类型，其中 22 个按 DomainBase 继承体系纳入全局过滤器扫描；关联表继承 DomainBase，业务字段联合主键）
 │   │   ├── Events/                 # 领域事件：DomainEvent 通用事件模型 + 按领域划分的事件文件（用户 / 角色 / 菜单 / 部门 / 字典 / 配置 / 通知 / 租户 / 作业 / 日志）
 │   │   ├── Repositories/           # IDomainRepository（查询 + 插入 + 物理删除）/ IAggregateRepository（聚合专属：乐观并发更新、软删除、恢复）/ IAggregateTreeRepository
 │   │   ├── Services/               # 跨层端口接口：IJobScheduleManager（调度）、ICaptchaService（验证码）、ITokenService、IPasswordHasher、IUnitOfWork、UserContext
-│   │   │   └── Rules/              # 纯逻辑领域校验规则：MenuRules / DictRules / ConfigRules / JobRules / NoticeRules / LogQueryBounds
+│   │   │   └── Rules/              # 纯逻辑领域校验规则：DictRules / ConfigRules / LogQueryBounds（三类）
 │   ├── Domain.Shared/              # 共享内核：枚举、错误码、BusinessException、分页
 │   ├── Infrastructure/             # 基础设施：SqlSugar 仓储实现、JWT、Quartz 调度、租户、当前用户
-│   │   ├── DataAccess/             # SqlSugarDomainRepository（三仓储实现：领域 / 聚合 / 树形聚合）、DbInitializer、种子数据
+│   │   ├── DataAccess/             # DbInitializer（库 / 结构 / 种子三层判定）、SqlSugarClientFactory、SchemaMigrator 与幂等迁移脚本、种子数据
 │   │   ├── Scheduling/             # Quartz 实现：JobScheduleManager、执行包装任务、示例任务
-│   │   ├── Repositories/           # 日志专属仓储（物理清空/删除）
+│   │   ├── Repositories/           # 三仓储实现（DomainRepository / AggregateRepository / AggregateTreeRepository）+ 日志 / Outbox / 刷新令牌专属仓储、UnitOfWork
 │   │   ├── Auth/                   # JwtTokenService、BCryptPasswordHasher 实现（端口接口定义于 Domain/Services）
 │   │   ├── Users/                  # HttpContextUserContext 实现（当前用户上下文唯一实现）
 │   │   └── Tenants/                # TenantContext 租户上下文实现
-│   └── Infrastructure.Shared/      # 基础设施共享：双层缓存（IAppCache 端口 + HybridCache 实现 + TTL 档位）、验证码、数据过滤开关、UA 之外的共享实现
+│   └── Infrastructure.Shared/      # 基础设施共享：双层缓存（ICache 端口 + HybridCache 实现 + TTL 档位）、验证码、数据过滤开关、UA 之外的共享实现
 └── test/
     ├── Domain.Tests/               # 领域层单测（基类相等性等）
     ├── Infrastructure.Tests/       # 数据访问集成测试（真实 MySQL：过滤器、乐观锁、CodeFirst）
@@ -92,18 +92,20 @@ canexus-api-netcore/
 - **乐观并发**：`Version` 为 Guid 版本令牌（`IsEnableUpdateVersionValidation = true`），更新走 SqlSugar `ExecuteCommandWithOptLock` 框架级校验（自动以旧值作更新条件并轮换新 Guid），冲突抛出业务异常（错误码 `40005`）
 - **软删除**：删除默认为墓碑标记，查询自动过滤；`RestoreAsync` 可恢复
 - **仓储三分**：`IDomainRepository`（查询统计 + 投影查询（Select&lt;TDto&gt; 按属性名自动映射返回指定类型）+ 插入 + 按条件删除，实体表 / 关联表公共；可空条件参数配合 WhereIF 按需拼接）/ `IAggregateRepository`（聚合专属：乐观并发更新、软删除与恢复（按主键 / 集合 / 条件全族单条 SQL 按列更新——仓储兜底填充更新人 / 更新时间并轮换版本令牌，防止墓碑被旧令牌复活））/ `IAggregateTreeRepository`（树形查询）。接口只定义契约（无 new 约束），`new()` 仅出现在 SqlSugar 实现类上
-- **关联表实体**：SysUserRole / SysRoleMenu / SysRoleDept 继承 `DomainBase`（非聚合根）：无独立主键，以业务字段联合主键唯一定位；具备创建审计与租户隔离（全局租户过滤器与聚合根一致），无乐观并发与更新审计语义，删除为物理删除
+- **关联表实体**：SysUserRole / SysRoleMenu / SysRoleDept / SysUserPost 继承 `DomainBase`（非聚合根）：无独立主键，以业务字段联合主键唯一定位；具备创建审计与租户隔离（全局租户过滤器与聚合根一致），无乐观并发与更新审计语义，删除为物理删除
 - **请求分类（MediatR，非读写分离 CQRS）**：项目只有 `ICommand` 写命令标记，没有 `IQuery` 接口，读写共用同一 `SqlSugarClientFactory` 连接与仓储（无独立读模型 / 只读副本）；请求定义（record 实现 `IRequest<TResponse>` + `ICommand`）位于 Application.Contracts；处理器继承 RequestHandler → CommandHandler / QueryHandler 基类（Application/Abstractions，封装 MediatR 适配，子类实现 HandleAsync）；验证器独立于 Validators 目录，横切关注点（审计 / 验证 / 数据范围 / 日志 / 性能 / 事务）由 Pipeline Behaviors 统一处理
-- **DTO 继承体系**：`Application.Contracts/Common` 提供与领域对齐的基类——请求侧 `StatusRequest` / `StatusDescriptionRequest`（对齐 Status / Description），视图侧 `EntityVO` / `StatusVO`（对齐 Id / CreatedAt / Status）；各模块以 `XxxWriteRequest` / `XxxBaseVO` 抽取 Create-Update 与 List-Detail 共同字段，派生类零重复定义
+- **DTO 继承体系**：`Application.Contracts/Dtos/Common/AggregateDtos.cs` 提供与领域对齐的基类——请求侧 `AggregateInputRequest`（聚合写载荷标记）/ `AggregatePagedRequest`（分页查询根），视图侧 `AggregatePagedResponse`（Id / Version / CreatedAt / Description）/ `AggregateDetailResponse`（补充租户与更新审计）/ `AggregateItemResponse`（列表简项）；各模块按 XxxInputRequest / XxxPagedResponse / XxxDetailResponse 派生，公共字段零重复定义
 - **校验分层**：请求级校验统一收敛于 **Validators 模块**（FluentValidation，`Application/Validators/`）：公共规则以扩展方法沉淀于 `Validators/Common/ValidationRules`（NotBlank / TrimmedMaxLength / Status / InRange / ConfigKey）；模块验证器按「请求级验证器（泛型，约束到 Write 基类 DTO）+ 命令验证器（SetValidator 委托）」组织，模块错误码经 Custom 规则透传；实体 setter 保留单属性不变量（Guard）作为领域最后防线
 - **DTO → 实体映射**：AutoMapper **按实体拆分独立 Profile**（`Mappings/SysUserProfile` / `SysRoleProfile` / `SysMenuProfile` / `SysDeptProfile` / `SysDictProfile` / `SysConfigProfile` / `SysJobProfile` / `SysNoticeProfile` / `SysTenantProfile` / `SysLogProfile`，公共约定（字符串 trim、PagedResult 开放泛型映射）沉淀于 `CommonProfile`）；14 组 Create/Update 请求 → 实体映射 + 全局字符串值转换器自动 trim；实体 setter 同步归一化，双保险
 - **富模型（setter 模式）**：实体属性 setter 内强制单属性不变量——trim 归一化（Domain.Shared/Validation/Guard）、非空、取值范围（状态 0/1、标签样式 1~5、数据范围 1~5、菜单类型等，经模块 Rules Ensure 方法）；跨属性耦合规则（如菜单类型 ↔ path/component/perms）由 `Create(...)` / `Apply(...)` 调用 Rules 校验，非法状态无法构造或逃逸
-- **仓储分层**：`IDomainRepository`（查询 + 插入 + 按条件删除：关联表为物理删除，聚合实现重写为软删除）→ `IAggregateRepository`（软删除 + 乐观并发更新 + 恢复）→ `IAggregateTreeRepository`（树查询）→ `IAncestorsTreeRepository`（**后代 Ancestors 批量刷新**，仅限实现 IAncestorsTree 的树形聚合如部门）；专属仓储：三张日志表（含 HardDeleteAsync） + `ISysRefreshTokenRepository`（GetActiveByTokenAsync / RevokeAllForUserAsync / RemoveExpiredAsync）
+- **仓储分层**：`IDomainRepository`（查询 + 插入 + 按条件删除：关联表为物理删除，聚合实现重写为软删除）→ `IAggregateRepository`（软删除 + 乐观并发更新 + 恢复）→ `IAggregateTreeRepository`（树查询；带祖级路径的树形聚合在 MoveAsync 中重算自身路径并联动刷新后代路径）；专属仓储：三张日志表（含 HardDeleteAsync） + `ISysRefreshTokenRepository`（GetActiveByTokenAsync / RevokeAllForUserAsync / RemoveExpiredAsync）
 - **工作单元**：`IUnitOfWork` 仅暴露 `RunInTransactionAsync`（委托成功自动提交、异常自动回滚并原样透出），实现基于 SqlSugar `Ado.UseTranAsync`，无需显式 Begin / Commit / Rollback
-- **端口归位**：领域技术端口（ITokenService / IPasswordHasher / IUnitOfWork / UserContext / ICaptchaService 等）定义于 Domain/Services，实现在 Infrastructure(.Shared)；缓存端口 `IAppCache` 与 TTL 档位定义于 Infrastructure.Shared/Caching（支持层共享设施），应用层经 DI 消费，不感知缓存技术细节
+- **端口归位**：领域技术端口（ITokenService / IPasswordHasher / IUnitOfWork / UserContext / ICaptchaService 等）定义于 Domain/Services，实现在 Infrastructure(.Shared)；缓存端口 `ICache` 与 TTL 档位定义于 Infrastructure.Shared/Caching（支持层共享设施），应用层经 DI 消费，不感知缓存技术细节
 - **领域事件**：根基类 `DomainEvent` 仅承载共有元数据（事件名称 EventName = 短类名，即事件类型的唯一标识；发生时间 OccurredAt），**事件类型由事件类本身表达**，无独立类型字符串与弱类型载荷。泛型基类 `DomainEvent<TDomain>`（TDomain : DomainBase）携带事件关联的领域实体（Domain 属性）。**聚合级事件基类族按变更类型分层**：`AggregateCreatedEvent<TAggregate>`（Domain = 创建后状态）/ `AggregateUpdatedEvent<TAggregate>`（Domain = 变更后状态，Before = 变更前快照，发布点经 DomainBase.Snapshot 浅拷贝捕获）/ `AggregateDeletedEvent<TAggregate>`（Domain = 删除前状态）/ `AggregateRestoredEvent<TAggregate>`（恢复，预留）；无实体状态的事件（UserPasswordResetEvent，密码哈希敏感）与聚合根可空的日志事件（LogDeletedEvent）直接继承 DomainEvent。**事件文件按所属领域划分**（UserEvents / RoleEvents / MenuEvents / DeptEvents / DictEvents / ConfigEvents / NoticeEvents / TenantEvents / JobEvents / LogEvents），每领域按创建 / 修改 / 删除拆分具体事件类（如 UserCreatedEvent / UserUpdatedEvent / UserDeletedEvent）。发布端口 `IDomainEventPublisher` 定义于 Domain/Services/Events；全部业务写命令处理器在变更成功后的关键节点发布对应事件。应用层经事务 Outbox 发布（见本条末的可靠性说明），提交后的投递阶段才由 MediatR 非泛型通知信封（DomainEventNotification）在进程内派发给监听器；监听器继承泛型基类 `DomainEventHandler<TEvent>`（屏蔽类型过滤守卫，TEvent 传 DomainEvent 即全量订阅）或直接实现 INotificationHandler 模式匹配（多类型监听器受类单继承限制）——**业务逻辑与响应逻辑解耦**，新增监听需求只需追加监听器实现，由 MediatR 扫描自动注册。内置监听器：权限缓存失效（用户事件→单用户，角色 / 菜单事件→全量）、字典缓存失效（类型迁移经 Before.DictType 比对新旧双失效）、配置缓存失效（键名变更经 Before.ConfigKey 比对新旧双失效）、事件审计（DomainEventAuditHandler，通用兜底记录事件名称与发生时间，不落实体状态以规避敏感数据）。**监听器命名约定**：`<响应关切><名词化响应动作>Handler`（如 PermissionCacheInvalidationHandler / DomainEventAuditHandler），统一继承泛型基类（单类型）或直接实现 INotificationHandler（多类型）。**可靠性（P1-A2 已落地）**：领域事件经事务 Outbox 发布——发布器在业务事务内将事件序列化持久化到 sys_outbox_message 并加入请求作用域待投递队列，事务提交成功后由 TransactionBehavior 同步投递（失败仅记录日志、不阻断业务响应），后台 worker（Outbox:Enabled）按 Outbox:PollIntervalSeconds 轮询兜底崩溃恢复与重试，超过 Outbox:MaxAttempts 置为失败状态保留排查；监听器由 MediatR IsolatedNotificationPublisher 逐一执行，单监听器失败不阻断其余监听器，但会聚合失败向上传播，由投递服务记录失败并进入重试（绝不标记为已处理），因此监听器必须可重入；载荷反序列化仅接受 Domain.Events 命名空间下的具体 DomainEvent 子类，拒绝任意 CLR 类型；Failed 与超期 Pending / Processing 消息在既有清理循环内按 Outbox:FailedRetentionDays / Outbox:StalePendingDays 收敛为死信并清理。Outbox 载荷经 System.Text.Json 序列化，敏感字段（如 SysUser.PasswordHash）已 [JsonIgnore] 排除，事件载荷不落敏感数据。评估后不发布事件的写操作：登录 / 登出 / 刷新令牌（认证基础设施流程）、立即执行一次任务（不改变聚合数据）、操作 / 登录日志写入（OperLog 过滤器承载审计职责）
-- **领域规则归位**：纯逻辑校验规则（MenuRules / DictRules / ConfigRules / JobRules / NoticeRules / LogQueryBounds）位于 Domain/Services/Rules，供处理器与 Domain.Tests 复用；树形装配统一由 `AggregateTreeBase<T>.BuildTree` 承接（同级按 OrderNum 升序再按 Id、孤儿节点挂根级），树查询处理器过滤后建树并经 AutoMapper 递归映射为契约 VO
-- **双层缓存**：基于 HybridCache 的 L1 进程内存（短过期）+ L2 Redis（长过期，`HybridCache:RedisEnabled` 开启后生效）缓存，按 TTL 档位（Hot / Medium / Cold，可配置）自动调整两级过期策略；应用层统一经 `IAppCache` 端口读写与失效，不感知缓存技术
+- **领域规则归位**：纯逻辑校验规则（`DictRules` / `ConfigRules` / `LogQueryBounds` 三类）位于 Domain/Services/Rules，供处理器与 Domain.Tests 复用；树形装配统一由 `AggregateTreeBase<T>.BuildTree` 承接（同级按 OrderNum 升序再按 Id、孤儿节点挂根级），树查询处理器过滤后建树并经 AutoMapper 递归映射为契约 VO
+- **双层缓存**：基于 HybridCache 的 L1 进程内存（短过期）+ L2 Redis（长过期，`HybridCache:RedisEnabled` 开启后生效）缓存，按 TTL 档位（Hot / Medium / Cold，可配置）自动调整两级过期策略；应用层统一经 `ICache` 端口读写与失效，不感知缓存技术
+- **领域实体有意保留 SqlSugar 特性**：`SugarTable` / `SugarColumn`（表名、主键、列描述、乐观锁 IsEnableUpdateVersionValidation、软删除字段）驱动 `DbInitializer` 的 CodeFirst.InitTables 与 EntityMaintenance.GetEntityInfo 建表与取模型元数据，是有意利用 ORM 原生能力替代手写映射配置，移除反而丧失建表与元数据能力，并非层间不纯净（架构文档展开论证）。
+- **契约层 DTO 有意保留 MiniExcel 列特性**：`UserExportRow` / `UserImportRow` 以 `ExcelColumnName` 标注中文表头，导入 `MiniExcel.Query<UserImportRow>` 与 POCO 导出共用同一行模型定义，是 MiniExcel 的官方用法，契约层只保留行模型、不暴露其公共 API（架构文档展开论证）。
 
 
 ## 安全与可靠性边界（P0 / P1 / P2 / P3 已落地）

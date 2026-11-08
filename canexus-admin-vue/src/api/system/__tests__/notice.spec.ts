@@ -32,6 +32,9 @@ const mockedDelete = request.delete as unknown as Mock
 /** 测试用公告 ID（GUID 字符串） */
 const NOTICE_ID = '00000000-0000-0000-0000-000000000006'
 
+/** 测试用乐观锁版本号（GUID 字符串，取自列表 / 详情响应的 version 字段） */
+const VERSION = '00000000-0000-0000-0000-00000000000a'
+
 describe('通知公告模块接口', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -58,15 +61,15 @@ describe('通知公告模块接口', () => {
     expect(mockedPost).toHaveBeenCalledWith('/system/notice', body)
   })
 
-  it('更新公告：PUT /system/notice/{id}', async () => {
+  it('更新公告：PUT /system/notice/{id}/{version}', async () => {
     const body = { title: '改标题', noticeType: 1, content: '新内容', status: 0 }
-    await updateNoticeApi(NOTICE_ID, body)
-    expect(mockedPut).toHaveBeenCalledWith(`/system/notice/${NOTICE_ID}`, body)
+    await updateNoticeApi(NOTICE_ID, VERSION, body)
+    expect(mockedPut).toHaveBeenCalledWith(`/system/notice/${NOTICE_ID}/${VERSION}`, body)
   })
 
-  it('删除公告：DELETE /system/notice/{id}', async () => {
-    await deleteNoticeApi(NOTICE_ID)
-    expect(mockedDelete).toHaveBeenCalledWith(`/system/notice/${NOTICE_ID}`)
+  it('删除公告：DELETE /system/notice/{id}/{version}', async () => {
+    await deleteNoticeApi(NOTICE_ID, VERSION)
+    expect(mockedDelete).toHaveBeenCalledWith(`/system/notice/${NOTICE_ID}/${VERSION}`)
   })
 
   it('查询最新公告：GET /system/notice/latest 且 count 透传（缺省 5）', async () => {

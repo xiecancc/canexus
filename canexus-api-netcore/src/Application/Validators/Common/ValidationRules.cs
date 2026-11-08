@@ -1,8 +1,8 @@
 
-using System.Text.RegularExpressions;
 using Domain.Shared.Enums;
 using Domain.Shared.Exceptions;
 using FluentValidation;
+using Infrastructure.Shared.Options;
 
 namespace Application.Validators.Common;
 /// <summary>
@@ -46,16 +46,71 @@ public static class ValidationRules
         where TEnum : struct, Enum
         => rule.Must(value => Enum.IsDefined(value)).WithMessage(message);
 
-    /// <summary>密码强度正则：6-20 位且同时包含字母与数字，不允许空白字符（与前端重置密码对话框口径一致）。</summary>
-    private static readonly Regex PasswordPattern = new(@"^(?=.*[A-Za-z])(?=.*\d)\S{6,20}$", RegexOptions.Compiled);
-
-    /// <summary>密码强度约束：6-20 位且同时包含字母与数字（与前端重置密码对话框口径一致）。</summary>
+    /// <summary>按部署方配置的口令策略校验强度（默认口径与历史规则一致：6-20 位、含字母与数字、不含空白）。</summary>
     /// <typeparam name="T">请求类型。</typeparam>
     /// <param name="rule">属性规则构建器。</param>
+    /// <param name="policy">口令策略（由 IOptionsMonitor 注入，支持热加载）。</param>
     /// <returns>规则选项。</returns>
-    public static IRuleBuilderOptions<T, string?> PasswordRule<T>(this IRuleBuilder<T, string?> rule)
-        => rule.Must(value => value is not null && PasswordPattern.IsMatch(value))
-            .WithMessage("密码为 6-20 位，且需同时包含字母和数字");
+    public static IRuleBuilderOptions<T, string?> PasswordRule<T>(this IRuleBuilder<T, string?> rule, PasswordPolicyOption policy)
+        => rule.Must(value => IsPasswordValid(value, policy)).WithMessage(BuildPasswordMessage(policy));
+
+    /// <summary>按策略判定口令是否合规（长度、禁止空白、各类字符要求）。</summary>
+    /// <param name="value">待校验口令。</param>
+    /// <param name="policy">口令策略。</param>
+    /// <returns>合规返回 true。</returns>
+    private static bool IsPasswordValid(string? value, PasswordPolicyOption policy)
+    {
+        if (string.IsNullOrEmpty(value)
+            || value.Length < policy.MinLength
+            || value.Length > policy.MaxLength
+            || value.Any(char.IsWhiteSpace))
+        {
+            return false;
+        }
+
+        return (!policy.RequireLetter || value.Any(char.IsLetter))
+            && (!policy.RequireDigit || value.Any(char.IsDigit))
+            && (!policy.RequireUppercase || value.Any(char.IsUpper))
+            && (!policy.RequireLowercase || value.Any(char.IsLower))
+            && (!policy.RequireSpecialCharacter || value.Any(ch => !char.IsLetterOrDigit(ch)));
+    }
+
+    /// <summary>按策略生成可读的校验失败提示（默认策略输出与历史文案完全一致）。</summary>
+    /// <param name="policy">口令策略。</param>
+    /// <returns>失败消息。</returns>
+    private static string BuildPasswordMessage(PasswordPolicyOption policy)
+    {
+        List<string> requirements = [];
+        if (policy.RequireLetter)
+        {
+            requirements.Add("字母");
+        }
+
+        if (policy.RequireDigit)
+        {
+            requirements.Add("数字");
+        }
+
+        if (policy.RequireUppercase)
+        {
+            requirements.Add("大写字母");
+        }
+
+        if (policy.RequireLowercase)
+        {
+            requirements.Add("小写字母");
+        }
+
+        if (policy.RequireSpecialCharacter)
+        {
+            requirements.Add("特殊字符");
+        }
+
+        var suffix = requirements.Count == 0
+            ? string.Empty
+            : $"，且需同时包含{(requirements.Count == 2 ? $"{requirements[0]}和{requirements[1]}" : string.Join("、", requirements))}";
+        return $"密码为 {policy.MinLength}-{policy.MaxLength} 位{suffix}";
+    }
 
     /// <summary>参数键名格式约束（非空白且去空白后不超过 100 字符，与实体列宽一致）。</summary>
     /// <typeparam name="T">请求类型。</typeparam>

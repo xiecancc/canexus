@@ -30,6 +30,9 @@ const isEdit = ref(false)
 /** 当前编辑的字典类型 ID */
 const editId = ref('')
 
+/** 当前编辑字典类型的乐观锁版本号（取自行数据，写请求回传至 URL） */
+const editVersion = ref('')
+
 /** 提交中 */
 const submitting = ref(false)
 
@@ -71,6 +74,7 @@ const rules: FormRules = {
 async function open(mode: 'create' | 'edit', row?: DictTypeVO): Promise<void> {
   isEdit.value = mode === 'edit'
   editId.value = row?.id ?? ''
+  editVersion.value = row?.version ?? ''
   Object.assign(form, getDefaultForm(), {
     dictName: row?.dictName ?? '',
     dictType: row?.dictType ?? '',
@@ -95,7 +99,7 @@ async function handleSubmit(): Promise<void> {
       description: form.description.trim(),
     }
     if (isEdit.value) {
-      await updateDictTypeApi(editId.value, data)
+      await updateDictTypeApi(editId.value, editVersion.value, data)
       ElMessage.success('修改成功')
     } else {
       await createDictTypeApi(data)

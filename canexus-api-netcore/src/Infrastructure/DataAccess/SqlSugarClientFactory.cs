@@ -65,7 +65,7 @@ internal static class SqlSugarClientFactory
             client.Ado.CommandTimeOut = monitor.CurrentValue.CommandTimeOut;
 
             ConfigureExecutingAop(client, currentUser, tenantContext);
-            ConfigureGlobalQueryFilters(client, options, dataFilter, tenantContext);
+            ConfigureGlobalQueryFilters(client, options, dataFilter, tenantContext, currentUser);
 
             // SQL 执行日志 + 慢查询日志（P1-R5）统一在 OnLogExecuting / OnLogExecuted 中组合：
             // SqlSugar Aop 为单委托槽位，两类逻辑必须合并赋值（后者赋值会覆盖前者）。
@@ -173,29 +173,33 @@ internal static class SqlSugarClientFactory
     /// <param name="options">数据访问配置（提供参与扫描的实体程序集）。</param>
     /// <param name="dataFilter">过滤开关。</param>
     /// <param name="tenantContext">租户上下文。</param>
+    /// <param name="currentUser">当前用户上下文（区分平台用户 / 租户用户，决定平台级行是否可见）。</param>
     private static void ConfigureGlobalQueryFilters(
         ISqlSugarClient client,
         DatabaseOption options,
         IDataFilter dataFilter,
-        ITenantContext tenantContext)
+        ITenantContext tenantContext,
+        IUserContext currentUser)
     {
         // 全局过滤器（按具体实体类型逐个注册，AND 组合）：
         // SqlSugar 的 AddTableFilter 对抽象基类注册不会向派生实体传播，故扫描实体程序集中
         // 全部具体实体类型，经反射逐类型注册（扫描结果静态缓存，避免重复反射）。
-        // 1. 租户隔离（全部实体，TenantId 定义于 DomainBase）：平台用户（无租户）可见全部数据，
-        //    租户用户仅可见本租户数据（租户为空的平台级数据对租户用户不可见）
+        // 1. 租户隔离（全部实体，TenantId 定义于 DomainBase）：平台用户（JWT 无 tenantId 声明）
+        //    除按 X-Tenant-Id 过滤出的业务数据外，仍可见 TenantId IS NULL 的平台级数据
+        //    （sys_tenant 定义表 / 平台管理员 / 平台角色菜单等）；租户用户仅可见本租户数据，
+        //    平台级行对其不可见。区分依据为 currentUser.TenantId 而非请求头，避免租户用户越权。
         // 2. 软删除（仅聚合根，IsDeleted 定义于 AggregateBase；关联表为物理删除无墓碑）：
         //    开关关闭或未删除数据可见，表达式在每次查询时求值，支持运行时切换
         foreach (var entityType in GetAggregateEntityTypes(options.EntityAssemblies))
         {
             AddAggregateFilterMethod.MakeGenericMethod(entityType)
-                .Invoke(null, [client, dataFilter, tenantContext]);
+                .Invoke(null, [client, dataFilter, tenantContext, currentUser]);
         }
 
         foreach (var entityType in GetPlainEntityTypes(options.EntityAssemblies))
         {
             AddTenantFilterMethod.MakeGenericMethod(entityType)
-                .Invoke(null, [client, dataFilter, tenantContext]);
+                .Invoke(null, [client, dataFilter, tenantContext, currentUser]);
         }
     }
 
@@ -253,14 +257,17 @@ internal static class SqlSugarClientFactory
     /// <param name="client">SqlSugar 客户端（每异步上下文实例）。</param>
     /// <param name="dataFilter">过滤开关。</param>
     /// <param name="tenantContext">租户上下文。</param>
-    private static void AddAggregateFilter<TEntity>(ISqlSugarClient client, IDataFilter dataFilter, ITenantContext tenantContext)
+    /// <param name="currentUser">当前用户上下文（平台用户可见 TenantId IS NULL 的平台级行）。</param>
+    private static void AddAggregateFilter<TEntity>(
+        ISqlSugarClient client, IDataFilter dataFilter, ITenantContext tenantContext, IUserContext currentUser)
         where TEntity : AggregateBase
     {
         client.QueryFilter.AddTableFilter<TEntity>(it =>
             (dataFilter.SoftDeleteEnabled == false || it.IsDeleted == false)
             && (dataFilter.TenantFilterEnabled == false
                 || tenantContext.TenantId == null
-                || it.TenantId == tenantContext.TenantId));
+                || it.TenantId == tenantContext.TenantId
+                || (currentUser.TenantId == null && it.TenantId == null)));
     }
 
     /// <summary>为单个非聚合实体类型注册租户隔离全局过滤器（无软删除字段，供反射按具体类型调用）。</summary>
@@ -268,12 +275,15 @@ internal static class SqlSugarClientFactory
     /// <param name="client">SqlSugar 客户端（每异步上下文实例）。</param>
     /// <param name="dataFilter">过滤开关。</param>
     /// <param name="tenantContext">租户上下文。</param>
-    private static void AddTenantFilter<TEntity>(ISqlSugarClient client, IDataFilter dataFilter, ITenantContext tenantContext)
+    /// <param name="currentUser">当前用户上下文（平台用户可见 TenantId IS NULL 的平台级行）。</param>
+    private static void AddTenantFilter<TEntity>(
+        ISqlSugarClient client, IDataFilter dataFilter, ITenantContext tenantContext, IUserContext currentUser)
         where TEntity : DomainBase
     {
         client.QueryFilter.AddTableFilter<TEntity>(it =>
             dataFilter.TenantFilterEnabled == false
             || tenantContext.TenantId == null
-            || it.TenantId == tenantContext.TenantId);
+            || it.TenantId == tenantContext.TenantId
+            || (currentUser.TenantId == null && it.TenantId == null));
     }
 }

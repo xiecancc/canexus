@@ -15,8 +15,10 @@ import { transformRoutes } from '@/router/dynamic'
 import {
   clearTokens,
   getAccessToken,
+  getMustChangePassword,
   getRefreshToken,
   setAccessToken,
+  setMustChangePassword,
   setRefreshToken,
 } from '@/utils/token'
 
@@ -27,6 +29,9 @@ export const useAuthStore = defineStore('auth', () => {
 
   /** 刷新令牌（镜像，实际以 utils/token.ts 为准） */
   const refreshToken = ref(getRefreshToken())
+
+  /** 是否须先修改初始密码（镜像；路由守卫以 utils/token.ts 为准，避免静默刷新后镜像滞后） */
+  const mustChangePassword = ref(getMustChangePassword())
 
   /** 当前登录用户信息 */
   const userInfo = ref<UserInfo | null>(null)
@@ -57,10 +62,12 @@ export const useAuthStore = defineStore('auth', () => {
     setRefreshToken(refresh)
   }
 
-  /** 账号密码登录：保存令牌（用户信息与路由由守卫在跳转时拉取） */
+  /** 账号密码登录：保存令牌与强制改密标记（用户信息与路由由守卫在跳转时拉取） */
   async function login(params: LoginParams): Promise<LoginResponse> {
     const data = await loginApi(params)
     setTokens(data.accessToken, data.refreshToken)
+    setMustChangePassword(data.mustChangePassword === true)
+    mustChangePassword.value = data.mustChangePassword === true
     return data
   }
 
@@ -93,6 +100,7 @@ export const useAuthStore = defineStore('auth', () => {
     routesLoaded.value = false
     accessToken.value = ''
     refreshToken.value = ''
+    mustChangePassword.value = false
     clearTokens()
   }
 
@@ -108,6 +116,7 @@ export const useAuthStore = defineStore('auth', () => {
   return {
     accessToken,
     refreshToken,
+    mustChangePassword,
     userInfo,
     routesLoaded,
     dynamicRoutes,

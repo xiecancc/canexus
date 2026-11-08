@@ -142,7 +142,7 @@ defineExpose({ open })
         type="info"
         :closable="false"
         show-icon
-        title="请先下载导入模板，按模板格式填写用户数据（用户名、昵称等必填项不能为空）"
+        title="请先下载导入模板，按模板格式填写用户数据（用户名、昵称等必填项不能为空）；密码列留空将使用系统参数 sys.user.initPassword 的初始密码，导入用户首次登录须修改密码"
         class="step-alert"
       />
       <div class="step-actions">

@@ -62,7 +62,7 @@ async function handleDelete(row: DeptVO): Promise<void> {
   if (!confirmed) {
     return
   }
-  await deleteDeptApi(row.id)
+  await deleteDeptApi(row.id, row.version)
   ElMessage.success('删除成功')
   await loadDeptTree()
 }

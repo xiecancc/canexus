@@ -41,6 +41,7 @@ const gid = (n: number): string => `00000000-0000-0000-0000-${String(n).padStart
 /** 构造菜单树节点 */
 function makeMenu(partial: Partial<MenuVO> & Pick<MenuVO, 'id'>): MenuVO {
   return {
+    version: '00000000-0000-0000-0000-000000000001',
     parentId: EMPTY_GUID,
     menuType: 1,
     menuName: '',
@@ -119,7 +120,7 @@ describe('菜单模块接口', () => {
     expect(mockedPost).toHaveBeenCalledWith('/system/menu', body)
   })
 
-  it('更新菜单：PUT /system/menu/{id}', async () => {
+  it('更新菜单：PUT /system/menu/{id}/{version}', async () => {
     const body = {
       parentId: EMPTY_GUID,
       menuType: 3 as const,
@@ -131,13 +132,13 @@ describe('菜单模块接口', () => {
       keepAlive: false,
       status: 1,
     }
-    await updateMenuApi(gid(21), body)
-    expect(mockedPut).toHaveBeenCalledWith(`/system/menu/${gid(21)}`, body)
+    await updateMenuApi(gid(21), gid(99), body)
+    expect(mockedPut).toHaveBeenCalledWith(`/system/menu/${gid(21)}/${gid(99)}`, body)
   })
 
-  it('删除菜单：DELETE /system/menu/{id}', async () => {
-    await deleteMenuApi(gid(21))
-    expect(mockedDelete).toHaveBeenCalledWith(`/system/menu/${gid(21)}`)
+  it('删除菜单：DELETE /system/menu/{id}/{version}', async () => {
+    await deleteMenuApi(gid(21), gid(99))
+    expect(mockedDelete).toHaveBeenCalledWith(`/system/menu/${gid(21)}/${gid(99)}`)
   })
 })
 

@@ -19,6 +19,16 @@ public class DistributedRateLimitApiTests
     private const string TestRedisPrefix = "rl-test:";
     private const int PermitLimit = 6;
 
+    /// <summary>
+    /// 固定窗口长度（秒）：由 60 调整为 300，配合 <see cref="ResetQuotaAsync"/> 的窗口对齐，
+    /// 消除「用例执行中恰好跨过窗口边界导致计数归零、本应 429 的请求返回 200」的偶发失败。
+    /// 窗口起点取自 Redis 服务端 TIME（与限流器同口径），故此处也按 Redis 时钟对齐。
+    /// </summary>
+    private const int WindowSeconds = 300;
+
+    /// <summary>开始用例前要求当前固定窗口至少剩余的秒数（覆盖预热 + 7 次请求的耗时）。</summary>
+    private const int MinWindowRemainingSeconds = 20;
+
     private static WebApplicationFactory<Program> _hostA = null!;
     private static WebApplicationFactory<Program> _hostB = null!;
     private static HttpClient _clientA = null!;
@@ -26,18 +36,10 @@ public class DistributedRateLimitApiTests
 
     /// <summary>套件初始化：清空测试 Redis 库，启动两个独立宿主（同配置、同 Redis）。</summary>
     [OneTimeSetUp]
-    public void OneTimeSetUp()
+    public async Task OneTimeSetUp()
     {
         // 隔离：按前缀清理测试专用 Redis 数据库中的历史限流键（SCAN+DEL，无需 admin 模式）
-        using (var mux = ConnectionMultiplexer.Connect(TestRedis))
-        {
-            var server = mux.GetServer(mux.GetEndPoints()[0]);
-            var db = mux.GetDatabase();
-            foreach (var key in server.Keys(database: 3, pattern: TestRedisPrefix + "*", pageSize: 200))
-            {
-                db.KeyDelete(key);
-            }
-        }
+        await ResetQuotaAsync();
 
         var connectionString = ApiTestSupport.TestConnectionString;
         var apiContentRoot = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "src", "API"));
@@ -59,7 +61,7 @@ public class DistributedRateLimitApiTests
                             ["RateLimit:RedisConfiguration"] = TestRedis,
                             ["RateLimit:RedisKeyPrefix"] = TestRedisPrefix,
                             ["RateLimit:AuthPermitLimit"] = PermitLimit.ToString(),
-                            ["RateLimit:AuthWindowSeconds"] = "60",
+                            ["RateLimit:AuthWindowSeconds"] = WindowSeconds.ToString(),
                             ["RateLimit:GlobalPermitLimit"] = "0",
                             ["Outbox:Enabled"] = "false"
                         });
@@ -84,12 +86,29 @@ public class DistributedRateLimitApiTests
         _hostB.Dispose();
     }
 
-    /// <summary>重置限流配额：按前缀删除测试 Redis 库中的历史限流键（SCAN+DEL，无需 admin 模式）。</summary>
-    private static void ResetQuota()
+    /// <summary>
+    /// 重置限流配额：按前缀删除测试 Redis 库中的历史限流键（SCAN+DEL，无需 admin 模式），
+    /// 并对齐固定窗口起点——若当前窗口剩余不足 <see cref="MinWindowRemainingSeconds"/> 秒，先等到下一窗口，
+    /// 保证整个用例的计数不会被窗口滚动清零。
+    /// </summary>
+    private static async Task ResetQuotaAsync()
     {
         using var mux = ConnectionMultiplexer.Connect(TestRedis);
         var server = mux.GetServer(mux.GetEndPoints()[0]);
         var db = mux.GetDatabase();
+
+        // Redis 不可用会让限流器 fail-open 放行，此时「未出现 429」不能归因于被测逻辑：前置断言给出明确诊断
+        var ping = await db.PingAsync();
+        Assert.That(ping.TotalMilliseconds, Is.GreaterThanOrEqualTo(0), "分布式限流集成测试依赖本机 Redis（127.0.0.1:6379）");
+
+        // 窗口起点由限流器取 Redis 服务端 TIME 计算，测试按同一时钟对齐，避免实例间时钟偏差
+        var now = new DateTimeOffset(await server.TimeAsync()).ToUnixTimeSeconds();
+        var remaining = WindowSeconds - now % WindowSeconds;
+        if (remaining < MinWindowRemainingSeconds)
+        {
+            await Task.Delay(TimeSpan.FromSeconds(remaining + 1));
+        }
+
         foreach (var key in server.Keys(database: 3, pattern: TestRedisPrefix + "*", pageSize: 200))
         {
             db.KeyDelete(key);
@@ -103,7 +122,7 @@ public class DistributedRateLimitApiTests
     [Test]
     public async Task TwoInstances_ShareAuthQuota_AcrossHosts()
     {
-        ResetQuota();
+        await ResetQuotaAsync();
 
         // 副本 A：消耗 4 次配额（均在窗口内）
         for (var i = 0; i < 4; i++)
@@ -139,7 +158,7 @@ public class DistributedRateLimitApiTests
     [Test]
     public async Task Rejected_Response_HasUnifiedBody_AndRetryAfter()
     {
-        ResetQuota();
+        await ResetQuotaAsync();
 
         // 先消耗满配额
         for (var i = 0; i < PermitLimit; i++)

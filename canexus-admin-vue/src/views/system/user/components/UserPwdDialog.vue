@@ -1,6 +1,7 @@
 <script setup lang="ts">
 /**
  * 重置密码对话框：6-20 位且需同时包含字母和数字，提交调用 /system/user/{id}/password。
+ * 后端重置后会将该账号标记为须首登改密，前端登录链路会引导其自助修改密码。
  */
 import { reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
@@ -18,6 +19,9 @@ const visible = ref(false)
 
 /** 当前用户 ID（GUID 字符串） */
 const userId = ref('')
+
+/** 当前用户的乐观锁版本号（取自行数据，写请求回传至 URL） */
+const version = ref('')
 
 /** 提交中 */
 const submitting = ref(false)
@@ -47,6 +51,7 @@ const rules: FormRules = {
  */
 function open(row: UserVO): void {
   userId.value = row.id
+  version.value = row.version
   form.password = ''
   visible.value = true
 }
@@ -59,8 +64,8 @@ async function handleSubmit(): Promise<void> {
   }
   submitting.value = true
   try {
-    await updateUserPasswordApi(userId.value, form.password)
-    ElMessage.success('密码重置成功')
+    await updateUserPasswordApi(userId.value, version.value, form.password)
+    ElMessage.success('密码重置成功，该用户下次登录须先修改密码')
     visible.value = false
   } finally {
     submitting.value = false

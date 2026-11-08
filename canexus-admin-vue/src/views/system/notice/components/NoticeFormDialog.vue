@@ -34,6 +34,9 @@ const isEdit = ref(false)
 /** 当前编辑的公告 ID */
 const editId = ref('')
 
+/** 当前编辑公告的乐观锁版本号（优先取详情响应，详情失败时回退行数据） */
+const editVersion = ref('')
+
 /** 提交中 */
 const submitting = ref(false)
 
@@ -75,6 +78,7 @@ const rules: FormRules = {
 async function open(mode: 'create' | 'edit', row?: NoticeVO): Promise<void> {
   isEdit.value = mode === 'edit'
   editId.value = row?.id ?? ''
+  editVersion.value = row?.version ?? ''
   Object.assign(form, getDefaultForm())
   visible.value = true
   await nextTick()
@@ -83,6 +87,7 @@ async function open(mode: 'create' | 'edit', row?: NoticeVO): Promise<void> {
     detailLoading.value = true
     try {
       const detail = await getNoticeApi(row.id)
+      editVersion.value = detail.version
       Object.assign(form, {
         title: detail.title,
         noticeType: detail.noticeType,
@@ -92,6 +97,7 @@ async function open(mode: 'create' | 'edit', row?: NoticeVO): Promise<void> {
       })
     } catch {
       // 详情拉取失败回退行数据回显（错误提示在请求层）
+      editVersion.value = row.version
       Object.assign(form, {
         title: row.title,
         noticeType: row.noticeType,
@@ -121,7 +127,7 @@ async function handleSubmit(): Promise<void> {
       description: form.description.trim(),
     }
     if (isEdit.value) {
-      await updateNoticeApi(editId.value, data)
+      await updateNoticeApi(editId.value, editVersion.value, data)
       ElMessage.success('修改成功')
     } else {
       await createNoticeApi(data)

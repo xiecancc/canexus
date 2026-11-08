@@ -2,12 +2,15 @@ using Application.Contracts.Queries;
 using Application.Contracts.Users;
 using Application.Queries;
 using Domain.Shared.Paging;
+using Infrastructure.Shared.Options;
 using MediatR;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 
 namespace Application.Tests.Queries;
 
 /// <summary>
-/// 导出边界单测：验证 10000 行硬裁剪、截断文件名标记、逐页请求对象隔离、取消令牌透传与首页前取消检查。
+/// 导出边界单测：验证可配置行数上限的硬裁剪、截断文件名标记、逐页请求对象隔离、取消令牌透传与首页前取消检查。
 /// 经公开的 UserExportQueryHandler.Handle 走完整导出链路，无需访问内部支撑类。
 /// </summary>
 [TestFixture]
@@ -22,7 +25,7 @@ public class ExcelExportBoundaryTests
     {
         var sender = new PagedUserSender(25000, PageRows);
         var original = new UserPageRequest { Keyword = "keep", PageIndex = 9, PageSize = 25 };
-        var handler = new UserExportQueryHandler(sender);
+        var handler = new UserExportQueryHandler(sender, CreateExportOptions());
 
         var file = await handler.Handle(new UserExportQuery(original), CancellationToken.None);
 
@@ -44,7 +47,7 @@ public class ExcelExportBoundaryTests
     public async Task Export_SinglePageOverPageRows_StillCappedAtMaxRows()
     {
         var sender = new PagedUserSender(12000, 600);
-        var handler = new UserExportQueryHandler(sender);
+        var handler = new UserExportQueryHandler(sender, CreateExportOptions());
 
         var file = await handler.Handle(new UserExportQuery(new UserPageRequest()), CancellationToken.None);
 
@@ -56,7 +59,7 @@ public class ExcelExportBoundaryTests
     public async Task Export_WithinLimit_FileNameHasNoTruncationMarker()
     {
         var sender = new PagedUserSender(700, PageRows);
-        var handler = new UserExportQueryHandler(sender);
+        var handler = new UserExportQueryHandler(sender, CreateExportOptions());
 
         var file = await handler.Handle(new UserExportQuery(new UserPageRequest()), CancellationToken.None);
 
@@ -73,7 +76,7 @@ public class ExcelExportBoundaryTests
     {
         using var cts = new CancellationTokenSource();
         var sender = new PagedUserSender(1200, PageRows);
-        var handler = new UserExportQueryHandler(sender);
+        var handler = new UserExportQueryHandler(sender, CreateExportOptions());
 
         await handler.Handle(new UserExportQuery(new UserPageRequest()), cts.Token);
 
@@ -91,11 +94,39 @@ public class ExcelExportBoundaryTests
         using var cts = new CancellationTokenSource();
         cts.Cancel();
         var sender = new PagedUserSender(1000, PageRows);
-        var handler = new UserExportQueryHandler(sender);
+        var handler = new UserExportQueryHandler(sender, CreateExportOptions());
 
         Assert.ThrowsAsync<OperationCanceledException>(async () =>
             await handler.Handle(new UserExportQuery(new UserPageRequest()), cts.Token));
         Assert.That(sender.Requests, Is.Empty);
+    }
+
+    /// <summary>EX-05 回归：Export:MaxRows 配置生效，不再是编译期常量 10000。</summary>
+    [Test]
+    public async Task Export_ConfiguredMaxRows_OverridesDefaultLimit()
+    {
+        const int configuredMaxRows = 1200;
+        var sender = new PagedUserSender(5000, PageRows);
+        var handler = new UserExportQueryHandler(sender, CreateExportOptions(configuredMaxRows));
+
+        var file = await handler.Handle(new UserExportQuery(new UserPageRequest()), CancellationToken.None);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(file.FileName, Does.Contain($"_已截断{configuredMaxRows}行"));
+            Assert.That(sender.Requests.Count, Is.EqualTo(3), "1200 行上限应按每页 500 行拉 3 页");
+        });
+    }
+
+    /// <summary>构造可控的 Export:MaxRows 选项监视器（与宿主 RegisterOptions 同一 Options 管道）。</summary>
+    /// <param name="maxRows">本次导出允许的最大行数。</param>
+    /// <returns>选项监视器。</returns>
+    private static IOptionsMonitor<ExportOption> CreateExportOptions(int maxRows = MaxRows)
+    {
+        var services = new ServiceCollection();
+        services.AddOptions();
+        services.Configure<ExportOption>(option => option.MaxRows = maxRows);
+        return services.BuildServiceProvider().GetRequiredService<IOptionsMonitor<ExportOption>>();
     }
 
     /// <summary>按页返回可控行数的分页 ISender 桩，记录每页请求对象与令牌。</summary>

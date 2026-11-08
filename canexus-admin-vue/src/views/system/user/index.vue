@@ -108,7 +108,9 @@ function handleQueryReset(): void {
 
 /** 行内切换状态：成功轻提示，失败由组合式回滚（错误提示在请求层） */
 async function handleStatusChange(row: UserVO): Promise<void> {
-  const success = await commitStatusToggle(row, (status) => updateUserStatusApi(row.id, status))
+  const success = await commitStatusToggle(row, (status) =>
+    updateUserStatusApi(row.id, row.version, status),
+  )
   if (success) {
     ElMessage.success(row.status === 1 ? '已启用' : '已停用')
   }
@@ -126,7 +128,7 @@ async function handleDelete(row: UserVO): Promise<void> {
   if (!confirmed) {
     return
   }
-  await deleteUserApi(row.id)
+  await deleteUserApi(row.id, row.version)
   ElMessage.success('删除成功')
   if (items.value.length === 1 && pageIndex.value > 1) {
     pageIndex.value -= 1

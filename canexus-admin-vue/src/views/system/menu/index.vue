@@ -92,7 +92,7 @@ async function handleDelete(row: MenuVO): Promise<void> {
   if (!confirmed) {
     return
   }
-  await deleteMenuApi(row.id)
+  await deleteMenuApi(row.id, row.version)
   ElMessage.success('删除成功')
   await loadMenuTree()
 }

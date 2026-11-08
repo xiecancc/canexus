@@ -54,11 +54,11 @@ const {
   getDefaultQuery: () => ({ title: '' }),
 })
 
-/** 行内切换状态：列表 VO 不含正文，先拉取详情再全量更新提交，失败由组合式回滚 */
+/** 行内切换状态：列表 VO 不含正文，先拉取详情（含最新 version）再全量更新提交，失败由组合式回滚 */
 async function handleStatusChange(row: NoticeVO): Promise<void> {
   const success = await commitStatusToggle(row, async (status) => {
     const detail = await getNoticeApi(row.id)
-    return updateNoticeApi(row.id, {
+    return updateNoticeApi(row.id, detail.version, {
       title: detail.title,
       noticeType: detail.noticeType,
       content: detail.content,
@@ -83,7 +83,7 @@ async function handleDelete(row: NoticeVO): Promise<void> {
   if (!confirmed) {
     return
   }
-  await deleteNoticeApi(row.id)
+  await deleteNoticeApi(row.id, row.version)
   ElMessage.success('删除成功')
   if (items.value.length === 1 && pageIndex.value > 1) {
     pageIndex.value -= 1

@@ -20,6 +20,7 @@ import type { DictDataVO } from '@/api/system/dict'
 function makeItem(value: string): DictDataVO {
   return {
     id: `00000000-0000-0000-0000-${value}`,
+    version: '00000000-0000-0000-0000-000000000001',
     dictType: 'sys_test',
     dictLabel: `标签${value}`,
     dictValue: value,

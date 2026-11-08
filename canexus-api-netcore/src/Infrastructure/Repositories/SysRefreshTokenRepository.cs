@@ -26,6 +26,24 @@ public class SysRefreshTokenRepository(ISqlSugarClient client, IUserContext curr
     }
 
     /// <inheritdoc />
+    public virtual async Task<SysRefreshToken?> GetRevokedByTokenAsync(string token, DateTime now, CancellationToken cancellationToken = default)
+    {
+        return await Client.Queryable<SysRefreshToken>()
+            .FirstAsync(t => t.Token == token && t.RevokedAt != null && t.ExpiresAt > now);
+    }
+
+    /// <inheritdoc />
+    public virtual async Task<int> RevokeAllForSessionAsync(Guid sessionId, DateTime revokedAt, CancellationToken cancellationToken = default)
+    {
+        // 独立连接：重用检测发生在写命令事务内，随后业务异常会回滚该事务；
+        // 安全吊销必须独立于业务事务提交，否则攻击者仍可继续使用该家族的新令牌。
+        return await Client.CopyNew().Updateable<SysRefreshToken>()
+            .SetColumns(t => t.RevokedAt == revokedAt)
+            .Where(t => t.SessionId == sessionId && t.RevokedAt == null && t.ExpiresAt > revokedAt)
+            .ExecuteCommandAsync(cancellationToken);
+    }
+
+    /// <inheritdoc />
     public virtual async Task<int> RevokeAllForUserAsync(Guid userId, DateTime revokedAt, CancellationToken cancellationToken = default)
     {
         // 刷新令牌吊销是匿名请求路径的可执行写入，不能依赖 QueryFilter：按令牌所属租户收敛

@@ -107,10 +107,11 @@ public static class ProductionConfigurationValidator
             issues.Add("Forwarded:Enabled=true 时必须配置 Forwarded:KnownProxies 可信代理白名单");
         }
 
-        var redisEnabled = configuration["Cache:RedisEnabled"];
-        if (string.IsNullOrWhiteSpace(redisEnabled) || !bool.TryParse(redisEnabled, out _))
+        // 会话吊销标记、权限/令牌版本失效、分布式限流都以 Redis 为跨实例统一视图；
+        // 单实例内存缓存无法满足「任一实例登出后其他实例立即生效」的安全语义。
+        if (!configuration.GetValue("Cache:RedisEnabled", false))
         {
-            issues.Add("Cache:RedisEnabled 必须显式声明 L2 缓存提供方式（开启或关闭均须显式）");
+            issues.Add("Cache:RedisEnabled 在 Production 必须为 true（会话吊销 / 缓存失效广播 / 分布式限流依赖 L2 统一视图）");
         }
     }
 }

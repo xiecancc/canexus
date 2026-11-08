@@ -41,6 +41,7 @@ const EMPTY_GUID = '00000000-0000-0000-0000-000000000000'
 function makeUser(partial: Partial<UserVO>): UserVO {
   return {
     id: '00000000-0000-0000-0000-000000000001',
+    version: '00000000-0000-0000-0000-000000000001',
     userName: 'zhangsan',
     nickName: '张三',
     deptId: '00000000-0000-0000-0000-000000000100',
@@ -67,6 +68,7 @@ const users: UserVO[] = [
 const deptTree: DeptVO[] = [
   {
     id: '00000000-0000-0000-0000-000000000100',
+    version: '00000000-0000-0000-0000-000000000101',
     parentId: EMPTY_GUID,
     deptName: '研发部',
     orderNum: 1,

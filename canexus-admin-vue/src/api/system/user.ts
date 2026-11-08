@@ -5,18 +5,20 @@
  * - GET    /system/user/page?keyword=&deptId=&status=&pageIndex=&pageSize= → PagedResult<UserVO>
  * - GET    /system/user/{id}                                              → UserDetail
  * - POST   /system/user                                                   → 创建用户
- * - PUT    /system/user/{id}                                              → 更新用户（不含用户名/密码）
- * - DELETE /system/user/{id}                                              → 删除用户
- * - PUT    /system/user/{id}/status                                       → 修改状态
- * - PUT    /system/user/{id}/password                                     → 重置密码
- * - PUT    /system/user/{id}/roles                                       → 分配角色
+ * - PUT    /system/user/{id}/{version}                                    → 更新用户（不含用户名/密码）
+ * - DELETE /system/user/{id}/{version}                                    → 删除用户
+ * - PUT    /system/user/{id}/{version}/status                             → 修改状态
+ * - PUT    /system/user/{id}/{version}/password                           → 重置密码
+ * - PUT    /system/user/{id}/{version}/roles                              → 分配角色
  * - GET    /system/user/import-template                                  → Blob（xlsx 模板文件流）
  * - POST   /system/user/import（FormData: file）                          → UserImportResult
  * - GET    /system/user/export?keyword=&deptId=&status=                   → Blob（xlsx 文件流）
  * - 用户状态：1 启用 0 停用
  * - 模板下载与数据导出为文件流接口，经 utils/download.ts 处理（不走 Result 解包）
+ * - 乐观锁：更新 / 删除 / 状态 / 重置密码 / 分配角色的 URL 均须携带 version，
+ *   取自列表 / 详情响应的 version 字段（36 位 GUID 字符串）
  */
-import type { PagedRequest, PagedResult } from '@/api/types'
+import type { AggregateVO, PagedRequest, PagedResult } from '@/api/types'
 import request from '@/utils/request'
 
 /** 用户关联角色简要信息 */
@@ -28,7 +30,7 @@ export interface UserRoleBrief {
 }
 
 /** 用户列表项 */
-export interface UserVO {
+export interface UserVO extends AggregateVO {
   /** 用户 ID（GUID 字符串） */
   id: string
   /** 账号 */
@@ -52,7 +54,7 @@ export interface UserVO {
 }
 
 /** 用户详情（编辑回显） */
-export interface UserDetail {
+export interface UserDetail extends AggregateVO {
   /** 用户 ID（GUID 字符串） */
   id: string
   /** 账号 */
@@ -89,7 +91,7 @@ export interface UserCreateRequest {
   userName: string
   /** 昵称 */
   nickName: string
-  /** 初始密码（缺省由后端取默认值） */
+  /** 初始密码（留空时由后端读取参数配置 sys.user.initPassword；使用该初始密码的账号须首登改密） */
   password?: string
   /** 部门 ID（GUID 字符串） */
   deptId?: string
@@ -134,33 +136,74 @@ export function getUserApi(id: string): Promise<UserDetail> {
 }
 
 /** 创建用户 */
-export function createUserApi(data: UserCreateRequest): Promise<null> {
-  return request.post<null>('/system/user', data)
+export function createUserApi(data: UserCreateRequest): Promise<boolean> {
+  return request.post<boolean>('/system/user', data)
 }
 
-/** 更新用户 */
-export function updateUserApi(id: string, data: UserUpdateRequest): Promise<null> {
-  return request.put<null>(`/system/user/${id}`, data)
+/**
+ * 更新用户。
+ *
+ * @param id 用户 ID（GUID 字符串）
+ * @param version 乐观锁版本号（取自列表 / 详情响应的 version 字段）
+ * @param data 更新数据（不含账号与密码）
+ */
+export function updateUserApi(
+  id: string,
+  version: string,
+  data: UserUpdateRequest,
+): Promise<boolean> {
+  return request.put<boolean>(`/system/user/${id}/${version}`, data)
 }
 
-/** 删除用户 */
-export function deleteUserApi(id: string): Promise<null> {
-  return request.delete<null>(`/system/user/${id}`)
+/**
+ * 删除用户。
+ *
+ * @param id 用户 ID（GUID 字符串）
+ * @param version 乐观锁版本号（取自列表 / 详情响应的 version 字段）
+ */
+export function deleteUserApi(id: string, version: string): Promise<boolean> {
+  return request.delete<boolean>(`/system/user/${id}/${version}`)
 }
 
-/** 修改用户状态 */
-export function updateUserStatusApi(id: string, status: number): Promise<null> {
-  return request.put<null>(`/system/user/${id}/status`, { status })
+/**
+ * 修改用户状态。
+ *
+ * @param id 用户 ID（GUID 字符串）
+ * @param version 乐观锁版本号（取自列表 / 详情响应的 version 字段）
+ * @param status 状态：1 启用 0 停用
+ */
+export function updateUserStatusApi(id: string, version: string, status: number): Promise<boolean> {
+  return request.put<boolean>(`/system/user/${id}/${version}/status`, { status })
 }
 
-/** 重置用户密码 */
-export function updateUserPasswordApi(id: string, password: string): Promise<null> {
-  return request.put<null>(`/system/user/${id}/password`, { password })
+/**
+ * 重置用户密码。
+ *
+ * @param id 用户 ID（GUID 字符串）
+ * @param version 乐观锁版本号（取自列表 / 详情响应的 version 字段）
+ * @param password 新密码
+ */
+export function updateUserPasswordApi(
+  id: string,
+  version: string,
+  password: string,
+): Promise<boolean> {
+  return request.put<boolean>(`/system/user/${id}/${version}/password`, { password })
 }
 
-/** 分配用户角色 */
-export function updateUserRolesApi(id: string, roleIds: string[]): Promise<null> {
-  return request.put<null>(`/system/user/${id}/roles`, { roleIds })
+/**
+ * 分配用户角色。
+ *
+ * @param id 用户 ID（GUID 字符串）
+ * @param version 乐观锁版本号（取自列表 / 详情响应的 version 字段）
+ * @param roleIds 角色 ID 集合
+ */
+export function updateUserRolesApi(
+  id: string,
+  version: string,
+  roleIds: string[],
+): Promise<boolean> {
+  return request.put<boolean>(`/system/user/${id}/${version}/roles`, { roleIds })
 }
 
 /** 用户导入失败明细行 */

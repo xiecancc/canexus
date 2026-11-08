@@ -42,15 +42,19 @@ describe('登录日志模块接口', () => {
     expect(mockedGet).toHaveBeenCalledWith('/system/login-log/page', { params })
   })
 
-  it('删除单条：DELETE /system/login-log/{id}', async () => {
-    await deleteLoginLogApi('00000000-0000-0000-0000-000000000011')
+  it('删除单条：DELETE /system/login-log/{id}/{version}', async () => {
+    await deleteLoginLogApi(
+      '00000000-0000-0000-0000-000000000011',
+      '00000000-0000-0000-0000-00000000000a',
+    )
     expect(mockedDelete).toHaveBeenCalledWith(
-      '/system/login-log/00000000-0000-0000-0000-000000000011',
+      '/system/login-log/00000000-0000-0000-0000-000000000011/00000000-0000-0000-0000-00000000000a',
     )
   })
 
-  it('清空全部：POST /system/login-log/clean', async () => {
-    await cleanLoginLogApi()
-    expect(mockedPost).toHaveBeenCalledWith('/system/login-log/clean')
+  it('按时间范围清空：POST /system/login-log/clean', async () => {
+    const params = { beginTime: '2026-11-01', endTime: '2026-11-07', confirm: true }
+    await cleanLoginLogApi(params)
+    expect(mockedPost).toHaveBeenCalledWith('/system/login-log/clean', null, { params })
   })
 })

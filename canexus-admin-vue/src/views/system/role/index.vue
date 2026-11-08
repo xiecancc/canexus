@@ -43,10 +43,10 @@ const {
 /** 表单对话框引用 */
 const formDialogRef = ref<InstanceType<typeof RoleFormDialog>>()
 
-/** 提交角色状态：先取详情（含 menuIds）再整体更新，防止清空菜单授权 */
-async function submitRoleStatus(row: RoleVO, status: number): Promise<null> {
+/** 提交角色状态：先取详情（含 menuIds 与最新 version）再整体更新，防止清空菜单授权 */
+async function submitRoleStatus(row: RoleVO, status: number): Promise<boolean> {
   const detail = await getRoleApi(row.id)
-  return updateRoleApi(row.id, {
+  return updateRoleApi(row.id, detail.version, {
     roleName: detail.roleName,
     roleKey: detail.roleKey,
     dataScope: detail.dataScope,
@@ -76,7 +76,7 @@ async function handleDelete(row: RoleVO): Promise<void> {
   if (!confirmed) {
     return
   }
-  await deleteRoleApi(row.id)
+  await deleteRoleApi(row.id, row.version)
   ElMessage.success('删除成功')
   if (items.value.length === 1 && pageIndex.value > 1) {
     pageIndex.value -= 1

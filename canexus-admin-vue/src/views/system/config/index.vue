@@ -54,7 +54,7 @@ async function handleDelete(row: ConfigVO): Promise<void> {
   if (!confirmed) {
     return
   }
-  await deleteConfigApi(row.id)
+  await deleteConfigApi(row.id, row.version)
   ElMessage.success('删除成功')
   if (items.value.length === 1 && pageIndex.value > 1) {
     pageIndex.value -= 1

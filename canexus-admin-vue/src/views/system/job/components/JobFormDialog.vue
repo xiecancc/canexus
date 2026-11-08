@@ -4,8 +4,7 @@
  *
  * - Cron 表达式：前端常用格式校验（5-6 段，最终以后端校验为准），
  *   输入框旁"校验"按钮即时校验并提示（契约无独立校验端点）
- * - 任务类型：预置框架内置示例 Job 全名（后端种子尚未提供内置清单，以下为占位示例），
- *   支持手动输入完整类名
+ * - 任务类型：预置后端已登记作业白名单标识，后端只接受白名单值（不再接受 CLR 类名）
  * - 编辑回显直接使用列表行数据（契约无独立详情接口）
  */
 import { nextTick, reactive, ref } from 'vue'
@@ -23,8 +22,8 @@ const emit = defineEmits<{
   success: []
 }>()
 
-/** 任务类型预置选项（占位示例，支持手动输入框架内置 Job 全名） */
-const JOB_TYPE_OPTIONS = ['System.Jobs.SystemHealthJob', 'System.Jobs.JobCleanJob']
+/** 任务类型预置选项（与后端 JobTypeResolver 白名单一致） */
+const JOB_TYPE_OPTIONS = ['noop']
 
 /** 表单引用 */
 const formRef = ref<FormInstance>()
@@ -37,6 +36,9 @@ const isEdit = ref(false)
 
 /** 当前编辑的任务 ID */
 const editId = ref('')
+
+/** 当前编辑任务的乐观锁版本号（取自行数据，写请求回传至 URL） */
+const editVersion = ref('')
 
 /** 提交中 */
 const submitting = ref(false)
@@ -93,6 +95,7 @@ const rules: FormRules = {
 async function open(mode: 'create' | 'edit', row?: JobVO): Promise<void> {
   isEdit.value = mode === 'edit'
   editId.value = row?.id ?? ''
+  editVersion.value = row?.version ?? ''
   Object.assign(form, getDefaultForm(), {
     jobName: row?.jobName ?? '',
     jobGroup: row?.jobGroup ?? '',
@@ -138,7 +141,7 @@ async function handleSubmit(): Promise<void> {
       description: form.description.trim(),
     }
     if (isEdit.value) {
-      await updateJobApi(editId.value, data)
+      await updateJobApi(editId.value, editVersion.value, data)
       ElMessage.success('修改成功')
     } else {
       await createJobApi(data)
@@ -189,7 +192,7 @@ defineExpose({ open })
           filterable
           allow-create
           default-first-option
-          placeholder="选择内置示例或输入 Job 全名"
+          placeholder="选择已登记作业标识（如 noop）"
           style="width: 100%"
         >
           <el-option v-for="item in JOB_TYPE_OPTIONS" :key="item" :label="item" :value="item" />

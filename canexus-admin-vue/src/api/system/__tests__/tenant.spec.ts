@@ -28,6 +28,12 @@ const mockedPost = request.post as unknown as Mock
 const mockedPut = request.put as unknown as Mock
 const mockedDelete = request.delete as unknown as Mock
 
+/** 测试用租户 ID（GUID 字符串） */
+const TENANT_ID = '00000000-0000-0000-0000-000000000008'
+
+/** 测试用乐观锁版本号（GUID 字符串，取自列表响应的 version 字段） */
+const VERSION = '00000000-0000-0000-0000-00000000000a'
+
 describe('租户管理模块接口', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -61,17 +67,14 @@ describe('租户管理模块接口', () => {
     expect(mockedPost).toHaveBeenCalledWith('/system/tenant', body)
   })
 
-  it('更新租户：PUT /system/tenant/{id}（标识随请求体提交但不可修改）', async () => {
+  it('更新租户：PUT /system/tenant/{id}/{version}（标识随请求体提交但不可修改）', async () => {
     const body = { tenantKey: 'acme', tenantName: 'Acme 集团', status: 0 }
-    await updateTenantApi('00000000-0000-0000-0000-000000000008', body)
-    expect(mockedPut).toHaveBeenCalledWith(
-      '/system/tenant/00000000-0000-0000-0000-000000000008',
-      body,
-    )
+    await updateTenantApi(TENANT_ID, VERSION, body)
+    expect(mockedPut).toHaveBeenCalledWith(`/system/tenant/${TENANT_ID}/${VERSION}`, body)
   })
 
-  it('删除租户：DELETE /system/tenant/{id}', async () => {
-    await deleteTenantApi('00000000-0000-0000-0000-000000000008')
-    expect(mockedDelete).toHaveBeenCalledWith('/system/tenant/00000000-0000-0000-0000-000000000008')
+  it('删除租户：DELETE /system/tenant/{id}/{version}', async () => {
+    await deleteTenantApi(TENANT_ID, VERSION)
+    expect(mockedDelete).toHaveBeenCalledWith(`/system/tenant/${TENANT_ID}/${VERSION}`)
   })
 })

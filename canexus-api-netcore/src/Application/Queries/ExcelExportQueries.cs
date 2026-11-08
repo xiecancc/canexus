@@ -6,13 +6,15 @@ using Application.Contracts.Queries;
 using Application.Contracts.Roles;
 using Application.Contracts.Users;
 using Domain.Shared.Enums;
+using Infrastructure.Shared.Options;
 using MediatR;
+using Microsoft.Extensions.Options;
 using MiniExcelLibs;
 
 namespace Application.Queries;
 /// <summary>分页循环拉取结果：已导出行与截断标记。</summary>
 /// <typeparam name="TItem">分页行类型。</typeparam>
-/// <param name="Rows">已导出行（不超过 ExcelExportSupport.MaxRows）。</param>
+/// <param name="Rows">已导出行（不超过 Export:MaxRows 配置上限）。</param>
 /// <param name="Truncated">是否仍有数据未导出（达到行数上限或上游分页口径差异）。</param>
 internal sealed record ExportCollectResult<TItem>(IReadOnlyList<TItem> Rows, bool Truncated);
 
@@ -25,39 +27,43 @@ internal static class ExcelExportSupport
     /// <summary>导出总行数上限（防止单次导出拖垮内存；超出部分截断并在文件名处如实导出已有行）。</summary>
     public const int MaxRows = 10000;
 
-    /// <summary>按页循环拉取全量行（首页前检查取消；总行数硬裁剪至 <see cref="MaxRows"/>，含单页超额场景）。</summary>
+    /// <summary>按页循环拉取全量行（首页前检查取消；总行数硬裁剪至 maxRows，含单页超额场景）。</summary>
     /// <typeparam name="TItem">分页行类型。</typeparam>
     /// <param name="fetchPage">按页拉取委托（入参页码与取消令牌，返回页行与总数）。</param>
+    /// <param name="maxRows">本次导出允许的最大行数（来自 Export:MaxRows；未注入配置时用 <see cref="MaxRows"/>）。</param>
     /// <param name="cancellationToken">取消令牌。</param>
-    /// <returns>已导出行（不超过 <see cref="MaxRows"/>）与是否发生截断。</returns>
+    /// <returns>已导出行（不超过 maxRows）与是否发生截断。</returns>
     public static async Task<ExportCollectResult<TItem>> CollectAsync<TItem>(
         Func<int, CancellationToken, Task<(IReadOnlyList<TItem> Items, long Total)>> fetchPage,
+        int maxRows,
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        var limit = maxRows > 0 ? maxRows : MaxRows;
         var (firstPage, total) = await fetchPage(1, cancellationToken);
-        var rows = new List<TItem>(Math.Min(MaxRows, Math.Max(firstPage.Count, 0)));
-        AppendWithinLimit(rows, firstPage);
+        var rows = new List<TItem>(Math.Min(limit, Math.Max(firstPage.Count, 0)));
+        AppendWithinLimit(rows, firstPage, limit);
 
-        var pageCount = (int)Math.Ceiling(Math.Min(total, MaxRows) / (double)PageRows);
-        for (var pageIndex = 2; pageIndex <= pageCount && rows.Count < MaxRows; pageIndex++)
+        var pageCount = (int)Math.Ceiling(Math.Min(total, limit) / (double)PageRows);
+        for (var pageIndex = 2; pageIndex <= pageCount && rows.Count < limit; pageIndex++)
         {
             cancellationToken.ThrowIfCancellationRequested();
             var (items, _) = await fetchPage(pageIndex, cancellationToken);
-            AppendWithinLimit(rows, items);
+            AppendWithinLimit(rows, items, limit);
         }
 
         // 如实反映「还有数据未导出」：总数大于实际导出行数即为截断（无论因上限还是上游分页口径差异）
         return new ExportCollectResult<TItem>(rows, total > rows.Count);
     }
 
-    /// <summary>按剩余额度追加当页行，绝不越过 <see cref="MaxRows"/>。</summary>
+    /// <summary>按剩余额度追加当页行，绝不越过行数上限。</summary>
     /// <typeparam name="TItem">分页行类型。</typeparam>
     /// <param name="rows">累计行集合。</param>
     /// <param name="items">当页拉取的行。</param>
-    private static void AppendWithinLimit<TItem>(List<TItem> rows, IReadOnlyList<TItem> items)
+    /// <param name="limit">本次导出的行数上限。</param>
+    private static void AppendWithinLimit<TItem>(List<TItem> rows, IReadOnlyList<TItem> items, int limit)
     {
-        var remaining = MaxRows - rows.Count;
+        var remaining = limit - rows.Count;
         if (remaining <= 0 || items.Count == 0)
         {
             return;
@@ -134,7 +140,8 @@ internal static class ExcelExportSupport
 /// <summary>用户列表导出查询处理器（复用用户分页查询同口径筛选与数据范围过滤，经 ISender 分页循环拉取）。</summary>
 /// <remarks>构造函数。</remarks>
 /// <param name="sender">MediatR 发送器（复用 UserQueryPaged 的筛选 / 数据范围 / 关联组装逻辑）。</param>
-public sealed class UserExportQueryHandler(ISender sender) : QueryHandler<UserExportQuery, ExportFileResponse>
+/// <param name="exportOptions">导出阈值（Export:MaxRows，EX-05 阈值 Option 化）。</param>
+public sealed class UserExportQueryHandler(ISender sender, IOptionsMonitor<ExportOption> exportOptions) : QueryHandler<UserExportQuery, ExportFileResponse>
 {
     /// <inheritdoc />
     protected override async Task<ExportFileResponse> HandleAsync(UserExportQuery query, CancellationToken cancellationToken)
@@ -144,7 +151,7 @@ public sealed class UserExportQueryHandler(ISender sender) : QueryHandler<UserEx
             var pageRequest = query.Request.CloneForPage<UserPageRequest>(pageIndex, ExcelExportSupport.PageRows);
             var page = await sender.Send(new UserQueryPaged(pageRequest), token);
             return (page.Items, page.Total);
-        }, cancellationToken);
+        }, exportOptions.CurrentValue.MaxRows, cancellationToken);
 
         var excelRows = collected.Rows.Select(row => new UserExportRow
         {
@@ -165,7 +172,8 @@ public sealed class UserExportQueryHandler(ISender sender) : QueryHandler<UserEx
 /// <summary>角色列表导出查询处理器（复用角色分页查询同口径筛选）。</summary>
 /// <remarks>构造函数。</remarks>
 /// <param name="sender">MediatR 发送器。</param>
-public sealed class RoleExportQueryHandler(ISender sender) : QueryHandler<RoleExportQuery, ExportFileResponse>
+/// <param name="exportOptions">导出阈值（Export:MaxRows，EX-05 阈值 Option 化）。</param>
+public sealed class RoleExportQueryHandler(ISender sender, IOptionsMonitor<ExportOption> exportOptions) : QueryHandler<RoleExportQuery, ExportFileResponse>
 {
     /// <inheritdoc />
     protected override async Task<ExportFileResponse> HandleAsync(RoleExportQuery query, CancellationToken cancellationToken)
@@ -175,7 +183,7 @@ public sealed class RoleExportQueryHandler(ISender sender) : QueryHandler<RoleEx
             var pageRequest = query.Request.CloneForPage<RolePageRequest>(pageIndex, ExcelExportSupport.PageRows);
             var page = await sender.Send(new RoleQueryPaged(pageRequest), token);
             return (page.Items, page.Total);
-        }, cancellationToken);
+        }, exportOptions.CurrentValue.MaxRows, cancellationToken);
 
         var excelRows = collected.Rows.Select(row => new RoleExportRow
         {
@@ -193,7 +201,8 @@ public sealed class RoleExportQueryHandler(ISender sender) : QueryHandler<RoleEx
 /// <summary>操作日志导出查询处理器（复用操作日志分页查询同口径筛选）。</summary>
 /// <remarks>构造函数。</remarks>
 /// <param name="sender">MediatR 发送器。</param>
-public sealed class OperLogExportQueryHandler(ISender sender) : QueryHandler<OperLogExportQuery, ExportFileResponse>
+/// <param name="exportOptions">导出阈值（Export:MaxRows，EX-05 阈值 Option 化）。</param>
+public sealed class OperLogExportQueryHandler(ISender sender, IOptionsMonitor<ExportOption> exportOptions) : QueryHandler<OperLogExportQuery, ExportFileResponse>
 {
     /// <inheritdoc />
     protected override async Task<ExportFileResponse> HandleAsync(OperLogExportQuery query, CancellationToken cancellationToken)
@@ -203,7 +212,7 @@ public sealed class OperLogExportQueryHandler(ISender sender) : QueryHandler<Ope
             var pageRequest = query.Request.CloneForPage<OperLogPageRequest>(pageIndex, ExcelExportSupport.PageRows);
             var page = await sender.Send(new OperLogQueryPaged(pageRequest), token);
             return (page.Items, page.Total);
-        }, cancellationToken);
+        }, exportOptions.CurrentValue.MaxRows, cancellationToken);
 
         var excelRows = collected.Rows.Select(row => new OperLogExportRow
         {
@@ -226,7 +235,8 @@ public sealed class OperLogExportQueryHandler(ISender sender) : QueryHandler<Ope
 /// <summary>登录日志导出查询处理器（复用登录日志分页查询同口径筛选）。</summary>
 /// <remarks>构造函数。</remarks>
 /// <param name="sender">MediatR 发送器。</param>
-public sealed class LoginLogExportQueryHandler(ISender sender) : QueryHandler<LoginLogExportQuery, ExportFileResponse>
+/// <param name="exportOptions">导出阈值（Export:MaxRows，EX-05 阈值 Option 化）。</param>
+public sealed class LoginLogExportQueryHandler(ISender sender, IOptionsMonitor<ExportOption> exportOptions) : QueryHandler<LoginLogExportQuery, ExportFileResponse>
 {
     /// <inheritdoc />
     protected override async Task<ExportFileResponse> HandleAsync(LoginLogExportQuery query, CancellationToken cancellationToken)
@@ -236,7 +246,7 @@ public sealed class LoginLogExportQueryHandler(ISender sender) : QueryHandler<Lo
             var pageRequest = query.Request.CloneForPage<LoginLogPageRequest>(pageIndex, ExcelExportSupport.PageRows);
             var page = await sender.Send(new LoginLogQueryPaged(pageRequest), token);
             return (page.Items, page.Total);
-        }, cancellationToken);
+        }, exportOptions.CurrentValue.MaxRows, cancellationToken);
 
         var excelRows = collected.Rows.Select(row => new LoginLogExportRow
         {

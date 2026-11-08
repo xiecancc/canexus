@@ -43,15 +43,19 @@ describe('操作日志模块接口', () => {
     expect(mockedGet).toHaveBeenCalledWith('/system/oper-log/page', { params })
   })
 
-  it('删除单条：DELETE /system/oper-log/{id}', async () => {
-    await deleteOperLogApi('00000000-0000-0000-0000-000000000009')
+  it('删除单条：DELETE /system/oper-log/{id}/{version}', async () => {
+    await deleteOperLogApi(
+      '00000000-0000-0000-0000-000000000009',
+      '00000000-0000-0000-0000-00000000000a',
+    )
     expect(mockedDelete).toHaveBeenCalledWith(
-      '/system/oper-log/00000000-0000-0000-0000-000000000009',
+      '/system/oper-log/00000000-0000-0000-0000-000000000009/00000000-0000-0000-0000-00000000000a',
     )
   })
 
-  it('清空全部：POST /system/oper-log/clean', async () => {
-    await cleanOperLogApi()
-    expect(mockedPost).toHaveBeenCalledWith('/system/oper-log/clean')
+  it('按时间范围清空：POST /system/oper-log/clean', async () => {
+    const params = { beginTime: '2026-11-01', endTime: '2026-11-07', confirm: true }
+    await cleanOperLogApi(params)
+    expect(mockedPost).toHaveBeenCalledWith('/system/oper-log/clean', null, { params })
   })
 })

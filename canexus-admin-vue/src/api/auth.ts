@@ -1,13 +1,17 @@
 /**
  * 认证模块接口与后端契约类型。
  *
- * 契约约定（后端并行开发，以此为准）：
- * - GET  /auth/captcha   → { captchaId, imageBase64 }
- * - POST /auth/login     → { accessToken, refreshToken, expiresIn }
- * - POST /auth/refresh   → { accessToken, refreshToken, expiresIn }（由 utils/request 静默刷新使用）
- * - POST /auth/logout    → null
- * - GET  /auth/user-info → { userId, userName, nickName, avatar, roles, permissions }
- * - GET  /auth/routes    → RouteVO[]
+ * 契约约定（与后端 AuthController / TokenPairDto 对齐）：
+ * - GET  /auth/captcha         → { captchaId, imageBase64 }
+ * - POST /auth/login           → { accessToken, refreshToken, expiresIn, mustChangePassword }
+ * - POST /auth/refresh         → 同上（由 utils/request 静默刷新使用）
+ * - POST /auth/change-password → null（改密后后端吊销全部刷新令牌，须重新登录）
+ * - POST /auth/logout          → null
+ * - GET  /auth/user-info       → { userId, userName, nickName, avatar, roles, permissions }
+ * - GET  /auth/routes          → RouteVO[]
+ *
+ * 待改密用户（mustChangePassword=true）访问受保护端点会被中间件以 HTTP 403 / 业务码 40302 拦截，
+ * 仅自助改密、用户信息、路由与登出端点放行，故前端必须提供改密入口并据此引导。
  */
 import request from '@/utils/request'
 
@@ -29,8 +33,18 @@ export interface LoginResponse {
   accessToken: string
   /** 刷新令牌 */
   refreshToken: string
-  /** 访问令牌有效期（秒） */
+  /** 访问令牌有效期（秒；由后端 Jwt:AccessTokenMinutes 决定，当前默认 30 分钟 = 1800 秒） */
   expiresIn: number
+  /** 是否须先修改初始密码（true 时受保护端点会被 40302 拦截） */
+  mustChangePassword: boolean
+}
+
+/** 自助修改密码请求参数 */
+export interface ChangePasswordParams {
+  /** 原密码（首次强制改密时为初始密码） */
+  oldPassword: string
+  /** 新密码（6-20 位且同时包含字母与数字） */
+  newPassword: string
 }
 
 /** 图形验证码响应 */
@@ -97,6 +111,11 @@ export function getCaptchaApi(): Promise<CaptchaResponse> {
 /** 账号密码登录 */
 export function loginApi(data: LoginParams): Promise<LoginResponse> {
   return request.post<LoginResponse>('/auth/login', data)
+}
+
+/** 自助修改密码（改密成功后后端吊销全部刷新令牌，前端须清理本地状态并重新登录） */
+export function changePasswordApi(data: ChangePasswordParams): Promise<boolean> {
+  return request.post<boolean>('/auth/change-password', data)
 }
 
 /** 退出登录（需携带认证头） */

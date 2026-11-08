@@ -67,7 +67,7 @@ async function handleDelete(row: LoginLogVO): Promise<void> {
   if (!confirmed) {
     return
   }
-  await deleteLoginLogApi(row.id)
+  await deleteLoginLogApi(row.id, row.version)
   ElMessage.success('删除成功')
   if (items.value.length === 1 && pageIndex.value > 1) {
     pageIndex.value -= 1
@@ -75,10 +75,20 @@ async function handleDelete(row: LoginLogVO): Promise<void> {
   await fetchData()
 }
 
-/** 清空全部登录日志（危险操作，二次确认） */
+/** 按时间范围清空登录日志（危险操作：须先选定日期范围、确认跨度并二次确认） */
 async function handleClean(): Promise<void> {
+  if (!dateRange.value) {
+    ElMessage.warning('请先在搜索条件中选择要清空的起止日期')
+    return
+  }
+  const [beginTime, endTime] = dateRange.value
+  const spanDays = (Date.parse(endTime) - Date.parse(beginTime)) / 86_400_000
+  if (spanDays > 30) {
+    ElMessage.warning('单次清空的时间范围不得超过 31 天')
+    return
+  }
   const confirmed = await ElMessageBox.confirm(
-    '是否确认清空全部登录日志？清空后不可恢复！',
+    `是否确认清空 ${beginTime} 至 ${endTime} 的登录日志？清空后不可恢复！`,
     '清空确认',
     { type: 'warning', confirmButtonText: '确 定', cancelButtonText: '取 消' },
   )
@@ -87,7 +97,7 @@ async function handleClean(): Promise<void> {
   if (!confirmed) {
     return
   }
-  await cleanLoginLogApi()
+  await cleanLoginLogApi({ beginTime, endTime, confirm: true })
   ElMessage.success('清空成功')
   await fetchData()
 }

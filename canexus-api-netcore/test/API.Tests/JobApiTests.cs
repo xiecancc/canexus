@@ -189,6 +189,29 @@ public class JobApiTests
         });
     }
 
+    /// <summary>回归：CLR 危险类型（System.Diagnostics.Process）不得写入作业类型，杜绝反射执行任意类型。</summary>
+    [Test]
+    public async Task Job_Create_DangerousClrType_Rejected()
+    {
+        var response = await SendAsync(HttpMethod.Post, "/api/monitor/job", new
+        {
+            jobName = NewJobName(),
+            jobGroup = "DEFAULT",
+            cronExpression = "0/10 * * * * ?",
+            jobType = "System.Diagnostics.Process, System.Diagnostics.Process",
+            status = 0,
+            concurrent = false
+        });
+        var body = await ReadBodyAsync(response);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+            Assert.That(body.RootElement.GetProperty("code").GetInt32(), Is.EqualTo(400902),
+                "白名单外的 CLR 程序集限定名应被 400902 拒绝");
+        });
+    }
+
     /// <summary>验证更新任务后重新调度，且删除不存在的任务返回 404 业务错误码。</summary>
     [Test]
     public async Task Job_Update_ReschedulesAndDeleteMissingJobReturns404BusinessCode()
@@ -242,6 +265,85 @@ public class JobApiTests
         finally
         {
             await SendAsync(HttpMethod.Delete, $"/api/monitor/job/{jobId}/{await ApiTestSupport.GetVersionAsync<SysJob>(_db, jobId)}");
+        }
+    }
+
+    /// <summary>
+    /// T5 #4 回归：作业参数经 ParametersJson → Quartz JobDataMap → 目标 IJob 全链路可用。
+    /// 创建带 RetentionDays 参数的 log-retention 业务作业，校验参数持久化、白名单解析与立即执行成功。
+    /// </summary>
+    [Test]
+    public async Task Job_Create_WithParameters_PersistsAndRunsRegisteredBusinessJob()
+    {
+        const string parameters = "{\"RetentionDays\":30}";
+        var jobName = NewJobName();
+        await SendForJsonAsync(HttpMethod.Post, "/api/monitor/job", new
+        {
+            jobName,
+            jobGroup = "DEFAULT",
+            cronExpression = "0 0 3 * * ?",
+            jobType = LogRetentionJob.JobKey,
+            status = 0,
+            concurrent = false,
+            parametersJson = parameters
+        });
+        var jobId = await ApiTestSupport.GetEntityIdAsync<SysJob>(_db, it => it.JobName == jobName);
+
+        try
+        {
+            var row = (await GetJsonAsync($"/api/monitor/job/page?keyword={jobName}"))
+                .RootElement.GetProperty("data").GetProperty("items")[0];
+            Assert.Multiple(() =>
+            {
+                Assert.That(row.GetProperty("jobType").GetString(), Is.EqualTo(LogRetentionJob.JobKey));
+                Assert.That(row.GetProperty("parametersJson").GetString(), Is.EqualTo(parameters),
+                    "作业参数应按原样持久化并在列表返回，供前端回显与编辑");
+            });
+
+            // 立即执行：包装任务须能从 DI 解析已登记业务作业，且参数经 MergedJobDataMap 送达而不报错
+            await SendForJsonAsync(HttpMethod.Post, $"/api/monitor/job/{jobId}/run", null!);
+            var logs = await WaitForJobLogsAsync(jobId, minimumCount: 1, timeoutSeconds: 15);
+            Assert.That(logs[0].GetProperty("status").GetInt32(), Is.EqualTo(1),
+                "已登记业务作业执行应成功（参数非法 / DI 未注册会在执行日志中记为失败）");
+        }
+        finally
+        {
+            await SendAsync(HttpMethod.Delete, $"/api/monitor/job/{jobId}/{await ApiTestSupport.GetVersionAsync<SysJob>(_db, jobId)}");
+        }
+    }
+
+    /// <summary>T5 #4 回归：非法作业参数在写入前被拦截，且不占用调度框架保留键。</summary>
+    [Test]
+    public async Task Job_Create_InvalidParameters_Rejected()
+    {
+        var invalidPayloads = new (string Name, string Json)[]
+        {
+            ("非 JSON", "not-json"),
+            ("数组", "[1,2]"),
+            ("嵌套对象", "{\"a\":{\"b\":1}}"),
+            ("保留键", "{\"jobId\":\"00000000-0000-0000-0000-000000000001\"}")
+        };
+
+        foreach (var (name, json) in invalidPayloads)
+        {
+            var response = await SendAsync(HttpMethod.Post, "/api/monitor/job", new
+            {
+                jobName = NewJobName(),
+                jobGroup = "DEFAULT",
+                cronExpression = "0/10 * * * * ?",
+                jobType = NoOpJob.JobKey,
+                status = 0,
+                concurrent = false,
+                parametersJson = json
+            });
+            var body = await ReadBodyAsync(response);
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest), $"{name} 应被 400 拒绝");
+                Assert.That(body.RootElement.GetProperty("code").GetInt32(), Is.EqualTo(40001),
+                    $"{name} 应映射为 CommonValidationFailed");
+            });
         }
     }
 

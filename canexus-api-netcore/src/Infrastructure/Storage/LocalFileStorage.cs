@@ -48,44 +48,23 @@ public class LocalFileStorage(IOptions<FileStorageOption> options) : IFileStorag
             throw FileTooLarge();
         }
 
-        // 第二道：边读边限（不可 seek 流同样生效），同时把内容缓冲到内存供签名检测与落盘复用
-        using var buffer = new MemoryStream();
+        // 流式落盘（SEC-07）：内存占用恒定为一个块（64 KiB），不再把整个文件缓冲进 MemoryStream。
+        // 大小判定仍优先于内容类型判定（避免为识别类型而处理超大载荷）；类型检测在落盘后
+        // 回读文件头完成，判定依据仍是真实内容而非客户端声明。
         var chunk = new byte[64 * 1024];
-        long total = 0;
-        while (true)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            var read = await content.ReadAsync(chunk.AsMemory(), cancellationToken);
-            if (read == 0)
-            {
-                break;
-            }
-
-            total += read;
-            if (total > maxBytes)
-            {
-                throw FileTooLarge();
-            }
-
-            buffer.Write(chunk, 0, read);
-        }
-
-        if (total == 0)
+        cancellationToken.ThrowIfCancellationRequested();
+        var firstRead = await content.ReadAsync(chunk.AsMemory(), cancellationToken);
+        if (firstRead == 0)
         {
             throw new BusinessException(ErrorCodes.FileExtensionNotAllowed, "文件内容为空或类型无法识别");
         }
 
-        // 类型判定只认文件头：签名族必须与扩展名同族，且 MIME 只取内置白名单推导值
-        var header = buffer.GetBuffer().AsSpan(0, (int)Math.Min(total, 512));
-        var family = FileContentInspector.Detect(header);
-        if (!FileContentInspector.TryResolveMime(extension, family, out var detectedContentType))
+        long total = firstRead;
+        if (total > maxBytes)
         {
-            throw new BusinessException(
-                ErrorCodes.FileExtensionNotAllowed,
-                $"不支持的文件类型：'.{extension}' 与文件内容不符（实测内容格式 {family}）");
+            throw FileTooLarge();
         }
 
-        buffer.Position = 0;
         var storedName = $"{Guid.NewGuid():N}.{extension}";
         var bucket = DateTime.UtcNow.ToString("yyyyMM/dd");
         var relativePath = $"{bucket}/{storedName}";
@@ -98,7 +77,26 @@ public class LocalFileStorage(IOptions<FileStorageOption> options) : IFileStorag
         try
         {
             await using var target = File.Create(fullPath);
-            await buffer.CopyToAsync(target, cancellationToken);
+            await target.WriteAsync(chunk.AsMemory(0, firstRead), cancellationToken);
+
+            // 第三道（流式）：边读边写边累计，超限立即中断并清理半成品，不占用整文件内存
+            while (true)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var read = await content.ReadAsync(chunk.AsMemory(), cancellationToken);
+                if (read == 0)
+                {
+                    break;
+                }
+
+                total += read;
+                if (total > maxBytes)
+                {
+                    throw FileTooLarge();
+                }
+
+                await target.WriteAsync(chunk.AsMemory(0, read), cancellationToken);
+            }
         }
         catch
         {
@@ -106,12 +104,31 @@ public class LocalFileStorage(IOptions<FileStorageOption> options) : IFileStorag
             throw;
         }
 
-        // 第三道：写后复核实际落盘大小
+        // 写后复核实际落盘大小（防止流式写入与累计计数不一致）
         var written = new FileInfo(fullPath).Length;
         if (written > maxBytes)
         {
             TryCleanup(fullPath);
             throw FileTooLarge();
+        }
+
+        // 类型判定只认文件头：签名族必须与扩展名同族，且 MIME 只取内置白名单推导值；
+        // 回读落盘文件的头部（≤512 字节），不占用整文件内存
+        byte[] header;
+        await using (var probe = File.OpenRead(fullPath))
+        {
+            var headerBuffer = new byte[512];
+            var headerLength = await probe.ReadAsync(headerBuffer, cancellationToken);
+            header = headerBuffer.AsSpan(0, headerLength).ToArray();
+        }
+
+        var family = FileContentInspector.Detect(header);
+        if (!FileContentInspector.TryResolveMime(extension, family, out var detectedContentType))
+        {
+            TryCleanup(fullPath);
+            throw new BusinessException(
+                ErrorCodes.FileExtensionNotAllowed,
+                $"不支持的文件类型：'.{extension}' 与文件内容不符（实测内容格式 {family}）");
         }
 
         return new FileSaveResult(storedName, relativePath, detectedContentType, written);

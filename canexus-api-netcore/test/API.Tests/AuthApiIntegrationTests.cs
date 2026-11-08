@@ -254,6 +254,71 @@ public class AuthApiIntegrationTests
         });
     }
 
+    /// <summary>令牌家族防护：并发轮换（宽限窗口内）只拒绝旧令牌，不误伤同会话的新令牌。</summary>
+    [Test]
+    public async Task Refresh_ConcurrentReuseWithinGraceWindow_DoesNotRevokeFamily()
+    {
+        var (_, tokens) = await LoginAsync(AdminUserName, AdminPassword);
+        Assert.That(tokens, Is.Not.Null);
+
+        var first = await PostJsonAsync("/api/auth/refresh", new { refreshToken = tokens!.RefreshToken });
+        Assert.That(first.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var firstBody = await ReadBodyAsync(first);
+        var newRefreshToken = firstBody.RootElement.GetProperty("data").GetProperty("refreshToken").GetString()!;
+
+        var reuse = await PostJsonAsync("/api/auth/refresh", new { refreshToken = tokens.RefreshToken });
+        Assert.That(reuse.StatusCode, Is.EqualTo(HttpStatusCode.Unauthorized), "旧令牌仍应被拒绝");
+
+        var stillValid = await PostJsonAsync("/api/auth/refresh", new { refreshToken = newRefreshToken });
+        Assert.That(stillValid.StatusCode, Is.EqualTo(HttpStatusCode.OK),
+            "宽限窗口内的重用属于并发轮换，不得吊销整个令牌家族");
+    }
+
+    /// <summary>
+    /// 令牌家族防护：轮换一段时间后再重用旧 refreshToken 视为泄露，
+    /// 同一会话的新 refreshToken 与 accessToken 全部失效（吊销不受业务事务回滚影响）。
+    /// </summary>
+    [Test]
+    public async Task Refresh_ReuseOutsideGraceWindow_RevokesWholeFamily()
+    {
+        var (_, tokens) = await LoginAsync(AdminUserName, AdminPassword);
+        Assert.That(tokens, Is.Not.Null);
+
+        var first = await PostJsonAsync("/api/auth/refresh", new { refreshToken = tokens!.RefreshToken });
+        Assert.That(first.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var firstBody = await ReadBodyAsync(first);
+        var newRefreshToken = firstBody.RootElement.GetProperty("data").GetProperty("refreshToken").GetString()!;
+        var newAccessToken = firstBody.RootElement.GetProperty("data").GetProperty("accessToken").GetString()!;
+
+        // 把旧令牌的吊销时间前移到宽限窗口之外，模拟「轮换一段时间后旧令牌被第三方重用」
+        var oldHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(tokens.RefreshToken))).ToLowerInvariant();
+        var simulatedRevokedAt = DateTime.UtcNow.AddSeconds(-11);
+        await _db.Updateable<SysRefreshToken>()
+            .SetColumns(t => t.RevokedAt == simulatedRevokedAt)
+            .Where(t => t.Token == oldHash)
+            .ExecuteCommandAsync();
+
+        var reuse = await PostJsonAsync("/api/auth/refresh", new { refreshToken = tokens.RefreshToken });
+        var reuseBody = await ReadBodyAsync(reuse);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(reuse.StatusCode, Is.EqualTo(HttpStatusCode.Unauthorized));
+            Assert.That(reuseBody.RootElement.GetProperty("code").GetInt32(), Is.EqualTo(40106));
+        });
+
+        var newTokenAfterReuse = await PostJsonAsync("/api/auth/refresh", new { refreshToken = newRefreshToken });
+        var accessAfterReuse = await SendAuthorizedAsync(HttpMethod.Get, "/api/auth/user-info", newAccessToken);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(newTokenAfterReuse.StatusCode, Is.EqualTo(HttpStatusCode.Unauthorized),
+                "检测到重用后，同一会话的新 refreshToken 必须失效（吊销须独立于回滚的业务事务）");
+            Assert.That(accessAfterReuse.StatusCode, Is.EqualTo(HttpStatusCode.Unauthorized),
+                "检测到重用后，该会话的 accessToken 必须立即失效");
+        });
+    }
+
     // —— 登出 ——
 
     /// <summary>验证登出后刷新令牌被吊销且无法再用于刷新。</summary>

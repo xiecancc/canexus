@@ -51,6 +51,75 @@ public class ProductionConfigurationValidatorTests
         });
     }
 
+    /// <summary>回归：Production 缺失内置超管初始口令时启动被拒绝（种子口令随机化基线）。</summary>
+    [Test]
+    public void ProductionBaseline_RequiresExplicitAdminInitialPassword()
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Jwt:Secret"] = "Prod-Only@Random#Secret-2026-abcdefghijklmnopqrstuvwxyz",
+                ["Bootstrap:AdminInitialPassword"] = ""
+            })
+            .Build();
+
+        var exception = Assert.Throws<InvalidOperationException>(
+            () => ProductionConfigurationValidator.Validate(configuration, new StubEnvironment("Production")));
+        Assert.That(exception!.Message, Does.Contain("Bootstrap:AdminInitialPassword 必须显式提供"));
+    }
+
+    /// <summary>回归：Production 不得关闭「种子 admin 首登须改密」。</summary>
+    [Test]
+    public void ProductionBaseline_RejectsDisabledPasswordChangeOnSeed()
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Jwt:Secret"] = "Prod-Only@Random#Secret-2026-abcdefghijklmnopqrstuvwxyz",
+                ["Bootstrap:AdminInitialPassword"] = "Prod-Only@Initial#Password-2026",
+                ["Bootstrap:RequirePasswordChangeOnSeed"] = "false"
+            })
+            .Build();
+
+        var exception = Assert.Throws<InvalidOperationException>(
+            () => ProductionConfigurationValidator.Validate(configuration, new StubEnvironment("Production")));
+        Assert.That(exception!.Message, Does.Contain("Bootstrap:RequirePasswordChangeOnSeed 在 Production 必须为 true"));
+    }
+
+    /// <summary>回归：Production 必须启用 Redis L2，否则会话吊销 / 失效广播 / 分布式限流无跨实例统一视图。</summary>
+    [Test]
+    public void ProductionBaseline_RequiresRedisEnabled()
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Cache:RedisEnabled"] = "false"
+            })
+            .Build();
+
+        var exception = Assert.Throws<InvalidOperationException>(
+            () => ProductionConfigurationValidator.Validate(configuration, new StubEnvironment("Production")));
+        Assert.That(exception!.Message, Does.Contain("Cache:RedisEnabled 在 Production 必须为 true"));
+    }
+
+    /// <summary>回归：显式开启 Redis 后该基线项不再出现在失败清单中。</summary>
+    [Test]
+    public void ProductionBaseline_AcceptsRedisEnabled()
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Cache:RedisEnabled"] = "true",
+                ["Jwt:Secret"] = "Prod-Only@Random#Secret-2026-abcdefghijklmnopqrstuvwxyz",
+                ["Bootstrap:AdminInitialPassword"] = "Prod-Only@Initial#Password-2026"
+            })
+            .Build();
+
+        var exception = Assert.Throws<InvalidOperationException>(
+            () => ProductionConfigurationValidator.Validate(configuration, new StubEnvironment("Production")));
+        Assert.That(exception!.Message, Does.Not.Contain("Cache:RedisEnabled"));
+    }
+
     /// <summary>测试用宿主环境桩。</summary>
     private sealed class StubEnvironment(string name) : IHostEnvironment
     {

@@ -6,15 +6,16 @@
  * - GET    /system/role/all                                       → 角色简要列表（下拉 / 复选）
  * - GET    /system/role/{id}                                      → 角色详情（含 menuIds）
  * - POST   /system/role                                           → 创建角色
- * - PUT    /system/role/{id}                                      → 更新角色
- * - DELETE /system/role/{id}                                      → 删除角色
+ * - PUT    /system/role/{id}/{version}                            → 更新角色
+ * - DELETE /system/role/{id}/{version}                            → 删除角色
  * - 状态：1 正常 0 停用；数据范围：1 全部 2 自定义 3 本部门 4 本部门及以下 5 仅本人
+ * - 乐观锁：更新 / 删除的 URL 均须携带 version，取自列表 / 详情响应的 version 字段（36 位 GUID 字符串）
  */
-import type { PagedRequest, PagedResult } from '@/api/types'
+import type { AggregateVO, PagedRequest, PagedResult } from '@/api/types'
 import request from '@/utils/request'
 
 /** 角色列表项 */
-export interface RoleVO {
+export interface RoleVO extends AggregateVO {
   /** 角色 ID（GUID 字符串） */
   id: string
   /** 角色名称 */
@@ -44,7 +45,7 @@ export interface RoleBrief {
 }
 
 /** 角色详情（编辑回显，含授权菜单） */
-export interface RoleDetail {
+export interface RoleDetail extends AggregateVO {
   /** 角色 ID（GUID 字符串） */
   id: string
   /** 角色名称 */
@@ -101,16 +102,31 @@ export function getRoleApi(id: string): Promise<RoleDetail> {
 }
 
 /** 创建角色 */
-export function createRoleApi(data: RoleSaveRequest): Promise<null> {
-  return request.post<null>('/system/role', data)
+export function createRoleApi(data: RoleSaveRequest): Promise<boolean> {
+  return request.post<boolean>('/system/role', data)
 }
 
-/** 更新角色 */
-export function updateRoleApi(id: string, data: RoleSaveRequest): Promise<null> {
-  return request.put<null>(`/system/role/${id}`, data)
+/**
+ * 更新角色。
+ *
+ * @param id 角色 ID（GUID 字符串）
+ * @param version 乐观锁版本号（取自列表 / 详情响应的 version 字段）
+ * @param data 更新数据
+ */
+export function updateRoleApi(
+  id: string,
+  version: string,
+  data: RoleSaveRequest,
+): Promise<boolean> {
+  return request.put<boolean>(`/system/role/${id}/${version}`, data)
 }
 
-/** 删除角色 */
-export function deleteRoleApi(id: string): Promise<null> {
-  return request.delete<null>(`/system/role/${id}`)
+/**
+ * 删除角色。
+ *
+ * @param id 角色 ID（GUID 字符串）
+ * @param version 乐观锁版本号（取自列表 / 详情响应的 version 字段）
+ */
+export function deleteRoleApi(id: string, version: string): Promise<boolean> {
+  return request.delete<boolean>(`/system/role/${id}/${version}`)
 }

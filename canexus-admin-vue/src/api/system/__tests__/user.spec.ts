@@ -35,6 +35,9 @@ const mockedDelete = request.delete as unknown as Mock
 /** 测试用用户 ID（GUID 字符串） */
 const USER_ID = '00000000-0000-0000-0000-000000000009'
 
+/** 测试用乐观锁版本号（GUID 字符串，取自列表 / 详情响应的 version 字段） */
+const VERSION = '00000000-0000-0000-0000-00000000000a'
+
 /** 测试用部门 ID（GUID 字符串） */
 const DEPT_ID = '00000000-0000-0000-0000-000000000100'
 
@@ -68,7 +71,7 @@ describe('用户模块接口', () => {
     expect(mockedPost).toHaveBeenCalledWith('/system/user', body)
   })
 
-  it('更新用户：PUT /system/user/{id} 且请求体不含账号密码', async () => {
+  it('更新用户：PUT /system/user/{id}/{version} 且请求体不含账号密码', async () => {
     const body = {
       nickName: '李四',
       deptId: DEPT_ID,
@@ -78,30 +81,32 @@ describe('用户模块接口', () => {
       description: '',
       roleIds: [],
     }
-    await updateUserApi(USER_ID, body)
-    expect(mockedPut).toHaveBeenCalledWith(`/system/user/${USER_ID}`, body)
+    await updateUserApi(USER_ID, VERSION, body)
+    expect(mockedPut).toHaveBeenCalledWith(`/system/user/${USER_ID}/${VERSION}`, body)
   })
 
-  it('删除用户：DELETE /system/user/{id}', async () => {
-    await deleteUserApi(USER_ID)
-    expect(mockedDelete).toHaveBeenCalledWith(`/system/user/${USER_ID}`)
+  it('删除用户：DELETE /system/user/{id}/{version}', async () => {
+    await deleteUserApi(USER_ID, VERSION)
+    expect(mockedDelete).toHaveBeenCalledWith(`/system/user/${USER_ID}/${VERSION}`)
   })
 
-  it('修改状态：PUT /system/user/{id}/status 且请求体为 { status }', async () => {
-    await updateUserStatusApi(USER_ID, 0)
-    expect(mockedPut).toHaveBeenCalledWith(`/system/user/${USER_ID}/status`, { status: 0 })
+  it('修改状态：PUT /system/user/{id}/{version}/status 且请求体为 { status }', async () => {
+    await updateUserStatusApi(USER_ID, VERSION, 0)
+    expect(mockedPut).toHaveBeenCalledWith(`/system/user/${USER_ID}/${VERSION}/status`, {
+      status: 0,
+    })
   })
 
-  it('重置密码：PUT /system/user/{id}/password 且请求体为 { password }', async () => {
-    await updateUserPasswordApi(USER_ID, 'abc12345')
-    expect(mockedPut).toHaveBeenCalledWith(`/system/user/${USER_ID}/password`, {
+  it('重置密码：PUT /system/user/{id}/{version}/password 且请求体为 { password }', async () => {
+    await updateUserPasswordApi(USER_ID, VERSION, 'abc12345')
+    expect(mockedPut).toHaveBeenCalledWith(`/system/user/${USER_ID}/${VERSION}/password`, {
       password: 'abc12345',
     })
   })
 
-  it('分配角色：PUT /system/user/{id}/roles 且请求体为 { roleIds }', async () => {
-    await updateUserRolesApi(USER_ID, [ROLE_ID_1, ROLE_ID_2])
-    expect(mockedPut).toHaveBeenCalledWith(`/system/user/${USER_ID}/roles`, {
+  it('分配角色：PUT /system/user/{id}/{version}/roles 且请求体为 { roleIds }', async () => {
+    await updateUserRolesApi(USER_ID, VERSION, [ROLE_ID_1, ROLE_ID_2])
+    expect(mockedPut).toHaveBeenCalledWith(`/system/user/${USER_ID}/${VERSION}/roles`, {
       roleIds: [ROLE_ID_1, ROLE_ID_2],
     })
   })

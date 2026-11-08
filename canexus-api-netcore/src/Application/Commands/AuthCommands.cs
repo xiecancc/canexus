@@ -17,6 +17,7 @@ using Infrastructure.Shared.Locking;
 using Infrastructure.Shared.Options;
 using Infrastructure.Shared.Tenants;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace Application.Commands;
 /// <summary>账号密码登录命令处理器。</summary>
@@ -31,6 +32,7 @@ namespace Application.Commands;
 /// <param name="distributedLock">失败计数分布式锁。</param>
 /// <param name="tenantAccessValidator">租户准入校验。</param>
 /// <param name="tenantContext">当前租户上下文。</param>
+/// <param name="loginLockOptions">登录失败锁定阈值（Security:LoginLock，EX-05 阈值 Option 化）。</param>
 /// <param name="logger">日志器（登录日志写入失败仅告警）。</param>
 public sealed class AuthLoginCommandHandler(
     IAggregateRepository<SysUser> userRepository,
@@ -43,16 +45,17 @@ public sealed class AuthLoginCommandHandler(
     IDistributedLock distributedLock,
     ITenantAccessValidator tenantAccessValidator,
     ITenantContext tenantContext,
+    IOptionsMonitor<LoginLockOption> loginLockOptions,
     ILogger<AuthLoginCommandHandler> logger) : RequestHandler<AuthLoginCommand, TokenPairDto>
 {
     /// <summary>登录失败计数缓存 key 前缀（key 格式：{prefix}{userName}）。</summary>
     public const string LoginFailCacheKeyPrefix = "auth:login-fail:";
 
-    /// <summary>允许的最大连续失败次数（达到即锁定）。</summary>
-    private const int MaxLoginFailCount = 5;
+    /// <summary>允许的最大连续失败次数（达到即锁定）：来自 Security:LoginLock:MaxFailedAttempts。</summary>
+    private int MaxLoginFailCount => loginLockOptions.CurrentValue.MaxFailedAttempts;
 
-    /// <summary>锁定时长（失败窗口，每次失败滑动重置）。</summary>
-    private static readonly TimeSpan LockDuration = TimeSpan.FromMinutes(10);
+    /// <summary>锁定时长（失败窗口，每次失败滑动重置）：来自 Security:LoginLock:LockMinutes。</summary>
+    private TimeSpan LockDuration => TimeSpan.FromMinutes(loginLockOptions.CurrentValue.LockMinutes);
 
     /// <summary>登录失败计数状态。</summary>
     /// <param name="Count">连续失败次数。</param>
@@ -134,7 +137,7 @@ public sealed class AuthLoginCommandHandler(
     private async Task CheckLockStateAsync(string userName, CancellationToken cancellationToken)
     {
         var state = await cache.GetAsync<LoginFailState>(LoginFailCacheKeyPrefix + userName, cancellationToken);
-        if (state is { Count: >= MaxLoginFailCount })
+        if (state is not null && state.Count >= MaxLoginFailCount)
         {
             var remaining = LockDuration - (DateTime.UtcNow - state.LastFailTime);
             var minutes = Math.Max(1, (int)Math.Ceiling(remaining.TotalMinutes));
@@ -159,7 +162,7 @@ public sealed class AuthLoginCommandHandler(
             ? new LoginFailState(current.Count + 1, DateTime.UtcNow)
             : new LoginFailState(1, DateTime.UtcNow);
 
-        // 显式 TTL：L1 1 分钟（本实例快速判定）/ L2 10 分钟（锁定窗口，跨实例一致）
+        // 显式 TTL：L1 1 分钟（本实例快速判定）/ L2 取配置锁定窗口（跨实例一致）
         await cache.SetAsync(key, next, new CacheTtlProfile(TimeSpan.FromMinutes(1), LockDuration), cancellationToken);
 
         await WriteLoginLogAsync(userName, ip, userAgent, success: false, "账号或密码错误", cancellationToken, independent: true);
@@ -248,20 +251,38 @@ public sealed class AuthLogoutCommandHandler(
     }
 }
 
-/// <summary>刷新令牌命令处理器。</summary>
+/// <summary>刷新令牌命令处理器（含令牌家族重用检测）。</summary>
 /// <remarks>构造函数。</remarks>
+/// <param name="userRepository">用户聚合仓储。</param>
+/// <param name="refreshTokenRepository">刷新令牌仓储（家族吊销）。</param>
+/// <param name="tokenService">令牌服务。</param>
+/// <param name="tokenVersionService">令牌版本服务（吊销会话 accessToken）。</param>
+/// <param name="tokenSubjectFactory">令牌主体工厂。</param>
+/// <param name="tenantAccessValidator">租户准入校验。</param>
+/// <param name="multiTenancyOption">多租户配置。</param>
+/// <param name="logger">日志器（安全事件留痕）。</param>
 public sealed class AuthRefreshTokenCommandHandler(
     IAggregateRepository<SysUser> userRepository,
+    ISysRefreshTokenRepository refreshTokenRepository,
     ITokenService tokenService,
+    ITokenVersionService tokenVersionService,
     ITokenSubjectFactory tokenSubjectFactory,
     ITenantAccessValidator tenantAccessValidator,
-    MultiTenancyOption multiTenancyOption) : RequestHandler<AuthRefreshTokenCommand, TokenPairDto>
+    MultiTenancyOption multiTenancyOption,
+    ILogger<AuthRefreshTokenCommandHandler> logger) : RequestHandler<AuthRefreshTokenCommand, TokenPairDto>
 {
+    /// <summary>并发轮换宽限窗口：吊销后该时长内的旧令牌重用视为正常客户端并发，仅拒绝不吊销家族。</summary>
+    private static readonly TimeSpan ReuseGraceWindow = TimeSpan.FromSeconds(10);
+
     /// <inheritdoc />
     protected override async Task<TokenPairDto> HandleAsync(AuthRefreshTokenCommand command, CancellationToken cancellationToken)
     {
-        var active = await tokenService.GetActiveRefreshTokenAsync(command.RefreshToken, cancellationToken)
-            ?? throw new BusinessException(ErrorCodes.AuthRefreshTokenInvalid, "刷新令牌无效或已过期，请重新登录");
+        var active = await tokenService.GetActiveRefreshTokenAsync(command.RefreshToken, cancellationToken);
+        if (active is null)
+        {
+            await HandleRevokedTokenReuseAsync(command.RefreshToken, cancellationToken);
+            throw new BusinessException(ErrorCodes.AuthRefreshTokenInvalid, "刷新令牌无效或已过期，请重新登录");
+        }
 
         var user = await userRepository.GetAsync([it => it.Id == active.UserId], cancellationToken);
         if (user is null || user.Status != CommonStatus.Enabled)
@@ -298,6 +319,39 @@ public sealed class AuthRefreshTokenCommandHandler(
             ExpiresIn = pair.ExpiresIn,
             MustChangePassword = user.MustChangePassword == true
         };
+    }
+
+    /// <summary>
+    /// 令牌家族重用检测：旧 refreshToken 在轮换/吊销后被再次使用，说明该家族可能已泄露，
+    /// 吊销同一会话下的全部 refreshToken 与 accessToken。
+    /// <para>吊销一律走独立连接（仓储 CopyNew）与缓存，不依赖后续会回滚的写命令事务；
+    /// 吊销后 10 秒内的重用视为正常客户端并发，只拒绝不吊销，避免误伤。</para>
+    /// </summary>
+    /// <param name="refreshToken">被重用的刷新令牌串。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>表示异步操作的任务。</returns>
+    private async Task HandleRevokedTokenReuseAsync(string refreshToken, CancellationToken cancellationToken)
+    {
+        var revoked = await tokenService.FindRevokedRefreshTokenAsync(refreshToken, cancellationToken);
+        if (revoked is null || revoked.SessionId == Guid.Empty)
+        {
+            return;
+        }
+
+        if (DateTime.UtcNow - revoked.RevokedAt <= ReuseGraceWindow)
+        {
+            // 并发轮换（如移动端与 Web 同时刷新）：仅拒绝本次请求，不吊销整个家族
+            return;
+        }
+
+        logger.LogWarning(
+            "检测到刷新令牌家族重用：用户 {UserId} 会话 {SessionId}，令牌于 {RevokedAt:O} 吊销后被再次使用，已吊销该会话全部令牌",
+            revoked.UserId, revoked.SessionId, revoked.RevokedAt);
+
+        // 独立连接写入：本命令随后抛业务异常，外层事务会回滚，安全吊销不能随之回滚
+        await refreshTokenRepository.RevokeAllForSessionAsync(revoked.SessionId, DateTime.UtcNow, cancellationToken);
+        // 缓存吊销标记：该会话已签发的 accessToken 下一次请求即 401
+        await tokenVersionService.RevokeSessionAsync(revoked.SessionId, cancellationToken);
     }
 }
 

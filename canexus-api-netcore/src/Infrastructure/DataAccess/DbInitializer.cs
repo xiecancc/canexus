@@ -134,7 +134,7 @@ public sealed class DbInitializer(
 
         if (status.Readiness == SchemaReadiness.Ready)
         {
-            await ValidateOnlyAsync(modelTableNames, orderedMigrations, cancellationToken);
+            await ValidateOnlyAsync(entityTypes, modelTableNames, orderedMigrations, cancellationToken);
             logger.LogInformation(
                 "数据库初始化[结构层]：已应用版本 {Applied} 与代码期望 {Expected} 一致，模型表齐全，本次启动不执行任何 DDL",
                 status.AppliedVersion, status.ExpectedVersion);
@@ -167,7 +167,7 @@ public sealed class DbInitializer(
 
         await migrator.EnsureBaselineAsync(modelTableNames, cancellationToken);
         await migrator.ApplyPendingAsync(orderedMigrations, cancellationToken);
-        await ValidateOnlyAsync(modelTableNames, orderedMigrations, cancellationToken);
+        await ValidateOnlyAsync(entityTypes, modelTableNames, orderedMigrations, cancellationToken);
 
         var final = await migrator.GetStatusAsync(modelTableNames, orderedMigrations, cancellationToken);
         if (final.Readiness != SchemaReadiness.Ready)
@@ -234,12 +234,14 @@ public sealed class DbInitializer(
         }
     }
 
-    /// <summary>只读校验：已应用脚本正文未被篡改、模型表均已登记迁移。</summary>
+    /// <summary>只读校验：已应用脚本正文未被篡改、模型表均已登记迁移、可选的模型结构与 information_schema 一致。</summary>
+    /// <param name="entityTypes">模型实体类型（结构校验开启时生成模型快照）。</param>
     /// <param name="modelTableNames">模型表名清单。</param>
     /// <param name="orderedMigrations">按版本排序的迁移清单。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>表示异步操作的任务。</returns>
     private async Task ValidateOnlyAsync(
+        IReadOnlyList<Type> entityTypes,
         IReadOnlyList<string> modelTableNames,
         IReadOnlyList<ISchemaMigration> orderedMigrations,
         CancellationToken cancellationToken)
@@ -251,6 +253,14 @@ public sealed class DbInitializer(
 
         await migrator.ValidateAppliedScriptsAsync(orderedMigrations, cancellationToken);
         await migrator.ValidateModelAgainstMigrationsAsync(modelTableNames, orderedMigrations, cancellationToken);
+
+        // T5 #13：可选的模型结构校验（默认关闭）。脚本正文指纹只能发现「已应用脚本被改写」，
+        // 无法发现「绕过迁移通道直接改表 / 脚本落地不完整」；此处用 EntityMaintenance 模型快照
+        // 与 information_schema 列/主键比对补上这一段。默认关闭以免存量库历史漂移阻断启动。
+        if (options.ValidateModelStructure)
+        {
+            await new ModelStructureValidator(client).ValidateAsync(entityTypes, cancellationToken);
+        }
     }
 
     /// <summary>判断类型是否为具体实体类型：类、非抽象、非泛型定义，且基类链中存在实体体系基类（或为显式纳入的基础设施消息实体）。</summary>

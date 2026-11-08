@@ -5,15 +5,16 @@
  * - GET    /system/tenant/page?keyword=&status=&pageIndex=&pageSize= → PagedResult<TenantVO>
  * - GET    /system/tenant/all → TenantBrief[]（租户简要集合，供下拉选择）
  * - POST   /system/tenant → 创建租户
- * - PUT    /system/tenant/{id} → 更新租户（tenantKey 编辑禁用）
- * - DELETE /system/tenant/{id} → 删除租户
+ * - PUT    /system/tenant/{id}/{version} → 更新租户（tenantKey 编辑禁用）
+ * - DELETE /system/tenant/{id}/{version} → 删除租户
  * - 租户状态：1 启用 0 停用（契约无独立状态接口，行内切换经全量更新实现）
+ * - 乐观锁：更新 / 删除的 URL 均须携带 version，取自列表 / 详情响应的 version 字段（36 位 GUID 字符串）
  */
-import type { PagedRequest, PagedResult } from '@/api/types'
+import type { AggregateVO, PagedRequest, PagedResult } from '@/api/types'
 import request from '@/utils/request'
 
 /** 租户列表项 */
-export interface TenantVO {
+export interface TenantVO extends AggregateVO {
   /** 租户 ID（GUID 字符串） */
   id: string
   /** 租户标识（唯一） */
@@ -95,16 +96,31 @@ export function getTenantAllApi(): Promise<TenantBrief[]> {
 }
 
 /** 创建租户 */
-export function createTenantApi(data: TenantCreateRequest): Promise<null> {
-  return request.post<null>('/system/tenant', data)
+export function createTenantApi(data: TenantCreateRequest): Promise<boolean> {
+  return request.post<boolean>('/system/tenant', data)
 }
 
-/** 更新租户（tenantKey 不可修改） */
-export function updateTenantApi(id: string, data: TenantUpdateRequest): Promise<null> {
-  return request.put<null>(`/system/tenant/${id}`, data)
+/**
+ * 更新租户（tenantKey 不可修改）。
+ *
+ * @param id 租户 ID（GUID 字符串）
+ * @param version 乐观锁版本号（取自列表 / 详情响应的 version 字段）
+ * @param data 更新数据
+ */
+export function updateTenantApi(
+  id: string,
+  version: string,
+  data: TenantUpdateRequest,
+): Promise<boolean> {
+  return request.put<boolean>(`/system/tenant/${id}/${version}`, data)
 }
 
-/** 删除租户 */
-export function deleteTenantApi(id: string): Promise<null> {
-  return request.delete<null>(`/system/tenant/${id}`)
+/**
+ * 删除租户。
+ *
+ * @param id 租户 ID（GUID 字符串）
+ * @param version 乐观锁版本号（取自列表 / 详情响应的 version 字段）
+ */
+export function deleteTenantApi(id: string, version: string): Promise<boolean> {
+  return request.delete<boolean>(`/system/tenant/${id}/${version}`)
 }

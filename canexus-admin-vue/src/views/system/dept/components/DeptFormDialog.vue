@@ -39,6 +39,9 @@ const isEdit = ref(false)
 /** 当前编辑的部门 ID */
 const editId = ref('')
 
+/** 当前编辑部门的乐观锁版本号（取自行数据，写请求回传至 URL） */
+const editVersion = ref('')
+
 /** 提交中 */
 const submitting = ref(false)
 
@@ -90,6 +93,7 @@ const rules: FormRules = {
 const parentOptions = computed<DeptVO[]>(() => [
   {
     id: EMPTY_GUID,
+    version: '',
     parentId: '',
     deptName: '顶级部门',
     orderNum: 0,
@@ -112,6 +116,7 @@ const parentOptions = computed<DeptVO[]>(() => [
 function open(mode: 'create' | 'edit', row?: DeptVO, parentId?: string): void {
   isEdit.value = mode === 'edit'
   editId.value = row?.id ?? ''
+  editVersion.value = row?.version ?? ''
   Object.assign(form, getDefaultForm(), {
     parentId: mode === 'edit' ? (row?.parentId ?? EMPTY_GUID) : (parentId ?? EMPTY_GUID),
   })
@@ -146,7 +151,7 @@ async function handleSubmit(): Promise<void> {
       status: form.status,
     }
     if (isEdit.value) {
-      await updateDeptApi(editId.value, data)
+      await updateDeptApi(editId.value, editVersion.value, data)
       ElMessage.success('修改成功')
     } else {
       await createDeptApi(data)

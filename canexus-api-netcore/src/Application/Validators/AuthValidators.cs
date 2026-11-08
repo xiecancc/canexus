@@ -2,6 +2,8 @@
 using Application.Contracts.Commands;
 using Application.Validators.Common;
 using FluentValidation;
+using Infrastructure.Shared.Options;
+using Microsoft.Extensions.Options;
 
 namespace Application.Validators;
 /// <summary>登录命令验证器：用户名 / 密码 / 验证码 Id / 验证码内容非空（承接自请求 DTO DataAnnotations 迁移的规则，口径一致）。</summary>
@@ -27,14 +29,15 @@ public sealed class AuthRefreshTokenCommandValidator : AbstractValidator<AuthRef
     }
 }
 
-/// <summary>自助修改密码命令验证器：原密码非空、新密码满足强度规则（原密码正确性与用户存在性由处理器校验）。</summary>
+/// <summary>自助修改密码命令验证器：原密码非空、新密码满足可配置强度规则（原密码正确性与用户存在性由处理器校验）。</summary>
 public sealed class AuthChangePasswordCommandValidator : AbstractValidator<AuthChangePasswordCommand>
 {
-    /// <summary>构造函数。</summary>
-    public AuthChangePasswordCommandValidator()
+    /// <summary>构造函数：装配原密码非空与可配置强度规则。</summary>
+    /// <param name="passwordPolicy">口令强度策略（支持热加载）。</param>
+    public AuthChangePasswordCommandValidator(IOptionsMonitor<PasswordPolicyOption> passwordPolicy)
     {
         RuleFor(command => command.OldPassword).NotBlankRule("原密码不能为空");
-        RuleFor(command => command.NewPassword).PasswordRule();
+        RuleFor(command => command.NewPassword).PasswordRule(passwordPolicy.CurrentValue);
     }
 }
 

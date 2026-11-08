@@ -38,6 +38,9 @@ const DICT_TYPE_ID = '00000000-0000-0000-0000-000000000009'
 /** 测试用字典数据 ID（GUID 字符串） */
 const DICT_DATA_ID = '00000000-0000-0000-0000-000000000007'
 
+/** 测试用乐观锁版本号（GUID 字符串，取自列表响应的 version 字段） */
+const VERSION = '00000000-0000-0000-0000-00000000000a'
+
 describe('字典模块接口', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -57,15 +60,15 @@ describe('字典模块接口', () => {
     expect(mockedPost).toHaveBeenCalledWith('/system/dict-type', body)
   })
 
-  it('更新字典类型：PUT /system/dict-type/{id}（dictType 回传原值）', async () => {
+  it('更新字典类型：PUT /system/dict-type/{id}/{version}（dictType 回传原值）', async () => {
     const body = { dictName: '系统状态', dictType: 'sys_common_status' }
-    await updateDictTypeApi(DICT_TYPE_ID, body)
-    expect(mockedPut).toHaveBeenCalledWith(`/system/dict-type/${DICT_TYPE_ID}`, body)
+    await updateDictTypeApi(DICT_TYPE_ID, VERSION, body)
+    expect(mockedPut).toHaveBeenCalledWith(`/system/dict-type/${DICT_TYPE_ID}/${VERSION}`, body)
   })
 
-  it('删除字典类型：DELETE /system/dict-type/{id}', async () => {
-    await deleteDictTypeApi(DICT_TYPE_ID)
-    expect(mockedDelete).toHaveBeenCalledWith(`/system/dict-type/${DICT_TYPE_ID}`)
+  it('删除字典类型：DELETE /system/dict-type/{id}/{version}', async () => {
+    await deleteDictTypeApi(DICT_TYPE_ID, VERSION)
+    expect(mockedDelete).toHaveBeenCalledWith(`/system/dict-type/${DICT_TYPE_ID}/${VERSION}`)
   })
 
   it('分页查询字典数据：GET /system/dict-data/page 且 dictType/keyword 透传', async () => {
@@ -89,7 +92,7 @@ describe('字典模块接口', () => {
     expect(mockedPost).toHaveBeenCalledWith('/system/dict-data', body)
   })
 
-  it('更新字典数据：PUT /system/dict-data/{id}', async () => {
+  it('更新字典数据：PUT /system/dict-data/{id}/{version}', async () => {
     const body = {
       dictType: 'sys_oper_type',
       dictLabel: '修改',
@@ -98,13 +101,13 @@ describe('字典模块接口', () => {
       orderNum: 2,
       status: 0,
     }
-    await updateDictDataApi(DICT_DATA_ID, body)
-    expect(mockedPut).toHaveBeenCalledWith(`/system/dict-data/${DICT_DATA_ID}`, body)
+    await updateDictDataApi(DICT_DATA_ID, VERSION, body)
+    expect(mockedPut).toHaveBeenCalledWith(`/system/dict-data/${DICT_DATA_ID}/${VERSION}`, body)
   })
 
-  it('删除字典数据：DELETE /system/dict-data/{id}', async () => {
-    await deleteDictDataApi(DICT_DATA_ID)
-    expect(mockedDelete).toHaveBeenCalledWith(`/system/dict-data/${DICT_DATA_ID}`)
+  it('删除字典数据：DELETE /system/dict-data/{id}/{version}', async () => {
+    await deleteDictDataApi(DICT_DATA_ID, VERSION)
+    expect(mockedDelete).toHaveBeenCalledWith(`/system/dict-data/${DICT_DATA_ID}/${VERSION}`)
   })
 
   it('按类型查询启用字典项：GET /system/dict-data/type/{dictType}', async () => {

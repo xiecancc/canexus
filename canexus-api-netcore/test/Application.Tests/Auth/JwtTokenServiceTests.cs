@@ -233,6 +233,23 @@ internal sealed class InMemoryRefreshTokenRepository : ISysRefreshTokenRepositor
         => Task.FromResult(_store.FirstOrDefault(t => t.Token == token && t.RevokedAt is null && t.ExpiresAt > now));
 
     /// <inheritdoc />
+    public Task<SysRefreshToken?> GetRevokedByTokenAsync(string token, DateTime now, CancellationToken cancellationToken = default)
+        => Task.FromResult(_store.FirstOrDefault(t => t.Token == token && t.RevokedAt is not null && t.ExpiresAt > now));
+
+    /// <inheritdoc />
+    public Task<int> RevokeAllForSessionAsync(Guid sessionId, DateTime revokedAt, CancellationToken cancellationToken = default)
+    {
+        var count = 0;
+        foreach (var token in _store.Where(t => t.SessionId == sessionId && t.RevokedAt is null && t.ExpiresAt > revokedAt))
+        {
+            token.RevokedAt = revokedAt;
+            count++;
+        }
+
+        return Task.FromResult(count);
+    }
+
+    /// <inheritdoc />
     public Task<int> RevokeAllForUserAsync(Guid userId, DateTime revokedAt, CancellationToken cancellationToken = default)
     {
         var count = 0;

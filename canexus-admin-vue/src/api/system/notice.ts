@@ -5,17 +5,18 @@
  * - GET    /system/notice/page?title=&noticeType=&status=&pageIndex=&pageSize= → PagedResult<NoticeVO>
  * - GET    /system/notice/{id} → NoticeDetail（编辑回显 / 查看全文）
  * - POST   /system/notice → 创建公告
- * - PUT    /system/notice/{id} → 更新公告
- * - DELETE /system/notice/{id} → 删除公告
+ * - PUT    /system/notice/{id}/{version} → 更新公告
+ * - DELETE /system/notice/{id}/{version} → 删除公告
  * - GET    /system/notice/latest?count=5 → NoticeBrief[]（最新公告，首页卡片）
  * - 公告类型 noticeType：1 通知 2 公告（字典 sys_notice_type 尚未种子化，前端暂用本地常量）
  * - 状态 status：1 正常 0 关闭（契约无独立状态接口，行内切换经全量更新实现）
+ * - 乐观锁：更新 / 删除的 URL 均须携带 version，取自列表 / 详情响应的 version 字段（36 位 GUID 字符串）
  */
-import type { PagedRequest, PagedResult } from '@/api/types'
+import type { AggregateVO, PagedRequest, PagedResult } from '@/api/types'
 import request from '@/utils/request'
 
 /** 通知公告列表项 */
-export interface NoticeVO {
+export interface NoticeVO extends AggregateVO {
   /** 公告 ID（GUID 字符串） */
   id: string
   /** 公告标题 */
@@ -82,18 +83,33 @@ export function getNoticeApi(id: string): Promise<NoticeVO> {
 }
 
 /** 创建通知公告 */
-export function createNoticeApi(data: NoticeCreateRequest): Promise<null> {
-  return request.post<null>('/system/notice', data)
+export function createNoticeApi(data: NoticeCreateRequest): Promise<boolean> {
+  return request.post<boolean>('/system/notice', data)
 }
 
-/** 更新通知公告 */
-export function updateNoticeApi(id: string, data: NoticeUpdateRequest): Promise<null> {
-  return request.put<null>(`/system/notice/${id}`, data)
+/**
+ * 更新通知公告。
+ *
+ * @param id 公告 ID（GUID 字符串）
+ * @param version 乐观锁版本号（取自列表 / 详情响应的 version 字段）
+ * @param data 更新数据
+ */
+export function updateNoticeApi(
+  id: string,
+  version: string,
+  data: NoticeUpdateRequest,
+): Promise<boolean> {
+  return request.put<boolean>(`/system/notice/${id}/${version}`, data)
 }
 
-/** 删除通知公告 */
-export function deleteNoticeApi(id: string): Promise<null> {
-  return request.delete<null>(`/system/notice/${id}`)
+/**
+ * 删除通知公告。
+ *
+ * @param id 公告 ID（GUID 字符串）
+ * @param version 乐观锁版本号（取自列表 / 详情响应的 version 字段）
+ */
+export function deleteNoticeApi(id: string, version: string): Promise<boolean> {
+  return request.delete<boolean>(`/system/notice/${id}/${version}`)
 }
 
 /** 查询最新通知公告（首页卡片，缺省取 5 条） */

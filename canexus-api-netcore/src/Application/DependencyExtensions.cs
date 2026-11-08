@@ -24,10 +24,12 @@ public static class DependencyExtensions
         {
             configuration.RegisterServicesFromAssembly(Assembly.GetExecutingAssembly());
 
-            // Pipeline Behaviors：默认审计在最外层（含校验失败与事务回滚后的失败路径；[OperLog] 端点由
-            // OperLogActionFilter 接管去重），验证在最前（失败抛 ValidationException，不开启事务），
-            // 随后用户写命令数据范围守卫（取得目标实体后越权即 403，不进入处理器与事务），
-            // 其后日志与性能监控，事务管道最内层（仅包裹处理器执行，写命令自动开启事务）
+            // Pipeline Behaviors：幂等在最外层（含幂等键时命中即返回，不重复执行审计 / 校验 / 事务）；
+            // 其后审计（含校验失败与事务回滚后的失败路径；[OperLog] 端点由 OperLogActionFilter 接管去重），
+            // 验证（失败抛 ValidationException，不开启事务），用户写命令数据范围守卫
+            //（取得目标实体后越权即 403，不进入处理器与事务），日志与性能监控，
+            // 事务管道最内层（仅包裹处理器执行，写命令自动开启事务）
+            configuration.AddBehavior(typeof(IPipelineBehavior<,>), typeof(IdempotencyBehavior<,>));
             configuration.AddBehavior(typeof(IPipelineBehavior<,>), typeof(AuditLogBehavior<,>));
             configuration.AddBehavior(typeof(IPipelineBehavior<,>), typeof(ValidationBehavior<,>));
             configuration.AddBehavior(typeof(IPipelineBehavior<,>), typeof(UserDataScopeBehavior<,>));

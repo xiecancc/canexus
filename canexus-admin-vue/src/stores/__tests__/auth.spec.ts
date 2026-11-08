@@ -12,7 +12,7 @@ vi.mock('@/utils/request', () => ({
 
 import { createPinia, setActivePinia } from 'pinia'
 import router from '@/router'
-import { ACCESS_TOKEN_KEY, REFRESH_TOKEN_KEY } from '@/utils/token'
+import { ACCESS_TOKEN_KEY, getMustChangePassword, REFRESH_TOKEN_KEY } from '@/utils/token'
 import type { LoginResponse, RouteVO, UserInfo } from '@/api/auth'
 import request from '@/utils/request'
 import { useAuthStore } from '../auth'
@@ -27,7 +27,9 @@ const mockedRequest = request as unknown as {
 const loginResponse: LoginResponse = {
   accessToken: 'access-1',
   refreshToken: 'refresh-1',
-  expiresIn: 7200,
+  // 后端 Jwt:AccessTokenMinutes 当前默认 30 分钟
+  expiresIn: 1800,
+  mustChangePassword: false,
 }
 
 /** 用户信息 mock 响应（超管） */
@@ -85,6 +87,25 @@ describe('useAuthStore 认证状态', () => {
     expect(store.refreshToken).toBe('refresh-1')
     expect(localStorage.getItem(ACCESS_TOKEN_KEY)).toBe('access-1')
     expect(localStorage.getItem(REFRESH_TOKEN_KEY)).toBe('refresh-1')
+  })
+
+  it('login 响应要求强制改密时写入标记，resetAuth 后清除', async () => {
+    mockedRequest.post.mockResolvedValueOnce({ ...loginResponse, mustChangePassword: true })
+    const store = useAuthStore()
+
+    await store.login({
+      userName: 'admin',
+      password: '123456',
+      captchaId: 'captcha-1',
+      captchaCode: 'abcd',
+    })
+
+    expect(store.mustChangePassword).toBe(true)
+    expect(getMustChangePassword()).toBe(true)
+
+    store.resetAuth()
+    expect(store.mustChangePassword).toBe(false)
+    expect(getMustChangePassword()).toBe(false)
   })
 
   it('fetchUserInfo 保存用户信息并派生 roles/permissions', async () => {

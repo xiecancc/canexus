@@ -6,6 +6,7 @@ using API.HealthChecks;
 using API.Middlewares;
 using Application;
 using Domain.Services;
+using Domain.Shared.Localization;
 using Domain.Shared.Results;
 using Infrastructure;
 using Infrastructure.DataAccess;
@@ -149,6 +150,10 @@ public class Program
             WriteCommandValidatorStartupValidator.Validate(
                 typeof(Application.Contracts.Abstractions.ICommand).Assembly,
                 typeof(Application.Validators.Common.WriteCommandValidator<,>).Assembly);
+
+            // 启动期一致性校验（T5 #12）：全部错误码都须在 zh-CN / en-US 两份本地化资源中有非空文案，
+            // 且不得出现无对应常量的多余键；缺失即在启动前汇总报错，避免 en-US 请求静默回退到中文文案
+            ErrorMessageResourceValidator.Validate();
 
             // 反向代理转发头解析（P0-S5）：部署在 Nginx / SLB 之后时（Forwarded:Enabled=true）解析 X-Forwarded-*，
             // 还原真实客户端 IP 供限流分区与操作日志使用；须先于任何消费 RemoteIpAddress 的中间件挂载。

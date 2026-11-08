@@ -39,6 +39,15 @@ public interface ITokenService
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>表示异步操作的任务。</returns>
     public Task RevokeAsync(string refreshToken, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 查询已吊销但尚未过期的刷新令牌记录，用于「令牌家族重用检测」：
+    /// 轮换后的旧令牌若被再次使用，说明该家族可能已泄露，调用方应吊销整个会话。
+    /// </summary>
+    /// <param name="refreshToken">刷新令牌串（明文，内部统一哈希后比对）。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>吊销记录摘要；令牌不存在或已过期返回 null。</returns>
+    public Task<RevokedRefreshTokenInfo?> FindRevokedRefreshTokenAsync(string refreshToken, CancellationToken cancellationToken = default);
 }
 
 /// <summary>令牌对：accessToken + refreshToken 与有效期。</summary>
@@ -54,6 +63,12 @@ public sealed record TokenPair(string AccessToken, string RefreshToken, long Exp
 /// <param name="ExpiresAt">过期时间。</param>
 /// <param name="SessionId">会话标识（历史记录为 Guid.Empty）。</param>
 public sealed record RefreshTokenInfo(Guid Id, string Token, Guid UserId, DateTime ExpiresAt, Guid SessionId);
+
+/// <summary>已吊销刷新令牌摘要（令牌家族重用检测用，不暴露持久化实体）。</summary>
+/// <param name="UserId">所属用户 Id。</param>
+/// <param name="SessionId">会话标识（历史记录为 Guid.Empty）。</param>
+/// <param name="RevokedAt">吊销时间（UTC，用于区分并发轮换与真实重用）。</param>
+public sealed record RevokedRefreshTokenInfo(Guid UserId, Guid SessionId, DateTime RevokedAt);
 
 /// <summary>令牌主题：发放令牌所需的用户身份信息。</summary>
 /// <param name="UserId">用户 Id（写入 sub claim）。</param>

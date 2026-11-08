@@ -22,6 +22,7 @@ import { SYS_NORMAL_DISABLE } from '@/utils/dict'
 function makeItem(value: string, tagType: number): DictDataVO {
   return {
     id: `00000000-0000-0000-0000-${value}`,
+    version: '00000000-0000-0000-0000-000000000001',
     dictType: 'sys_oper_type',
     dictLabel: `标签${value}`,
     dictValue: value,

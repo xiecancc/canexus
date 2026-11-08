@@ -4,6 +4,8 @@ using Application.Contracts.Users;
 using Application.Validators.Common;
 using Domain.Shared.Enums;
 using FluentValidation;
+using Infrastructure.Shared.Options;
+using Microsoft.Extensions.Options;
 
 namespace Application.Validators;
 /// <summary>修改用户状态命令验证器：状态仅允许 1 启用 / 0 停用（错误码与原处理器文案一致）。</summary>
@@ -52,10 +54,11 @@ public sealed class UserUpdateCommandValidator() :
 /// <summary>重置用户密码命令验证器：新密码须满足强度约束（乐观锁版本比对由处理器完成）。</summary>
 public sealed class UserResetPasswordCommandValidator : AbstractValidator<UserResetPasswordCommand>
 {
-    /// <summary>构造函数。</summary>
-    public UserResetPasswordCommandValidator()
+    /// <summary>构造函数：装配可配置口令强度规则。</summary>
+    /// <param name="passwordPolicy">口令强度策略（支持热加载）。</param>
+    public UserResetPasswordCommandValidator(IOptionsMonitor<PasswordPolicyOption> passwordPolicy)
     {
-        RuleFor(command => command.Request.Password).PasswordRule();
+        RuleFor(command => command.Request.Password).PasswordRule(passwordPolicy.CurrentValue);
 
         RuleFor(command => command.Version).NoEmptyRule("乐观锁版本号不能为空，请回传详情 / 列表接口返回的 Version");
     }

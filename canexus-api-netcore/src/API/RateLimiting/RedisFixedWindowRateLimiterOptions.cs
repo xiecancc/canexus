@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using StackExchange.Redis;
 
 namespace API.RateLimiting;
@@ -26,4 +27,7 @@ public sealed class RedisFixedWindowRateLimiterOptions
 
     /// <summary>ConnectionMultiplexer 工厂（由依赖注入提供，连接复用、不重复创建）。</summary>
     public Func<IConnectionMultiplexer> ConnectionMultiplexerFactory { get; set; } = null!;
+
+    /// <summary>日志器（可选）：Redis 后端故障降级放行时记录告警，便于发现限流失效窗口。</summary>
+    public ILogger? Logger { get; set; }
 }

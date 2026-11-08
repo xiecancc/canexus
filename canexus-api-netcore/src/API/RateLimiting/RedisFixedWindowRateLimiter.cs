@@ -66,7 +66,14 @@ public sealed class RedisFixedWindowRateLimiter : RateLimiter
     protected override RateLimitLease AttemptAcquireCore(int permitCount)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(permitCount);
-        return AcquireLeaseSync(permitCount);
+        try
+        {
+            return AcquireLeaseSync(permitCount);
+        }
+        catch (Exception exception) when (IsBackendFailure(exception))
+        {
+            return FailOpen(exception);
+        }
     }
 
     /// <inheritdoc />
@@ -74,7 +81,34 @@ public sealed class RedisFixedWindowRateLimiter : RateLimiter
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(permitCount);
         cancellationToken.ThrowIfCancellationRequested();
-        return await AcquireLeaseAsync(permitCount, cancellationToken);
+        try
+        {
+            return await AcquireLeaseAsync(permitCount, cancellationToken);
+        }
+        catch (Exception exception) when (IsBackendFailure(exception))
+        {
+            // Redis 停机不应把业务请求变成 5xx：限流是保护性设施，故障时 fail-open 放行，
+            // 由告警暴露限流失效窗口（正确性由认证 / 业务幂等 / 数据库约束兜底）
+            return FailOpen(exception);
+        }
+    }
+
+    /// <summary>判定是否属于后端故障（取消与参数错误须原样上抛，不得被降级掩盖）。</summary>
+    /// <param name="exception">捕获到的异常。</param>
+    /// <returns>属于后端故障返回 true。</returns>
+    private static bool IsBackendFailure(Exception exception)
+        => exception is not OperationCanceledException and not ArgumentException;
+
+    /// <summary>后端故障降级：记录告警并返回「已获取」租约。</summary>
+    /// <param name="exception">后端故障异常。</param>
+    /// <returns>允许通行的租约。</returns>
+    private RateLimitLease FailOpen(Exception exception)
+    {
+        _options.Logger?.LogWarning(exception,
+            "Redis 限流后端不可用，已降级放行（fail-open）：策略 {PolicyId} 分区 {PartitionKey}",
+            _options.PolicyId, _options.PartitionKey);
+        Interlocked.Increment(ref _successfulLeases);
+        return new RedisFixedWindowRateLimitLease(true, null);
     }
 
     /// <summary>异步租约获取（限流中间件的常规路径）：TIME 取窗口起点 → Lua 原子计数。</summary>

@@ -4,21 +4,22 @@
  * 契约约定（后端并行开发，以此为准）：
  * - GET    /system/dict-type/page?keyword=&pageIndex=&pageSize= → PagedResult<DictTypeVO>
  * - POST   /system/dict-type                                    → 创建字典类型
- * - PUT    /system/dict-type/{id}                               → 更新字典类型（dictType 不可改）
- * - DELETE /system/dict-type/{id}                               → 删除字典类型（存在字典数据时后端拒绝）
+ * - PUT    /system/dict-type/{id}/{version}                     → 更新字典类型（dictType 不可改）
+ * - DELETE /system/dict-type/{id}/{version}                     → 删除字典类型（存在字典数据时后端拒绝）
  * - GET    /system/dict-data/page?dictType=&keyword=&pageIndex=&pageSize= → PagedResult<DictDataVO>
  * - POST   /system/dict-data                                    → 创建字典数据
- * - PUT    /system/dict-data/{id}                               → 更新字典数据
- * - DELETE /system/dict-data/{id}                               → 删除字典数据
+ * - PUT    /system/dict-data/{id}/{version}                     → 更新字典数据
+ * - DELETE /system/dict-data/{id}/{version}                     → 删除字典数据
  * - GET    /system/dict-data/type/{dictType}                    → 启用状态字典数据列表（前端带缓存，见 useDict）
  * - tagType 标签色：1 primary 2 success 3 info 4 warning 5 danger
  * - status 状态：1 启用 0 停用
+ * - 乐观锁：更新 / 删除的 URL 均须携带 version，取自列表 / 详情响应的 version 字段（36 位 GUID 字符串）
  */
-import type { PagedRequest, PagedResult } from '@/api/types'
+import type { AggregateVO, PagedRequest, PagedResult } from '@/api/types'
 import request from '@/utils/request'
 
 /** 字典类型列表项 */
-export interface DictTypeVO {
+export interface DictTypeVO extends AggregateVO {
   /** 主键（GUID 字符串） */
   id: string
   /** 字典名称 */
@@ -48,7 +49,7 @@ export interface DictTypePageRequest extends PagedRequest {
 }
 
 /** 字典数据列表项 */
-export interface DictDataVO {
+export interface DictDataVO extends AggregateVO {
   /** 主键（GUID 字符串） */
   id: string
   /** 所属字典类型 */
@@ -101,18 +102,33 @@ export function getDictTypePageApi(params: DictTypePageRequest): Promise<PagedRe
 }
 
 /** 创建字典类型 */
-export function createDictTypeApi(data: DictTypeSaveRequest): Promise<null> {
-  return request.post<null>('/system/dict-type', data)
+export function createDictTypeApi(data: DictTypeSaveRequest): Promise<boolean> {
+  return request.post<boolean>('/system/dict-type', data)
 }
 
-/** 更新字典类型（dictType 不可改，回传原值） */
-export function updateDictTypeApi(id: string, data: DictTypeSaveRequest): Promise<null> {
-  return request.put<null>(`/system/dict-type/${id}`, data)
+/**
+ * 更新字典类型（dictType 不可改，回传原值）。
+ *
+ * @param id 字典类型 ID（GUID 字符串）
+ * @param version 乐观锁版本号（取自列表 / 详情响应的 version 字段）
+ * @param data 更新数据
+ */
+export function updateDictTypeApi(
+  id: string,
+  version: string,
+  data: DictTypeSaveRequest,
+): Promise<boolean> {
+  return request.put<boolean>(`/system/dict-type/${id}/${version}`, data)
 }
 
-/** 删除字典类型（存在字典数据时后端拒绝） */
-export function deleteDictTypeApi(id: string): Promise<null> {
-  return request.delete<null>(`/system/dict-type/${id}`)
+/**
+ * 删除字典类型（存在字典数据时后端拒绝）。
+ *
+ * @param id 字典类型 ID（GUID 字符串）
+ * @param version 乐观锁版本号（取自列表 / 详情响应的 version 字段）
+ */
+export function deleteDictTypeApi(id: string, version: string): Promise<boolean> {
+  return request.delete<boolean>(`/system/dict-type/${id}/${version}`)
 }
 
 /** 分页查询字典数据 */
@@ -121,18 +137,33 @@ export function getDictDataPageApi(params: DictDataPageRequest): Promise<PagedRe
 }
 
 /** 创建字典数据 */
-export function createDictDataApi(data: DictDataSaveRequest): Promise<null> {
-  return request.post<null>('/system/dict-data', data)
+export function createDictDataApi(data: DictDataSaveRequest): Promise<boolean> {
+  return request.post<boolean>('/system/dict-data', data)
 }
 
-/** 更新字典数据 */
-export function updateDictDataApi(id: string, data: DictDataSaveRequest): Promise<null> {
-  return request.put<null>(`/system/dict-data/${id}`, data)
+/**
+ * 更新字典数据。
+ *
+ * @param id 字典数据 ID（GUID 字符串）
+ * @param version 乐观锁版本号（取自列表 / 详情响应的 version 字段）
+ * @param data 更新数据
+ */
+export function updateDictDataApi(
+  id: string,
+  version: string,
+  data: DictDataSaveRequest,
+): Promise<boolean> {
+  return request.put<boolean>(`/system/dict-data/${id}/${version}`, data)
 }
 
-/** 删除字典数据 */
-export function deleteDictDataApi(id: string): Promise<null> {
-  return request.delete<null>(`/system/dict-data/${id}`)
+/**
+ * 删除字典数据。
+ *
+ * @param id 字典数据 ID（GUID 字符串）
+ * @param version 乐观锁版本号（取自列表 / 详情响应的 version 字段）
+ */
+export function deleteDictDataApi(id: string, version: string): Promise<boolean> {
+  return request.delete<boolean>(`/system/dict-data/${id}/${version}`)
 }
 
 /** 按字典类型查询启用状态的字典数据列表（启用项，前端经 useDict 带缓存） */

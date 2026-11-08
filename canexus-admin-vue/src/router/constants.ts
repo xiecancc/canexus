@@ -10,3 +10,6 @@ export const DASHBOARD_ROUTE_PATH = '/dashboard'
 
 /** 登录页路径 */
 export const LOGIN_ROUTE_PATH = '/login'
+
+/** 自助修改密码页路径（首次登录强制改密与用户主动改密共用） */
+export const CHANGE_PASSWORD_ROUTE_PATH = '/change-password'

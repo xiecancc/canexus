@@ -7,11 +7,16 @@
  */
 import { createRouter, createWebHistory } from 'vue-router'
 import type { RouteRecordRaw } from 'vue-router'
-import { DASHBOARD_ROUTE_PATH, LAYOUT_ROUTE_NAME } from './constants'
+import { CHANGE_PASSWORD_ROUTE_PATH, DASHBOARD_ROUTE_PATH, LAYOUT_ROUTE_NAME } from './constants'
 import { setupRouterGuard } from './guards'
 
 // 常量统一收敛至 ./constants（重新导出保持既有导入路径兼容）
-export { DASHBOARD_ROUTE_PATH, LAYOUT_ROUTE_NAME, LOGIN_ROUTE_PATH } from './constants'
+export {
+  CHANGE_PASSWORD_ROUTE_PATH,
+  DASHBOARD_ROUTE_PATH,
+  LAYOUT_ROUTE_NAME,
+  LOGIN_ROUTE_PATH,
+} from './constants'
 
 /** 路由元信息约定 */
 declare module 'vue-router' {
@@ -40,6 +45,13 @@ export const constantRoutes: RouteRecordRaw[] = [
     name: 'Login',
     component: () => import('@/views/login/index.vue'),
     meta: { title: '登录', hidden: true },
+  },
+  {
+    // 自助改密页：须已登录才能访问（守卫校验令牌），待改密用户仅可停留此页
+    path: CHANGE_PASSWORD_ROUTE_PATH,
+    name: 'ChangePassword',
+    component: () => import('@/views/login/ChangePassword.vue'),
+    meta: { title: '修改密码', hidden: true },
   },
   {
     path: '/',

@@ -27,6 +27,9 @@ const EMPTY_GUID = '00000000-0000-0000-0000-000000000000'
 /** 测试用部门 ID（GUID 字符串） */
 const DEPT_ID = '00000000-0000-0000-0000-000000000004'
 
+/** 测试用乐观锁版本号（GUID 字符串，取自列表 / 详情响应的 version 字段） */
+const VERSION = '00000000-0000-0000-0000-00000000000a'
+
 describe('部门模块接口', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -63,7 +66,7 @@ describe('部门模块接口', () => {
     expect(mockedPost).toHaveBeenCalledWith('/system/dept', body)
   })
 
-  it('更新部门：PUT /system/dept/{id}', async () => {
+  it('更新部门：PUT /system/dept/{id}/{version}', async () => {
     const body = {
       parentId: EMPTY_GUID,
       deptName: '研发部',
@@ -73,12 +76,12 @@ describe('部门模块接口', () => {
       email: '',
       status: 1,
     }
-    await updateDeptApi(DEPT_ID, body)
-    expect(mockedPut).toHaveBeenCalledWith(`/system/dept/${DEPT_ID}`, body)
+    await updateDeptApi(DEPT_ID, VERSION, body)
+    expect(mockedPut).toHaveBeenCalledWith(`/system/dept/${DEPT_ID}/${VERSION}`, body)
   })
 
-  it('删除部门：DELETE /system/dept/{id}', async () => {
-    await deleteDeptApi(DEPT_ID)
-    expect(mockedDelete).toHaveBeenCalledWith(`/system/dept/${DEPT_ID}`)
+  it('删除部门：DELETE /system/dept/{id}/{version}', async () => {
+    await deleteDeptApi(DEPT_ID, VERSION)
+    expect(mockedDelete).toHaveBeenCalledWith(`/system/dept/${DEPT_ID}/${VERSION}`)
   })
 })

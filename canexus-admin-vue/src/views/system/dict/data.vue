@@ -63,7 +63,7 @@ function handleBack(): void {
 /** 行内切换状态（契约 PUT 为全量更新，提交完整字段；失败由组合式回滚） */
 async function handleStatusChange(row: DictDataVO): Promise<void> {
   const success = await commitStatusToggle(row, (status) =>
-    updateDictDataApi(row.id, {
+    updateDictDataApi(row.id, row.version, {
       dictType: row.dictType,
       dictLabel: row.dictLabel,
       dictValue: row.dictValue,
@@ -90,7 +90,7 @@ async function handleDelete(row: DictDataVO): Promise<void> {
   if (!confirmed) {
     return
   }
-  await deleteDictDataApi(row.id)
+  await deleteDictDataApi(row.id, row.version)
   ElMessage.success('删除成功')
   if (items.value.length === 1 && pageIndex.value > 1) {
     pageIndex.value -= 1

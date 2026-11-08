@@ -28,6 +28,12 @@ const mockedPost = request.post as unknown as Mock
 const mockedPut = request.put as unknown as Mock
 const mockedDelete = request.delete as unknown as Mock
 
+/** 测试用参数 ID（GUID 字符串） */
+const CONFIG_ID = '00000000-0000-0000-0000-000000000005'
+
+/** 测试用乐观锁版本号（GUID 字符串，取自列表响应的 version 字段） */
+const VERSION = '00000000-0000-0000-0000-00000000000a'
+
 describe('参数配置模块接口', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -53,17 +59,14 @@ describe('参数配置模块接口', () => {
     expect(mockedPost).toHaveBeenCalledWith('/system/config', body)
   })
 
-  it('更新参数：PUT /system/config/{id}', async () => {
+  it('更新参数：PUT /system/config/{id}/{version}', async () => {
     const body = { configName: '主框架皮肤', configKey: 'sys.index.skinName', configValue: 'light' }
-    await updateConfigApi('00000000-0000-0000-0000-000000000005', body)
-    expect(mockedPut).toHaveBeenCalledWith(
-      '/system/config/00000000-0000-0000-0000-000000000005',
-      body,
-    )
+    await updateConfigApi(CONFIG_ID, VERSION, body)
+    expect(mockedPut).toHaveBeenCalledWith(`/system/config/${CONFIG_ID}/${VERSION}`, body)
   })
 
-  it('删除参数：DELETE /system/config/{id}', async () => {
-    await deleteConfigApi('00000000-0000-0000-0000-000000000005')
-    expect(mockedDelete).toHaveBeenCalledWith('/system/config/00000000-0000-0000-0000-000000000005')
+  it('删除参数：DELETE /system/config/{id}/{version}', async () => {
+    await deleteConfigApi(CONFIG_ID, VERSION)
+    expect(mockedDelete).toHaveBeenCalledWith(`/system/config/${CONFIG_ID}/${VERSION}`)
   })
 })

@@ -4,6 +4,7 @@ using System.Threading.RateLimiting;
 using API.Middlewares;
 using API.RateLimiting;
 using Domain.Shared.Results;
+using Infrastructure.Redis;
 using Infrastructure.Shared.Options;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Cors.Infrastructure;
@@ -105,7 +106,8 @@ public static class SecurityDependencyExtensions
 
         // Redis 分布式限流复用单一 ConnectionMultiplexer（懒创建：仅 UseRedis=true 且首次解析限流选项时建立连接）
         services.AddSingleton<IConnectionMultiplexer>(sp => ConnectionMultiplexer.Connect(
-            sp.GetRequiredService<IOptionsMonitor<RateLimitOption>>().CurrentValue.RedisConfiguration));
+            RedisConnectionOptions.Create(
+                sp.GetRequiredService<IOptionsMonitor<RateLimitOption>>().CurrentValue.RedisConfiguration)));
 
         // 限流参数从 RateLimitOption（IOptionsMonitor）注入，经 Options 管道在首次解析时定型（限流参数不支持热加载）
         services.AddOptions<RateLimiterOptions>()
@@ -155,7 +157,8 @@ public static class SecurityDependencyExtensions
                                 KeyPrefix = option.RedisKeyPrefix,
                                 PolicyId = AuthRateLimitPolicy,
                                 PartitionKey = key,
-                                ConnectionMultiplexerFactory = () => multiplexer
+                                ConnectionMultiplexerFactory = () => multiplexer,
+                                Logger = serviceProvider.GetRequiredService<ILogger<RedisFixedWindowRateLimiter>>()
                             }));
                     }
 
@@ -191,7 +194,8 @@ public static class SecurityDependencyExtensions
                                     KeyPrefix = option.RedisKeyPrefix,
                                     PolicyId = "global",
                                     PartitionKey = key,
-                                    ConnectionMultiplexerFactory = () => multiplexer
+                                    ConnectionMultiplexerFactory = () => multiplexer,
+                                    Logger = serviceProvider.GetRequiredService<ILogger<RedisFixedWindowRateLimiter>>()
                                 }));
                         }
 

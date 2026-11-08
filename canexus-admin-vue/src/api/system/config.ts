@@ -5,14 +5,14 @@
  * - GET    /system/config/page?keyword=&pageIndex=&pageSize= → PagedResult<ConfigVO>
  * - GET    /system/config/key/{configKey}                    → data 为参数值字符串
  * - POST   /system/config                                    → 创建参数
- * - PUT    /system/config/{id}                               → 更新参数
- * - DELETE /system/config/{id}                               → 删除参数（builtIn 内置参数后端拒绝删除，前端禁用按钮）
+ * - PUT    /system/config/{id}/{version}                     → 更新参数
+ * - DELETE /system/config/{id}/{version}                     → 删除参数（builtIn 内置参数后端拒绝删除，前端禁用按钮）
  */
-import type { PagedRequest, PagedResult } from '@/api/types'
+import type { AggregateVO, PagedRequest, PagedResult } from '@/api/types'
 import request from '@/utils/request'
 
 /** 参数配置列表项 */
-export interface ConfigVO {
+export interface ConfigVO extends AggregateVO {
   /** 主键（GUID 字符串） */
   id: string
   /** 参数名称 */
@@ -58,16 +58,31 @@ export function getConfigByKeyApi(configKey: string): Promise<string> {
 }
 
 /** 创建参数 */
-export function createConfigApi(data: ConfigSaveRequest): Promise<null> {
-  return request.post<null>('/system/config', data)
+export function createConfigApi(data: ConfigSaveRequest): Promise<boolean> {
+  return request.post<boolean>('/system/config', data)
 }
 
-/** 更新参数 */
-export function updateConfigApi(id: string, data: ConfigSaveRequest): Promise<null> {
-  return request.put<null>(`/system/config/${id}`, data)
+/**
+ * 更新参数。
+ *
+ * @param id 参数 ID（GUID 字符串）
+ * @param version 乐观锁版本号（取自列表 / 详情响应的 version 字段）
+ * @param data 更新数据
+ */
+export function updateConfigApi(
+  id: string,
+  version: string,
+  data: ConfigSaveRequest,
+): Promise<boolean> {
+  return request.put<boolean>(`/system/config/${id}/${version}`, data)
 }
 
-/** 删除参数（builtIn 内置参数后端拒绝） */
-export function deleteConfigApi(id: string): Promise<null> {
-  return request.delete<null>(`/system/config/${id}`)
+/**
+ * 删除参数（builtIn 内置参数后端拒绝）。
+ *
+ * @param id 参数 ID（GUID 字符串）
+ * @param version 乐观锁版本号（取自列表 / 详情响应的 version 字段）
+ */
+export function deleteConfigApi(id: string, version: string): Promise<boolean> {
+  return request.delete<boolean>(`/system/config/${id}/${version}`)
 }

@@ -30,6 +30,9 @@ const isEdit = ref(false)
 /** 当前编辑的租户 ID */
 const editId = ref('')
 
+/** 当前编辑租户的乐观锁版本号（取自行数据，写请求回传至 URL） */
+const editVersion = ref('')
+
 /** 提交中 */
 const submitting = ref(false)
 
@@ -68,6 +71,7 @@ const rules: FormRules = {
 async function open(mode: 'create' | 'edit', row?: TenantVO): Promise<void> {
   isEdit.value = mode === 'edit'
   editId.value = row?.id ?? ''
+  editVersion.value = row?.version ?? ''
   Object.assign(form, getDefaultForm(), {
     tenantKey: row?.tenantKey ?? '',
     tenantName: row?.tenantName ?? '',
@@ -98,7 +102,7 @@ async function handleSubmit(): Promise<void> {
       expireTime: form.expireTime || undefined,
     }
     if (isEdit.value) {
-      await updateTenantApi(editId.value, data)
+      await updateTenantApi(editId.value, editVersion.value, data)
       ElMessage.success('修改成功')
     } else {
       await createTenantApi(data)

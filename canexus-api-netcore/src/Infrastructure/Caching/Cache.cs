@@ -1,4 +1,5 @@
 
+using Infrastructure.Redis;
 using Infrastructure.Shared.Caching;
 using Infrastructure.Shared.Options;
 using Microsoft.Extensions.Caching.Hybrid;
@@ -59,11 +60,21 @@ public sealed class Cache(HybridCache cache, IOptionsMonitor<CacheOption> monito
         // 说明：HybridCache 10.x 的 GetValueOrDefault 仅查询 L2 分布式缓存、不读 L1，
         // 因此此处用 GetOrCreateAsync 包装（factory 恒返回 default 以实现"只读不回源"语义，
         // L1 → L2 逐级读取，均未命中时返回 default(T)）。
+        //
+        // flags 禁用两级写入是「只读」语义的关键：HybridCache 默认会把 factory 结果也写入缓存，
+        // 对值类型而言就是缓存 false / 0（例如会话吊销状态），会把一次「未命中」固化成
+        // TTL 内的确定性假值，后续显式 SetAsync 之前其他实例读到的都是旧假值。禁止写入后，
+        // 「不存在」永远表示未命中，只有调用方显式 SetAsync 的值才会在 L1 / L2 中存在。
         try
         {
             return await cache.GetOrCreateAsync<T?>(
                 key,
                 _ => ValueTask.FromResult(default(T)),
+                new HybridCacheEntryOptions
+                {
+                    Flags = HybridCacheEntryFlags.DisableLocalCacheWrite
+                        | HybridCacheEntryFlags.DisableDistributedCacheWrite
+                },
                 cancellationToken: cancellationToken);
         }
         catch (Exception exception)
@@ -163,7 +174,8 @@ public sealed class Cache(HybridCache cache, IOptionsMonitor<CacheOption> monito
         {
             if (_broadcastRedis is null)
             {
-                var multiplexer = await ConnectionMultiplexer.ConnectAsync(Option.RedisConfiguration);
+                var multiplexer = await ConnectionMultiplexer.ConnectAsync(
+                    RedisConnectionOptions.Create(Option.RedisConfiguration));
                 var subscriber = multiplexer.GetSubscriber();
                 await subscriber.SubscribeAsync(
                     RedisChannel.Literal(InvalidationChannel),

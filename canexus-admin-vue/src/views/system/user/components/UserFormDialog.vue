@@ -2,7 +2,7 @@
 /**
  * 新增 / 编辑用户对话框。
  *
- * - 新增：账号可填、初始密码可选填（不填默认 123456）
+ * - 新增：账号可填、初始密码可选填（留空则使用后端参数 sys.user.initPassword，该账号首登须改密）
  * - 编辑：账号只读、不修改密码，仅更新昵称/部门/联系方式/状态/角色/备注
  * - 部门选择复用父级传入的部门树数据，角色选项来自 /system/role/all
  */
@@ -39,6 +39,9 @@ const isEdit = ref(false)
 /** 当前编辑的用户 ID */
 const editId = ref('')
 
+/** 当前编辑用户的乐观锁版本号（取自详情响应，写请求回传至 URL） */
+const editVersion = ref('')
+
 /** 提交中 */
 const submitting = ref(false)
 
@@ -70,6 +73,9 @@ const PHONE_PATTERN = /^1[3-9]\d{9}$/
 /** 邮箱格式 */
 const EMAIL_PATTERN = /^[\w.+-]+@[\w-]+(\.[\w-]+)+$/
 
+/** 密码强度：与后端一致，6-20 位且同时包含字母与数字，不允许空白字符 */
+const PWD_PATTERN = /^(?=.*[A-Za-z])(?=.*\d)[^\s]{6,20}$/
+
 /** 表单校验规则 */
 const rules: FormRules = {
   userName: [
@@ -80,7 +86,7 @@ const rules: FormRules = {
     { required: true, message: '请输入昵称', trigger: 'blur' },
     { max: 30, message: '昵称不能超过 30 个字符', trigger: 'blur' },
   ],
-  password: [{ min: 5, max: 20, message: '密码长度为 5 到 20 位', trigger: 'blur' }],
+  password: [{ min: 6, max: 20, message: '密码长度为 6 到 20 位', trigger: 'blur' }],
   email: [{ pattern: EMAIL_PATTERN, message: '邮箱格式不正确', trigger: 'blur' }],
   phone: [{ pattern: PHONE_PATTERN, message: '手机号格式不正确', trigger: 'blur' }],
 }
@@ -106,6 +112,7 @@ async function loadRoles(): Promise<void> {
 async function open(mode: 'create' | 'edit', row?: UserVO): Promise<void> {
   isEdit.value = mode === 'edit'
   editId.value = row?.id ?? ''
+  editVersion.value = row?.version ?? ''
   Object.assign(form, getDefaultForm())
   visible.value = true
   await nextTick()
@@ -114,6 +121,7 @@ async function open(mode: 'create' | 'edit', row?: UserVO): Promise<void> {
   if (isEdit.value) {
     try {
       const detail = await getUserApi(editId.value)
+      editVersion.value = detail.version
       Object.assign(form, {
         userName: detail.userName,
         nickName: detail.nickName,
@@ -136,10 +144,15 @@ async function handleSubmit(): Promise<void> {
   if (!valid) {
     return
   }
+  // 可选填的初始密码若填写，须与后端强度规则一致（6-20 位含字母与数字）
+  if (!isEdit.value && form.password && !PWD_PATTERN.test(form.password)) {
+    ElMessage.warning('密码需为 6-20 位，且同时包含字母和数字')
+    return
+  }
   submitting.value = true
   try {
     if (isEdit.value) {
-      await updateUserApi(editId.value, {
+      await updateUserApi(editId.value, editVersion.value, {
         nickName: form.nickName.trim(),
         deptId: form.deptId ?? '',
         email: form.email.trim(),
@@ -198,7 +211,7 @@ defineExpose({ open })
           v-model="form.password"
           type="password"
           show-password
-          placeholder="不填则默认为 123456"
+          placeholder="不填则使用系统参数 sys.user.initPassword 的初始密码（首登须修改）"
           maxlength="20"
           autocomplete="new-password"
         />

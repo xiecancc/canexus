@@ -8,10 +8,12 @@ using Domain.Services.Storage;
 using Domain.Services.Users;
 using Infrastructure.Auth;
 using Infrastructure.Caching;
+using Infrastructure.Contexts;
 using Infrastructure.DataAccess;
 using Infrastructure.Filtering;
 using Infrastructure.Locking;
 using Infrastructure.Notifications;
+using Infrastructure.Redis;
 using Infrastructure.Repositories;
 using Infrastructure.Scheduling;
 using Infrastructure.Shared.Caching;
@@ -99,6 +101,9 @@ public static class DependencyExtensions
         services.RegisterOption<BootstrapOption>(configuration, "Bootstrap");
         services.RegisterOption<DatabaseOption>(configuration, "Database");
         services.RegisterOption<JwtOption>(configuration, "Jwt");
+        services.RegisterOption<PasswordPolicyOption>(configuration, "Security:PasswordPolicy");
+        services.RegisterOption<LoginLockOption>(configuration, "Security:LoginLock");
+        services.RegisterOption<ExportOption>(configuration, "Export");
         services.RegisterOption<CorsOption>(configuration, "Cors");
         services.RegisterOption<RateLimitOption>(configuration, "RateLimit");
         services.RegisterOption<HttpsOption>(configuration, "Https");
@@ -121,8 +126,10 @@ public static class DependencyExtensions
     /// <returns>服务集合。</returns>
     public static IServiceCollection AddSecurity(this IServiceCollection services)
     {
-        // 当前用户上下文：单例 + IHttpContextAccessor，请求间天然隔离
-        services.AddSingleton<IUserContext, HttpContextUserContext>();
+        // 当前用户上下文：单例 + IHttpContextAccessor，请求间天然隔离。
+        // AR-06：AddDataAccess 也以 TryAddSingleton 注册同一实现（供独立装配数据访问的集成测试使用）。
+        // 两处统一用 TryAdd，保证任意装配顺序下都只有一份描述符，避免「最后一个注册生效」的隐式行为。
+        services.TryAddSingleton<IUserContext, HttpContextUserContext>();
 
         // 密码哈希（BCrypt）：无状态单例
         services.AddSingleton<IPasswordHasher, BCryptPasswordHasher>();
@@ -237,6 +244,13 @@ public static class DependencyExtensions
         // 定时任务调度管理（依赖 scoped 仓储，随请求作用域创建）
         services.AddScoped<IJobScheduleManager, JobScheduleManager>();
 
+        // 已登记业务作业（T5 #4）：由 JobTypeResolver 白名单映射到稳定短标识，
+        // JobExecuteWrapper 经作业执行作用域的 IServiceProvider 解析实例，故按 scoped 注册；
+        // 未登记时包装器会回退 Activator.CreateInstance，但依赖注入的作业必须显式登记
+        services.AddScoped<NoOpJob>();
+        services.AddScoped<LogRetentionJob>();
+        services.AddScoped<RefreshTokenCleanupJob>();
+
         // 调度器运行信息提供者（监控端点消费）
         services.AddScoped<ISchedulerInfoProvider, SchedulerInfoProvider>();
 
@@ -269,7 +283,7 @@ public static class DependencyExtensions
             return option.RedisEnabled
                 ? new RedisCache(Options.Create(new RedisCacheOptions
                 {
-                    Configuration = option.RedisConfiguration,
+                    ConfigurationOptions = RedisConnectionOptions.Create(option.RedisConfiguration),
                     InstanceName = option.InstanceName
                 }))
                 : new MemoryDistributedCache(Options.Create(new MemoryDistributedCacheOptions()));
@@ -308,6 +322,7 @@ public static class DependencyExtensions
         services.AddSingleton<ITenantContext, TenantContext>();
         services.AddSingleton<IDataFilter, DataFilter>();
         services.AddHttpContextAccessor();
+        services.TryAddSingleton<IIdempotencyContext, HttpIdempotencyContext>();
         services.AddSingleton<ISqlSugarClient>(serviceProvider =>
             SqlSugarClientFactory.Create(serviceProvider.GetRequiredService<IOptionsMonitor<DatabaseOption>>(), serviceProvider));
         services.AddScoped(typeof(IDomainRepository<>), typeof(DomainRepository<>));

@@ -44,7 +44,7 @@ const {
 /** 行内切换状态：契约无独立状态接口，用行数据全量更新提交，失败由组合式回滚 */
 async function handleStatusChange(row: TenantVO): Promise<void> {
   const success = await commitStatusToggle(row, (status) =>
-    updateTenantApi(row.id, {
+    updateTenantApi(row.id, row.version, {
       tenantKey: row.tenantKey,
       tenantName: row.tenantName,
       contactPhone: row.contactPhone,
@@ -70,7 +70,7 @@ async function handleDelete(row: TenantVO): Promise<void> {
   if (!confirmed) {
     return
   }
-  await deleteTenantApi(row.id)
+  await deleteTenantApi(row.id, row.version)
   ElMessage.success('删除成功')
   if (items.value.length === 1 && pageIndex.value > 1) {
     pageIndex.value -= 1

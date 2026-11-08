@@ -8,6 +8,7 @@ import { useFullscreen } from '@vueuse/core'
 import { ElMessage } from 'element-plus'
 import AppIcon from '@/components/AppIcon.vue'
 import AppBreadcrumb from './AppBreadcrumb.vue'
+import { CHANGE_PASSWORD_ROUTE_PATH } from '@/router/constants'
 import { DEFAULT_PRIMARY, useAppStore } from '@/stores/app'
 import type { ThemeMode } from '@/stores/app'
 import { useAuthStore } from '@/stores/auth'
@@ -47,6 +48,9 @@ function handleUserCommand(command: string): void {
   if (command === 'profile') {
     // 个人中心暂为占位功能
     ElMessage.info('个人中心建设中')
+  } else if (command === 'change-password') {
+    // 自助改密：后端改密成功后会吊销全部刷新令牌并强制重新登录
+    router.push(CHANGE_PASSWORD_ROUTE_PATH)
   } else if (command === 'logout') {
     handleLogout()
   }
@@ -126,6 +130,7 @@ async function handleLogout(): Promise<void> {
         <template #dropdown>
           <el-dropdown-menu>
             <el-dropdown-item command="profile">个人中心</el-dropdown-item>
+            <el-dropdown-item command="change-password">修改密码</el-dropdown-item>
             <el-dropdown-item divided command="logout">退出登录</el-dropdown-item>
           </el-dropdown-menu>
         </template>

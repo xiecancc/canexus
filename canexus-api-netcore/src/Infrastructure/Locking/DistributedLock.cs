@@ -1,4 +1,5 @@
 
+using Infrastructure.Redis;
 using Infrastructure.Shared.Locking;
 using Infrastructure.Shared.Options;
 using Microsoft.Extensions.Logging;
@@ -113,7 +114,8 @@ public sealed class DistributedLock(IOptionsMonitor<CacheOption> monitor, ILogge
         {
             if (_redis is null)
             {
-                _redis = await ConnectionMultiplexer.ConnectAsync(monitor.CurrentValue.RedisConfiguration);
+                _redis = await ConnectionMultiplexer.ConnectAsync(
+                    RedisConnectionOptions.Create(monitor.CurrentValue.RedisConfiguration));
             }
         }
         finally

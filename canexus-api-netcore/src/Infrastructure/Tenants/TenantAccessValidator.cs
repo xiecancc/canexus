@@ -1,8 +1,8 @@
 using Domain.Entities;
-using Domain.Repositories;
 using Domain.Shared.Enums;
 using Infrastructure.Shared.Caching;
 using Infrastructure.Shared.Tenants;
+using SqlSugar;
 
 namespace Infrastructure.Tenants;
 /// <summary>
@@ -12,10 +12,10 @@ namespace Infrastructure.Tenants;
 /// <see cref="InvalidateAsync"/> 主动失效，使状态变更近实时生效。</para>
 /// </summary>
 /// <remarks>构造函数。</remarks>
-/// <param name="tenantRepository">租户聚合仓储。</param>
+/// <param name="client">SqlSugar 客户端（平台级租户表需绕开租户过滤器，与 TokenVersionService 读 SysUser 同范式）。</param>
 /// <param name="cache">双层缓存。</param>
 public sealed class TenantAccessValidator(
-    IAggregateRepository<SysTenant> tenantRepository,
+    ISqlSugarClient client,
     ICache cache) : ITenantAccessValidator
 {
     /// <summary>缓存键前缀。</summary>
@@ -28,7 +28,15 @@ public sealed class TenantAccessValidator(
             CacheKeyPrefix + tenantId,
             async token =>
             {
-                var tenant = await tenantRepository.GetAsync([it => it.Id == tenantId], token);
+                // sys_tenant 是平台级全局表（TenantId IS NULL），但 TenantResolutionMiddleware 在认证前
+                // 已把 X-Tenant-Id 写入 ITenantContext；若走通用仓储，查询会被「it.TenantId == 当前租户」
+                // 过滤器屏蔽，冷缓存时把存在且启用的租户误判为 NotFound（V-01 实测复现）。
+                // 这里显式 ClearFilter 只作用于本查询（SqlSugar 原生 API），同时补回软删除语义，
+                // 不改变全局过滤器注册机制，也不影响其他实体的租户隔离。
+                var tenant = await client.Queryable<SysTenant>()
+                    .ClearFilter<SysTenant>()
+                    .Where(it => it.Id == tenantId && !it.IsDeleted)
+                    .FirstAsync(token);
                 return new TenantCacheState(
                     tenant is not null,
                     tenant?.Status ?? CommonStatus.Disabled,

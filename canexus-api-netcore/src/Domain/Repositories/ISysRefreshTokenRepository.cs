@@ -16,6 +16,23 @@ public interface ISysRefreshTokenRepository : IAggregateRepository<SysRefreshTok
     /// <returns>活跃令牌实体；无效时返回 null。</returns>
     public Task<SysRefreshToken?> GetActiveByTokenAsync(string token, DateTime now, CancellationToken cancellationToken = default);
 
+    /// <summary>按令牌哈希查询已吊销且未过期的记录（令牌家族重用检测）。</summary>
+    /// <param name="token">令牌哈希值。</param>
+    /// <param name="now">当前时间（UTC）。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>吊销记录；不存在或已过期返回 null。</returns>
+    public Task<SysRefreshToken?> GetRevokedByTokenAsync(string token, DateTime now, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 吊销同一会话（令牌家族）的全部活跃令牌；使用独立连接执行，
+    /// 保证「检测到重用 → 抛异常回滚业务事务」时安全吊销仍然生效。
+    /// </summary>
+    /// <param name="sessionId">会话标识。</param>
+    /// <param name="revokedAt">吊销时间（UTC）。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>受影响行数。</returns>
+    public Task<int> RevokeAllForSessionAsync(Guid sessionId, DateTime revokedAt, CancellationToken cancellationToken = default);
+
     /// <summary>吊销指定用户的全部活跃令牌（强制下线全部会话），单条 UPDATE 完成。</summary>
     /// <param name="userId">用户 Id。</param>
     /// <param name="revokedAt">吊销时间。</param>

@@ -4,6 +4,7 @@ using Domain.Repositories;
 using Domain.Services;
 using Domain.Shared.Enums;
 using Domain.Shared.Exceptions;
+using Domain.Shared.Jobs;
 using Domain.Shared.Results;
 using Infrastructure.Shared.Locking;
 using Infrastructure.Shared.Options;
@@ -14,7 +15,8 @@ using Quartz.Impl.Matchers;
 namespace Infrastructure.Scheduling;
 /// <summary>
 /// 定时任务调度管理实现（Quartz）：JobKey 以「sys_job_{Id}」为名称、JobGroup 为分组，
-/// 实际入调度的是包装任务（JobExecuteWrapper / DisallowConcurrent 变体），目标 IJob 类型由包装任务反射解析。
+/// 实际入调度的是包装任务（JobExecuteWrapper / DisallowConcurrent 变体），目标 IJob 类型由包装任务经白名单注册表解析；
+/// JobDataMap 携带业务任务 Id 与作业参数（T5 #4），重试/恢复/misfire 全部沿用 Quartz 原生能力。
 /// <para>同步策略（P1-C）：启动装载与单任务入调度均采用「差异比对后 add / update / delete」，不再无条件
 /// DeleteJob + ScheduleJob；定义未变化时保留既有 Trigger（不重置下次触发时间），仅 Cron 变更时 RescheduleJob。
 /// 启动同步由持有分布式锁的实例执行（滚动发布时其余副本跳过，持锁副本完成全量同步）。</para>
@@ -188,17 +190,31 @@ public sealed class JobScheduleManager(
     /// <returns>JobKey。</returns>
     private static JobKey BuildJobKey(Guid jobId, string jobGroup) => new($"sys_job_{jobId}", jobGroup);
 
-    /// <summary>构造任务定义（包装任务类型按 Concurrent 选择，JobData 携带业务任务 Id）。</summary>
+    /// <summary>
+    /// 构造任务定义（包装任务类型按 Concurrent 选择，JobData 携带业务任务 Id 与作业参数）。
+    /// <para>作业参数逐项写入 Quartz 原生 JobDataMap，目标 IJob 直接从 MergedJobDataMap 读取；
+    /// 额外写入规范化签名键供 <see cref="IsJobDetailChanged"/> 做差异比对（参数一变即替换 JobDetail）。
+    /// 不自研参数绑定 / 重试 / 超时框架：恢复与 misfire 沿用 Quartz 原生能力。</para>
+    /// </summary>
     /// <param name="job">任务定义。</param>
     /// <param name="jobKey">调度键。</param>
     /// <returns>JobDetail。</returns>
     private static IJobDetail BuildJobDetail(SysJob job, JobKey jobKey)
     {
-        return JobBuilder
+        var parameters = JobParameters.Parse(job.ParametersJson);
+        var builder = JobBuilder
             .Create(job.Concurrent ? typeof(JobExecuteWrapper) : typeof(JobExecuteWrapperDisallowConcurrent))
             .WithIdentity(jobKey)
             .WithDescription(job.JobName)
-            .UsingJobData(JobExecuteWrapper.JobIdKey, job.Id.ToString())
+            .UsingJobData(JobExecuteWrapper.JobIdKey, job.Id.ToString());
+
+        foreach (var parameter in parameters)
+        {
+            builder.UsingJobData(parameter.Key, parameter.Value);
+        }
+
+        return builder
+            .UsingJobData(JobParameters.SignatureKey, JobParameters.Signature(parameters))
             // 执行期包装器把失败传播为 JobExecutionException，此处登记恢复语义供调度器在实例故障后重跑
             .RequestRecovery()
             .StoreDurably()
@@ -232,7 +248,7 @@ public sealed class JobScheduleManager(
             : builder.WithMisfireHandlingInstructionFireAndProceed();
     }
 
-    /// <summary>判断既有 JobDetail 是否需要替换（包装类型、描述、业务任务 Id 任一变化）。</summary>
+    /// <summary>判断既有 JobDetail 是否需要替换（包装类型、描述、业务任务 Id、作业参数签名任一变化）。</summary>
     /// <param name="existing">既有定义。</param>
     /// <param name="desired">期望定义。</param>
     /// <returns>需要替换返回 true。</returns>
@@ -244,12 +260,26 @@ public sealed class JobScheduleManager(
             return true;
         }
 
-        var existingJobId = existing.JobDataMap.ContainsKey(JobExecuteWrapper.JobIdKey)
-            ? existing.JobDataMap.GetString(JobExecuteWrapper.JobIdKey)
-            : null;
-        var desiredJobId = desired.JobDataMap.GetString(JobExecuteWrapper.JobIdKey);
-        return !string.Equals(existingJobId, desiredJobId, StringComparison.Ordinal);
+        var existingJobId = ReadJobData(existing, JobExecuteWrapper.JobIdKey);
+        var desiredJobId = ReadJobData(desired, JobExecuteWrapper.JobIdKey);
+        if (!string.Equals(existingJobId, desiredJobId, StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        // 参数签名：升级前持久化的 JobDetail 没有该键，按空串处理，避免每次启动都误判为「已变更」而反复替换
+        return !string.Equals(
+            ReadJobData(existing, JobParameters.SignatureKey),
+            ReadJobData(desired, JobParameters.SignatureKey),
+            StringComparison.Ordinal);
     }
+
+    /// <summary>读取 JobDataMap 字符串键；键不存在时返回空串。</summary>
+    /// <param name="detail">任务定义。</param>
+    /// <param name="key">键名。</param>
+    /// <returns>键值或空串。</returns>
+    private static string ReadJobData(IJobDetail detail, string key) =>
+        detail.JobDataMap.ContainsKey(key) ? detail.JobDataMap.GetString(key) ?? string.Empty : string.Empty;
 
     /// <summary>读取触发器 Cron 表达式（非 Cron 触发器返回 null）。</summary>
     /// <param name="trigger">触发器。</param>

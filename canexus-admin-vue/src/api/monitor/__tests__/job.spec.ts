@@ -33,6 +33,9 @@ const mockedDelete = request.delete as unknown as Mock
 /** 测试用任务 ID（GUID 字符串） */
 const JOB_ID = '00000000-0000-0000-0000-000000000003'
 
+/** 测试用乐观锁版本号（GUID 字符串，取自列表响应的 version 字段） */
+const VERSION = '00000000-0000-0000-0000-00000000000a'
+
 describe('定时任务模块接口', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -51,7 +54,7 @@ describe('定时任务模块接口', () => {
       jobName: '数据清理',
       jobGroup: 'DEFAULT',
       cronExpression: '0 0/30 * * * ?',
-      jobType: 'System.Jobs.JobCleanJob',
+      jobType: 'noop',
       status: 0,
       concurrent: 1,
     }
@@ -59,32 +62,34 @@ describe('定时任务模块接口', () => {
     expect(mockedPost).toHaveBeenCalledWith('/monitor/job', body)
   })
 
-  it('更新任务：PUT /monitor/job/{id}', async () => {
+  it('更新任务：PUT /monitor/job/{id}/{version}', async () => {
     const body = {
       jobName: '数据清理',
       jobGroup: 'DEFAULT',
       cronExpression: '0 0 1 * * ?',
-      jobType: 'System.Jobs.JobCleanJob',
+      jobType: 'noop',
       status: 1,
       concurrent: 0,
     }
-    await updateJobApi(JOB_ID, body)
-    expect(mockedPut).toHaveBeenCalledWith(`/monitor/job/${JOB_ID}`, body)
+    await updateJobApi(JOB_ID, VERSION, body)
+    expect(mockedPut).toHaveBeenCalledWith(`/monitor/job/${JOB_ID}/${VERSION}`, body)
   })
 
-  it('删除任务：DELETE /monitor/job/{id}', async () => {
-    await deleteJobApi(JOB_ID)
-    expect(mockedDelete).toHaveBeenCalledWith(`/monitor/job/${JOB_ID}`)
+  it('删除任务：DELETE /monitor/job/{id}/{version}', async () => {
+    await deleteJobApi(JOB_ID, VERSION)
+    expect(mockedDelete).toHaveBeenCalledWith(`/monitor/job/${JOB_ID}/${VERSION}`)
   })
 
-  it('修改任务状态：PUT /monitor/job/{id}/status 且 body 透传 {status}', async () => {
-    await updateJobStatusApi(JOB_ID, 1)
-    expect(mockedPut).toHaveBeenCalledWith(`/monitor/job/${JOB_ID}/status`, { status: 1 })
+  it('修改任务状态：PUT /monitor/job/{id}/{version}/status 且 body 透传 {status}', async () => {
+    await updateJobStatusApi(JOB_ID, VERSION, 1)
+    expect(mockedPut).toHaveBeenCalledWith(`/monitor/job/${JOB_ID}/${VERSION}/status`, {
+      status: 1,
+    })
   })
 
-  it('立即执行任务：PUT /monitor/job/{id}/run', async () => {
+  it('立即执行任务：POST /monitor/job/{id}/run', async () => {
     await runJobApi(JOB_ID)
-    expect(mockedPut).toHaveBeenCalledWith(`/monitor/job/${JOB_ID}/run`)
+    expect(mockedPost).toHaveBeenCalledWith(`/monitor/job/${JOB_ID}/run`)
   })
 
   it('分页查询执行日志：GET /monitor/job-log/page 且 jobId / status 透传', async () => {

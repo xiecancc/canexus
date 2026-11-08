@@ -34,6 +34,9 @@ public class JobPagedResponse : AggregatePagedResponse
     /// <summary>是否允许并发执行。</summary>
     public bool Concurrent { get; set; }
 
+    /// <summary>作业参数（JSON 对象，扁平标量键值；写入 Quartz JobDataMap）。</summary>
+    public string? ParametersJson { get; set; }
+
 }
 
 /// <summary>定时任务写入请求（POST / PUT 共用载荷；镜像 SysJob 聚合的启停 / 备注与业务字段；平台级数据不做租户隔离）。</summary>
@@ -54,11 +57,17 @@ public class JobInputRequest : AggregateInputRequest
     /// <summary>Cron 表达式（经调度端口校验）。</summary>
     public string CronExpression { get; set; } = string.Empty;
 
-    /// <summary>任务类型（实现 Quartz.IJob 的程序集限定类型名）。</summary>
+    /// <summary>任务类型（已登记业务作业白名单的稳定短标识，如 noop / log-retention；不接受 CLR 类型名）。</summary>
     public string JobType { get; set; } = string.Empty;
 
     /// <summary>是否允许并发执行。</summary>
     public bool Concurrent { get; set; }
+
+    /// <summary>
+    /// 作业参数（JSON 对象，扁平标量键值；如 <c>{"RetentionDays":30}</c>）。
+    /// <para>为空表示无参数；长度上限 2000 字符，键名不得占用调度框架保留键（jobId / jobParametersSignature）。</para>
+    /// </summary>
+    public string? ParametersJson { get; set; }
 }
 
 /// <summary>修改任务状态请求（PUT /api/system/job/{id}/status；运行即入调度、暂停即移出；Version 须回传乐观锁版本号）。</summary>

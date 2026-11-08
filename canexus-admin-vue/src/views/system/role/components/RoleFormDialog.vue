@@ -39,6 +39,9 @@ const isEdit = ref(false)
 /** 当前编辑的角色 ID（GUID 字符串） */
 const editId = ref('')
 
+/** 当前编辑角色的乐观锁版本号（取自详情响应，写请求回传至 URL） */
+const editVersion = ref('')
+
 /** 提交中 */
 const submitting = ref(false)
 
@@ -101,6 +104,7 @@ async function loadMenuTree(): Promise<void> {
 async function open(mode: 'create' | 'edit', row?: RoleVO): Promise<void> {
   isEdit.value = mode === 'edit'
   editId.value = row?.id ?? ''
+  editVersion.value = row?.version ?? ''
   Object.assign(form, getDefaultForm())
   menuTree.value = []
   visible.value = true
@@ -115,6 +119,7 @@ async function open(mode: 'create' | 'edit', row?: RoleVO): Promise<void> {
   const detail = await loadDetail
   await nextTick()
   if (detail) {
+    editVersion.value = detail.version
     Object.assign(form, {
       roleName: detail.roleName,
       roleKey: detail.roleKey,
@@ -155,7 +160,7 @@ async function handleSubmit(): Promise<void> {
       menuIds,
     }
     if (isEdit.value) {
-      await updateRoleApi(editId.value, data)
+      await updateRoleApi(editId.value, editVersion.value, data)
       ElMessage.success('修改成功')
     } else {
       await createRoleApi(data)

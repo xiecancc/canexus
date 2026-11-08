@@ -37,6 +37,7 @@ window.ResizeObserver ??= ResizeObserverStub as unknown as typeof ResizeObserver
 function makeTenant(partial: Partial<TenantVO>): TenantVO {
   return {
     id: '00000000-0000-0000-0000-000000000001',
+    version: '00000000-0000-0000-0000-000000000001',
     tenantKey: 'acme',
     tenantName: 'Acme 公司',
     contactPhone: '13800000000',

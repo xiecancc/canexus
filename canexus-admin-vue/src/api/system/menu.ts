@@ -5,17 +5,19 @@
  * - GET    /system/menu/tree?keyword=&status= → MenuVO[]（树结构）
  * - GET    /system/menu/{id}                  → MenuVO
  * - POST   /system/menu                       → 创建菜单
- * - PUT    /system/menu/{id}                  → 更新菜单
- * - DELETE /system/menu/{id}                  → 删除菜单
+ * - PUT    /system/menu/{id}/{version}        → 更新菜单
+ * - DELETE /system/menu/{id}/{version}        → 删除菜单
  * - 菜单类型：1 目录 2 菜单 3 按钮；可见性：1 显示 0 隐藏；状态：1 正常 0 停用；顶级菜单 parentId 为空 GUID
+ * - 乐观锁：更新 / 删除的 URL 均须携带 version，取自列表 / 详情响应的 version 字段（36 位 GUID 字符串）
  */
+import type { AggregateVO } from '@/api/types'
 import request from '@/utils/request'
 
 /** 菜单类型：1 目录 2 菜单 3 按钮 */
 export type MenuType = 1 | 2 | 3
 
 /** 菜单树节点 */
-export interface MenuVO {
+export interface MenuVO extends AggregateVO {
   /** 菜单 ID（GUID 字符串） */
   id: string
   /** 父菜单 ID（顶级为空 GUID：00000000-0000-0000-0000-000000000000） */
@@ -91,18 +93,33 @@ export function getMenuApi(id: string): Promise<MenuVO> {
 }
 
 /** 创建菜单 */
-export function createMenuApi(data: MenuSaveRequest): Promise<null> {
-  return request.post<null>('/system/menu', data)
+export function createMenuApi(data: MenuSaveRequest): Promise<boolean> {
+  return request.post<boolean>('/system/menu', data)
 }
 
-/** 更新菜单 */
-export function updateMenuApi(id: string, data: MenuSaveRequest): Promise<null> {
-  return request.put<null>(`/system/menu/${id}`, data)
+/**
+ * 更新菜单。
+ *
+ * @param id 菜单 ID（GUID 字符串）
+ * @param version 乐观锁版本号（取自列表 / 详情响应的 version 字段）
+ * @param data 更新数据
+ */
+export function updateMenuApi(
+  id: string,
+  version: string,
+  data: MenuSaveRequest,
+): Promise<boolean> {
+  return request.put<boolean>(`/system/menu/${id}/${version}`, data)
 }
 
-/** 删除菜单 */
-export function deleteMenuApi(id: string): Promise<null> {
-  return request.delete<null>(`/system/menu/${id}`)
+/**
+ * 删除菜单。
+ *
+ * @param id 菜单 ID（GUID 字符串）
+ * @param version 乐观锁版本号（取自列表 / 详情响应的 version 字段）
+ */
+export function deleteMenuApi(id: string, version: string): Promise<boolean> {
+  return request.delete<boolean>(`/system/menu/${id}/${version}`)
 }
 
 /**

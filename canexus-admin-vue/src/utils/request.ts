@@ -6,6 +6,7 @@
  * - 响应拦截器解包统一响应 Result<T>：code === 200 直接返回 data
  * - 401 时使用 refreshToken 静默刷新一次并重放请求（并发请求共享刷新、排队重放、防循环）
  * - 刷新失败清除令牌并跳转登录页
+ * - 40302（首次登录须先修改初始密码）不做刷新重试，写入强制改密标记并跳转改密页
  * - 业务失败与网络异常统一通过 ElMessage 提示
  */
 import axios from 'axios'
@@ -17,11 +18,13 @@ import type {
 } from 'axios'
 import { ElMessage } from 'element-plus'
 import type { Result } from '@/api/types'
+import { CHANGE_PASSWORD_ROUTE_PATH, LOGIN_ROUTE_PATH } from '@/router/constants'
 import {
   clearTokens,
   getAccessToken,
   getRefreshToken,
   setAccessToken,
+  setMustChangePassword,
   setRefreshToken,
 } from './token'
 
@@ -31,6 +34,9 @@ const SUCCESS_CODE = 200
 /** 登录状态失效码 */
 const UNAUTHORIZED_CODE = 401
 
+/** 首次登录须先修改初始密码（后端 MustChangePasswordMiddleware 返回 HTTP 403） */
+const MUST_CHANGE_PASSWORD_CODE = 40302
+
 /** 刷新令牌接口地址（认证模块接入后沿用该契约） */
 const REFRESH_URL = '/auth/refresh'
 
@@ -38,6 +44,8 @@ const REFRESH_URL = '/auth/refresh'
 interface AuthTokens {
   accessToken: string
   refreshToken: string
+  /** 是否仍须先修改初始密码（刷新响应同样携带，避免标记在轮换后丢失） */
+  mustChangePassword?: boolean
 }
 
 /** axios 实例（文件下载等特殊场景可直接使用） */
@@ -53,8 +61,19 @@ function showErrorMessage(message: string): void {
 
 /** 跳转登录页（已处于登录页时不再跳转，防止循环） */
 function redirectToLogin(): void {
-  if (window.location.pathname !== '/login') {
-    window.location.href = '/login'
+  if (window.location.pathname !== LOGIN_ROUTE_PATH) {
+    window.location.href = LOGIN_ROUTE_PATH
+  }
+}
+
+/**
+ * 跳转强制改密页：先持久化标记，保证刷新页面后路由守卫仍能拦截受保护页面。
+ * 改密端点本身是后端强制改密白名单，不会再次返回 40302，因此不存在循环。
+ */
+function redirectToChangePassword(): void {
+  setMustChangePassword(true)
+  if (window.location.pathname !== CHANGE_PASSWORD_ROUTE_PATH) {
+    window.location.href = CHANGE_PASSWORD_ROUTE_PATH
   }
 }
 
@@ -81,6 +100,10 @@ async function refreshTokens(): Promise<boolean> {
     if (code === SUCCESS_CODE && data) {
       setAccessToken(data.accessToken)
       setRefreshToken(data.refreshToken)
+      // 仅在响应确实携带该字段时更新，避免旧版本响应把已存在的标记误清除
+      if (data.mustChangePassword !== undefined) {
+        setMustChangePassword(data.mustChangePassword === true)
+      }
       return true
     }
     return false
@@ -139,8 +162,15 @@ function handleHttpError(error: AxiosError): Promise<unknown> {
     if (response.status === UNAUTHORIZED_CODE) {
       return handleUnauthorized(response.config)
     }
+    const result = response.data as Partial<Result> | undefined
+    // 强制改密拦截：HTTP 403 + 业务码 40302，不能当作普通 403 或走刷新令牌重试
+    if (response.status === 403 && result?.code === MUST_CHANGE_PASSWORD_CODE) {
+      redirectToChangePassword()
+      showErrorMessage(result.message || '首次登录须先修改初始密码')
+      return Promise.reject(new Error('须先修改初始密码'))
+    }
     // 优先展示后端统一响应中的 message
-    const resultMessage = (response.data as Partial<Result> | undefined)?.message
+    const resultMessage = result?.message
     showErrorMessage(resultMessage || getHttpErrorMessage(response.status))
     return Promise.reject(error)
   }
@@ -172,6 +202,11 @@ instance.interceptors.response.use(
     }
     if (result.code === UNAUTHORIZED_CODE) {
       return handleUnauthorized(response.config)
+    }
+    if (result.code === MUST_CHANGE_PASSWORD_CODE) {
+      redirectToChangePassword()
+      showErrorMessage(result.message || '首次登录须先修改初始密码')
+      return Promise.reject(new Error('须先修改初始密码'))
     }
     // 业务失败：统一提示并拒绝
     showErrorMessage(result.message || '请求失败')

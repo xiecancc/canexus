@@ -31,6 +31,9 @@ const mockedDelete = request.delete as unknown as Mock
 /** 测试用角色 ID（GUID 字符串） */
 const ROLE_ID = '00000000-0000-0000-0000-000000000003'
 
+/** 测试用乐观锁版本号（GUID 字符串，取自列表 / 详情响应的 version 字段） */
+const VERSION = '00000000-0000-0000-0000-00000000000a'
+
 /** 测试用菜单 ID（GUID 字符串） */
 const MENU_ID_1 = '00000000-0000-0000-0000-000000000001'
 const MENU_ID_2 = '00000000-0000-0000-0000-000000000002'
@@ -71,7 +74,7 @@ describe('角色模块接口', () => {
     expect(mockedPost).toHaveBeenCalledWith('/system/role', body)
   })
 
-  it('更新角色：PUT /system/role/{id}（用于状态整体更新等场景）', async () => {
+  it('更新角色：PUT /system/role/{id}/{version}（用于状态整体更新等场景）', async () => {
     const body = {
       roleName: '访客',
       roleKey: 'guest',
@@ -80,12 +83,12 @@ describe('角色模块接口', () => {
       description: '',
       menuIds: [MENU_ID_1],
     }
-    await updateRoleApi(ROLE_ID, body)
-    expect(mockedPut).toHaveBeenCalledWith(`/system/role/${ROLE_ID}`, body)
+    await updateRoleApi(ROLE_ID, VERSION, body)
+    expect(mockedPut).toHaveBeenCalledWith(`/system/role/${ROLE_ID}/${VERSION}`, body)
   })
 
-  it('删除角色：DELETE /system/role/{id}', async () => {
-    await deleteRoleApi(ROLE_ID)
-    expect(mockedDelete).toHaveBeenCalledWith(`/system/role/${ROLE_ID}`)
+  it('删除角色：DELETE /system/role/{id}/{version}', async () => {
+    await deleteRoleApi(ROLE_ID, VERSION)
+    expect(mockedDelete).toHaveBeenCalledWith(`/system/role/${ROLE_ID}/${VERSION}`)
   })
 })
