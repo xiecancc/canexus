@@ -99,7 +99,7 @@ public class SysRefreshTokenRepository(ISqlSugarClient client, IUserContext curr
     /// <inheritdoc />
     public virtual async Task<int> RemoveExpiredAsync(DateTime now, CancellationToken cancellationToken = default)
     {
-        var delete = BuildHardDelete(t => t.ExpiresAt < now || t.RevokedAt != null);
+        var delete = BuildDelete(t => t.ExpiresAt < now || t.RevokedAt != null);
         if (CurrentTenantId is { } tenantId)
         {
             delete = delete.Where(t => t.TenantId == tenantId);

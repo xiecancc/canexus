@@ -27,7 +27,7 @@ public class LoginLogRepository(ISqlSugarClient client, IUserContext currentUser
     /// <inheritdoc />
     public async Task ClearAsync(DateTime fromInclusive, DateTime toExclusive, CancellationToken cancellationToken = default)
     {
-        var delete = BuildHardDelete(log => log.CreatedAt >= fromInclusive && log.CreatedAt < toExclusive);
+        var delete = BuildDelete(log => log.CreatedAt >= fromInclusive && log.CreatedAt < toExclusive);
         if (CurrentTenantId is { } tenantId)
         {
             delete = delete.Where(log => log.TenantId == tenantId);
@@ -39,7 +39,7 @@ public class LoginLogRepository(ISqlSugarClient client, IUserContext currentUser
     /// <inheritdoc />
     public async Task HardDeleteAsync(Guid id, CancellationToken cancellationToken = default)
     {
-        var delete = BuildHardDelete(log => log.Id == id);
+        var delete = BuildDelete(log => log.Id == id);
         if (CurrentTenantId is { } tenantId)
         {
             delete = delete.Where(log => log.TenantId == tenantId);

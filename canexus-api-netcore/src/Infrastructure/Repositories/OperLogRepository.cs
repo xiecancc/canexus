@@ -17,7 +17,7 @@ public class OperLogRepository(ISqlSugarClient client, IUserContext currentUser,
     public async Task ClearAsync(DateTime fromInclusive, DateTime toExclusive, CancellationToken cancellationToken = default)
     {
         // Deleteable 不走查询侧全局过滤器：显式补时间范围与租户条件，危险清空不得全表 / 跨租户执行
-        var delete = BuildHardDelete(log => log.CreatedAt >= fromInclusive && log.CreatedAt < toExclusive);
+        var delete = BuildDelete(log => log.CreatedAt >= fromInclusive && log.CreatedAt < toExclusive);
         if (CurrentTenantId is { } tenantId)
         {
             delete = delete.Where(log => log.TenantId == tenantId);
@@ -29,7 +29,7 @@ public class OperLogRepository(ISqlSugarClient client, IUserContext currentUser,
     /// <inheritdoc />
     public async Task HardDeleteAsync(Guid id, CancellationToken cancellationToken = default)
     {
-        var delete = BuildHardDelete(log => log.Id == id);
+        var delete = BuildDelete(log => log.Id == id);
         if (CurrentTenantId is { } tenantId)
         {
             delete = delete.Where(log => log.TenantId == tenantId);

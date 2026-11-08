@@ -16,7 +16,7 @@ namespace Infrastructure.Repositories;
 /// 列表 / 首条 / 分页另有泛型投影重载（Select&lt;TDto&gt; 按属性名自动映射，SQL 层只取 DTO 涉及的列）。</para>
 /// <para>增删改查统一经受保护的构建器方法 <see cref="BuildQuery"/> / <see cref="BuildInsert(TEntity)"/> /
 /// <see cref="BuildUpdate(TEntity)"/> / <see cref="BuildDelete"/> 产出 SqlSugar 对象，
-/// 基类方法与派生仓储复用同一入口；聚合根仓储以 <c>new</c> 将删除构建器替换为软删除更新构建器。</para>
+/// 基类方法与派生仓储复用同一入口；<see cref="BuildDelete"/> 为物理删除，软删除请走更新构建器按列更新。</para>
 /// </summary>
 /// <typeparam name="TEntity">实体类型。</typeparam>
 /// <remarks>构造函数。</remarks>
@@ -212,8 +212,8 @@ public class DomainRepository<TEntity>(ISqlSugarClient client, ITenantContext te
     protected virtual IUpdateable<TEntity> BuildUpdate() => client.Updateable<TEntity>();
 
     /// <summary>
-    /// 构建删除对象（CRUD 构建器 · 删）：普通实体为物理删除；
-    /// 聚合根仓储以 <c>new</c> 隐藏本方法并返回更新对象（软删除语义）。
+    /// 构建物理删除对象（CRUD 构建器 · 删）：直接执行 DELETE；
+    /// 聚合根的软删除 / 恢复不走本方法，而是经构建器产出的更新对象按列更新（见 AggregateRepository）。
     /// </summary>
     /// <param name="predicate">删除条件。</param>
     /// <returns>SqlSugar 删除对象。</returns>

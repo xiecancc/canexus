@@ -18,8 +18,8 @@ namespace Infrastructure.Repositories;
 /// 按列更新路径绕过了该切面，故软删除 / 恢复在仓储内显式补齐更新审计与版本轮换（盲区兜底）；
 /// 实体更新经 SqlSugar ExecuteCommandWithOptLock 做框架级乐观并发控制（UPDATE ... WHERE Version = 传入值，
 /// 受影响 0 行即冲突），版本冲突时抛出业务异常（错误码 CommonConcurrencyConflict）。</para>
-/// <para>CRUD 构建器复用领域仓储的查询 / 插入 / 更新构建器；删除构建器以 <c>new</c> 隐藏为更新构建器
-/// （聚合根删除一律为软删除），确需物理删除的日志类仓储改用 <see cref="BuildHardDelete"/>。</para>
+/// <para>CRUD 构建器复用领域仓储的查询 / 插入 / 更新 / 物理删除构建器；聚合根的删除 / 恢复一律为软删除，
+/// 经 <c>BuildUpdate</c> 产出的更新对象按列更新实现，业务聚合仓储不应调用基类的物理删除构建器。</para>
 /// </summary>
 /// <typeparam name="TEntity">聚合根实体类型。</typeparam>
 /// <remarks>构造函数。</remarks>
@@ -40,24 +40,6 @@ public class AggregateRepository<TEntity>(ISqlSugarClient client, IUserContext c
 
     /// <summary>变更日志开关（含自引用防护）：日志实体自身不得再产生变更日志，避免无限递归。</summary>
     private bool ChangeLogEnabled => EntityChangeLogEnabled && typeof(TEntity) != typeof(SysEntityChangeLog);
-
-    /// <summary>
-    /// 构建聚合根的「删除」对象（CRUD 构建器 · 删）：聚合根删除一律为软删除，
-    /// 故以更新对象隐藏基类的物理删除构建器（返回类型不同，无法 <c>override</c>，只能 <c>new</c>）。
-    /// </summary>
-    /// <param name="predicate">删除条件。</param>
-    /// <returns>已附加条件的更新对象，调用方继续链式 SetColumns 翻转软删除标记。</returns>
-    protected new virtual IUpdateable<TEntity> BuildDelete(Expression<Func<TEntity, bool>> predicate)
-        => Client.Updateable<TEntity>().Where(predicate);
-
-    /// <summary>
-    /// 构建物理删除对象：仅供日志清理等确需绕过软删除的聚合仓储使用
-    /// （调用基类实现，避免被上方的软删除构建器遮蔽）。
-    /// </summary>
-    /// <param name="predicate">删除条件。</param>
-    /// <returns>SqlSugar 删除对象。</returns>
-    protected IDeleteable<TEntity> BuildHardDelete(Expression<Func<TEntity, bool>> predicate)
-        => base.BuildDelete(predicate);
 
     /// <inheritdoc />
     public virtual async Task<TEntity?> GetDeletedAsync(Guid id, CancellationToken cancellationToken = default)
@@ -234,8 +216,8 @@ public class AggregateRepository<TEntity>(ISqlSugarClient client, IUserContext c
         var targetDeleted = !deleted;
         var userId = CurrentUser.UserId;
         var newVersion = Guid.NewGuid();
-        // 聚合根的「删除」构建器返回更新对象（软删除 = 按列更新），此处即为软删 / 恢复的 UPDATE 起点
-        var update = BuildDelete(predicate)
+        // 软删除 / 恢复本质是按列更新，直接复用更新构建器（聚合根不提供物理删除语义）
+        var update = BuildUpdate()
             .SetColumns(it => new TEntity
             {
                 IsDeleted = targetDeleted,
@@ -243,6 +225,7 @@ public class AggregateRepository<TEntity>(ISqlSugarClient client, IUserContext c
                 UpdatedAt = now,
                 UpdatedBy = userId
             })
+            .Where(predicate)
             .Where(it => it.IsDeleted == deleted);
 
         // 写入侧显式补租户条件：批量软删 / 恢复不得越界修改其他租户的行；
