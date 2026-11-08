@@ -1,0 +1,73 @@
+name: backend-ci
+
+# 后端回归门禁：补上 .husky/pre-push 注释所指的「完整构建与集成测试由 CI 执行」。
+# 本地 pre-commit 负责格式、pre-push 负责编译，本 workflow 额外跑全量 dotnet test
+# （API.Tests 需要真实 MySQL，连接串经 SUPER_ADMIN_TEST_CONN 注入隔离测试库）。
+on:
+  push:
+    paths:
+      - 'canexus-api-netcore/**'
+      - '.github/workflows/backend-ci.yml'
+  pull_request:
+    paths:
+      - 'canexus-api-netcore/**'
+      - '.github/workflows/backend-ci.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: backend-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: build / format / test
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: ${{ secrets.TEST_DB_ROOT_PASSWORD || 'CiOnlyTest2026' }}
+          MYSQL_DATABASE: super_admin_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 --silent"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=12
+
+    defaults:
+      run:
+        working-directory: canexus-api-netcore
+
+    env:
+      DOTNET_NOLOGO: 'true'
+      DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+      SUPER_ADMIN_TEST_CONN: server=127.0.0.1;port=3306;database=super_admin_test;user id=root;password=${{ secrets.TEST_DB_ROOT_PASSWORD || 'CiOnlyTest2026' }};CharSet=utf8mb4;AllowPublicKeyRetrieval=true;SslMode=none
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # README 引用的 C# 类型必须与 src 声明一致；失败即快速拦截，不占用后续构建/Test。
+      - name: Validate README type references
+        run: python3 scripts/check-readme-types.py
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore
+        run: dotnet restore api.slnx
+
+      - name: Build
+        run: dotnet build api.slnx --no-restore --verbosity quiet -nologo
+
+      - name: Format check
+        run: dotnet format api.slnx --no-restore --verify-no-changes --verbosity minimal
+
+      - name: Test
+        run: dotnet test api.slnx --no-build --verbosity quiet -nologo
