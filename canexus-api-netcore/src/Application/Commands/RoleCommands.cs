@@ -111,7 +111,7 @@ public sealed class RoleDeleteCommandHandler(
         // 变更前捕获角色状态快照（软删除可能回填墓碑字段）
         var snapshot = role.Snapshot<SysRole>();
 
-        await roleRepository.DeleteAsync(command.Id, cancellationToken);
+        await roleRepository.DeleteAsync(command.Id, cancellationToken, command.Version);
         await roleMenuRepository.DeleteAsync(rm => rm.RoleId == command.Id, cancellationToken);
 
         // 关键节点发布角色删除领域事件（携带删除前的角色状态）

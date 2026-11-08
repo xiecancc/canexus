@@ -7,9 +7,10 @@ using Domain.Events;
 using Domain.Repositories;
 using Domain.Services.Auth;
 using Domain.Services.Events;
-using Domain.Shared.Constants;
 using Domain.Shared.Exceptions;
 using Domain.Shared.Results;
+using Infrastructure.Shared.Caching;
+using Infrastructure.Shared.Tenants;
 using MiniExcelLibs;
 
 namespace Application.Commands;
@@ -22,13 +23,19 @@ namespace Application.Commands;
 /// <remarks>构造函数。</remarks>
 /// <param name="userRepository">用户仓储。</param>
 /// <param name="deptRepository">部门仓储（部门 Id 存在性校验）。</param>
+/// <param name="configRepository">参数配置仓储（读取用户初始密码）。</param>
 /// <param name="passwordHasher">密码哈希器（初始密码 BCrypt 存储）。</param>
+/// <param name="cache">业务缓存端口（参数值缓存）。</param>
 /// <param name="domainEventPublisher">领域事件发布器。</param>
+/// <param name="tenantContext">当前租户上下文（参数值缓存键按租户隔离）。</param>
 public sealed partial class UserImportCommandHandler(
     IAggregateRepository<SysUser> userRepository,
     IAggregateTreeRepository<SysDept> deptRepository,
+    IDomainRepository<SysConfig> configRepository,
     IPasswordHasher passwordHasher,
-    IDomainEventPublisher domainEventPublisher) : RequestHandler<UserImportCommand, UserImportResultDto>
+    ICache cache,
+    IDomainEventPublisher domainEventPublisher,
+    ITenantContext tenantContext) : RequestHandler<UserImportCommand, UserImportResultDto>
 {
     /// <summary>单次导入行数上限（防大文件拖垮请求；超限整体拒绝）。</summary>
     public const int MaxImportRows = 1000;
@@ -135,17 +142,27 @@ public sealed partial class UserImportCommandHandler(
             return result;
         }
 
-        // —— 批量入库：初始密码哈希 + 逐行发布领域事件（部门存在性已在前面校验，此处直接取库内确认集）——
-        var users = rows.Select(row => new SysUser
+        // 仅当存在未显式填写密码的行时才解析初始密码，避免「配置缺失」影响全量带密码的合法导入
+        var initialPassword = rows.Any(row => string.IsNullOrWhiteSpace(row.Password))
+            ? await UserPasswordSupport.ResolveInitialPasswordAsync(configRepository, cache, tenantContext.TenantId, cancellationToken)
+            : string.Empty;
+
+        // —— 批量入库：初始密码哈希（缺省取 sys.user.initPassword 并强制首登改密）+ 逐行发布领域事件
+        // —— （部门存在性已在前面校验，此处直接取库内确认集）——
+        var users = rows.Select(row =>
         {
-            UserName = row.UserName.Trim(),
-            NickName = row.NickName.Trim(),
-            PasswordHash = passwordHasher.Hash(
-                string.IsNullOrWhiteSpace(row.Password) ? UserConstants.DefaultPassword : row.Password.Trim()),
-            DeptId = TryParseGuid(row.DeptId) is { } deptId && existingDeptIds.Contains(deptId) ? deptId : null,
-            Email = string.IsNullOrWhiteSpace(row.Email) ? null : row.Email.Trim(),
-            Phone = string.IsNullOrWhiteSpace(row.Phone) ? null : row.Phone.Trim(),
-            Status = Domain.Shared.Enums.CommonStatus.Enabled
+            var useInitialPassword = string.IsNullOrWhiteSpace(row.Password);
+            return new SysUser
+            {
+                UserName = row.UserName.Trim(),
+                NickName = row.NickName.Trim(),
+                PasswordHash = passwordHasher.Hash(useInitialPassword ? initialPassword : row.Password!.Trim()),
+                MustChangePassword = useInitialPassword,
+                DeptId = TryParseGuid(row.DeptId) is { } deptId && existingDeptIds.Contains(deptId) ? deptId : null,
+                Email = string.IsNullOrWhiteSpace(row.Email) ? null : row.Email.Trim(),
+                Phone = string.IsNullOrWhiteSpace(row.Phone) ? null : row.Phone.Trim(),
+                Status = Domain.Shared.Enums.CommonStatus.Enabled
+            };
         }).ToList();
 
         await userRepository.InsertAsync(users, cancellationToken);

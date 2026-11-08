@@ -22,7 +22,7 @@ public class UserImportRow
     [MiniExcelLibs.Attributes.ExcelColumnName("部门Id")]
     public string? DeptId { get; set; }
 
-    /// <summary>初始密码（可空，缺省系统默认密码）。</summary>
+    /// <summary>初始密码（可空，缺省取参数配置 sys.user.initPassword，并强制首登改密）。</summary>
     [MiniExcelLibs.Attributes.ExcelColumnName("初始密码")]
     public string? Password { get; set; }
 }

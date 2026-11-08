@@ -21,9 +21,11 @@ public static class HealthCheckDependencyExtensions
     {
         var timeout = TimeSpan.FromSeconds(5);
 
+        // DatabaseInitializationState 由 Infrastructure 依赖注册（单例），此处只消费，避免重复注册产生两个实例
         services.AddHealthChecks()
             // 进程存活自检：liveness 端点唯一检查项（同时计入 readiness）
             .AddCheck("self", () => Microsoft.Extensions.Diagnostics.HealthChecks.HealthCheckResult.Healthy(), tags: ["live", "ready"], timeout: timeout)
+            .AddCheck<InitializationHealthCheck>("initialization", tags: ["ready"], timeout: timeout)
             .AddCheck<DatabaseHealthCheck>("mysql", tags: ["ready"], timeout: timeout)
             .AddCheck<CacheHealthCheck>("cache", tags: ["ready"], timeout: timeout)
             .AddCheck<SchedulerHealthCheck>("quartz", tags: ["ready"], timeout: timeout);

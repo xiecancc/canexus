@@ -3,7 +3,7 @@ using Application.Contracts.Abstractions;
 using Application.Contracts.Users;
 
 namespace Application.Contracts.Commands;
-/// <summary>创建用户命令（用户名唯一；密码缺省 "Aa123456"，使用缺省密码时首登强制改密）。</summary>
+/// <summary>创建用户命令（用户名唯一；密码缺省取参数配置 sys.user.initPassword，一律首登强制改密）。</summary>
 public sealed record UserCreateCommand : AggregateCreateCommand<UserInputRequest>
 {
     /// <summary>构造创建用户命令。</summary>

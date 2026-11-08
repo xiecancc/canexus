@@ -20,6 +20,7 @@ public sealed class PerformanceBehavior<TRequest, TResponse>(ILogger<Performance
     /// <inheritdoc />
     public async Task<TResponse> Handle(TRequest request, RequestHandlerDelegate<TResponse> next, CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         // 计时从 Handle 入口开始（局部变量）：字段初始化计时会在管道构建期即启动，
         // 计入验证 / 日志等前序行为的执行开销，且异常路径不会停表
         var timer = Stopwatch.StartNew();

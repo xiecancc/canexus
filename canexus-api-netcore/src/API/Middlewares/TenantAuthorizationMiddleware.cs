@@ -1,4 +1,6 @@
+using Application.Permissions;
 using Domain.Services.Users;
+using Domain.Shared.Permissions;
 using Domain.Shared.Results;
 using Infrastructure.Shared.Tenants;
 using Microsoft.AspNetCore.Http;
@@ -11,7 +13,8 @@ namespace API.Middlewares;
 /// <list type="bullet">
 /// <item>登录用户（JWT 声明租户）：请求头租户与声明不一致 → 403（40301 跨租户拒绝）；无论是否带头，
 /// 均复查声明租户当前可用性（不存在 / 停用 / 到期 → 403），随后以声明租户收敛；</item>
-/// <item>平台用户（无租户声明）：请求头租户须存在、启用且未到期（400801 / 400805 / 400806），否则拒绝；未带头 → 平台数据范围；</item>
+/// <item>平台用户（无租户声明）：携带请求头租户时须持有 system:tenant:switch 权限位（超管通配权限自动放行），
+/// 且该租户须存在、启用且未到期（400801 / 400805 / 400806），否则拒绝；未带头 → 平台数据范围；</item>
 /// <item>匿名请求（登录 / 验证码 / 刷新）：请求头租户同样须校验可用后生效，用于登录时的租户数据范围收敛。</item>
 /// </list>
 /// 校验通过的租户写入 <see cref="ITenantContext"/>，由 SqlSugar 全局过滤器执行行级隔离。
@@ -30,7 +33,8 @@ public sealed class TenantAuthorizationMiddleware(
     /// <param name="configuration">应用配置（读取多租户开关）。</param>
     /// <param name="tenantValidator">租户访问校验器（请求作用域解析）。</param>
     /// <param name="currentUser">当前用户上下文（认证后 claims）。</param>
-    public async Task InvokeAsync(HttpContext context, IConfiguration configuration, ITenantAccessValidator tenantValidator, IUserContext currentUser)
+    /// <param name="permissionChecker">权限校验器（平台切换租户的权限位校验）。</param>
+    public async Task InvokeAsync(HttpContext context, IConfiguration configuration, ITenantAccessValidator tenantValidator, IUserContext currentUser, IPermissionChecker permissionChecker)
     {
         if (!configuration.GetValue("MultiTenancy:Enabled", false))
         {
@@ -83,6 +87,21 @@ public sealed class TenantAuthorizationMiddleware(
         // 平台用户（无租户声明）或匿名请求：请求头租户须校验可用
         if (requested is not null)
         {
+            // 平台用户代表平台切换租户属于高权限动作：须显式持有 system:tenant:switch；
+            // 超管按全站既有惯例（PermissionAuthorizationFilter）持通配权限直接放行；
+            // 匿名登录 / 刷新请求需要以租户头收敛数据范围，不受此约束。
+            if (currentUser.IsAuthenticated && userTenant is null && !currentUser.IsSuperAdmin
+                && !await permissionChecker.HasPermissionAsync(
+                    currentUser.UserId ?? Guid.Empty, PermissionDefinitions.SystemTenantSwitch, context.RequestAborted))
+            {
+                logger.LogWarning("平台切换租户被拒绝：用户 {UserId} 缺少 {Permission} 权限（请求租户 {Requested}，路径 {Path}）",
+                    currentUser.UserId, PermissionDefinitions.SystemTenantSwitch, requested, context.Request.Path);
+                await UnifiedResponseWriter.WriteResultAsync(
+                    context, StatusCodes.Status403Forbidden,
+                    Result.Fail(ErrorCodes.AuthForbidden, "缺少平台切换租户权限"));
+                return;
+            }
+
             var status = await tenantValidator.ValidateAsync(requested.Value, context.RequestAborted);
             var (code, message) = status switch
             {

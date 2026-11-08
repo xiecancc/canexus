@@ -11,19 +11,21 @@ using Domain.Services.Rules;
 using Domain.Shared.Exceptions;
 using Domain.Shared.Results;
 using Infrastructure.Shared.Caching;
+using Infrastructure.Shared.Tenants;
 
 namespace Application.Queries;
 /// <summary>按参数键名查询参数值处理器。</summary>
 /// <remarks>构造函数。</remarks>
 /// <param name="configRepository">参数配置仓储（只读）。</param>
 /// <param name="cache">内存缓存。</param>
-public sealed class ConfigQueryByKeyHandler(IDomainRepository<SysConfig> configRepository, ICache cache) : QueryHandler<ConfigQueryByKey, string>
+/// <param name="tenantContext">当前租户上下文（缓存键按租户隔离）。</param>
+public sealed class ConfigQueryByKeyHandler(IDomainRepository<SysConfig> configRepository, ICache cache, ITenantContext tenantContext) : QueryHandler<ConfigQueryByKey, string>
 {
     /// <inheritdoc />
     protected override async Task<string> HandleAsync(ConfigQueryByKey query, CancellationToken cancellationToken)
     {
         var key = query.ConfigKey.Trim();
-        var cacheKey = ConfigRules.ValueCacheKey(key);
+        var cacheKey = ConfigRules.ValueCacheKey(key, tenantContext.TenantId);
 
         // 常规档：L1 1 分钟 / L2 10 分钟；写操作后按键失效（见 ConfigCommands）
         return await cache.GetOrCreateAsync(cacheKey, async token =>

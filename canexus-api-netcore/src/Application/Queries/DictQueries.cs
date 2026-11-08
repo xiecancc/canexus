@@ -10,6 +10,7 @@ using Domain.Repositories;
 using Domain.Services.Rules;
 using Domain.Shared.Enums;
 using Infrastructure.Shared.Caching;
+using Infrastructure.Shared.Tenants;
 
 namespace Application.Queries;
 /// <summary>按字典类型查询字典数据处理器。</summary>
@@ -17,13 +18,14 @@ namespace Application.Queries;
 /// <param name="dictDataRepository">字典数据仓储。</param>
 /// <param name="mapper">AutoMapper 映射器。</param>
 /// <param name="cache">内存缓存（写操作后按类型失效）。</param>
-public sealed class DictDataQueryByTypeHandler(IAggregateRepository<SysDictData> dictDataRepository, IMapper mapper, ICache cache) : QueryHandler<DictDataQueryByType, List<DictDataDropdownResponse>>
+/// <param name="tenantContext">当前租户上下文（缓存键按租户隔离）。</param>
+public sealed class DictDataQueryByTypeHandler(IAggregateRepository<SysDictData> dictDataRepository, IMapper mapper, ICache cache, ITenantContext tenantContext) : QueryHandler<DictDataQueryByType, List<DictDataDropdownResponse>>
 {
     /// <inheritdoc />
     protected override async Task<List<DictDataDropdownResponse>> HandleAsync(DictDataQueryByType query, CancellationToken cancellationToken)
     {
         var type = query.Request.DictType.Trim();
-        var cacheKey = DictRules.DataTypeCacheKey(type);
+        var cacheKey = DictRules.DataTypeCacheKey(type, tenantContext.TenantId);
 
         // 常规档：L1 1 分钟 / L2 10 分钟；字典写操作后按类型失效（见 DictCommands）
         return await cache.GetOrCreateAsync(cacheKey, async token =>

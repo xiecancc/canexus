@@ -3,6 +3,8 @@ using Application.Contracts.Commands;
 using Application.Scopes;
 using Domain.Entities;
 using Domain.Repositories;
+using Domain.Shared.Exceptions;
+using Domain.Shared.Results;
 using MediatR;
 
 namespace Application.Behaviors;
@@ -27,20 +29,20 @@ public sealed class UserDataScopeBehavior<TRequest, TResponse>(
     /// <inheritdoc />
     public async Task<TResponse> Handle(TRequest request, RequestHandlerDelegate<TResponse> next, CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         if (request is not IUserDataScopeCommand command)
         {
             return await next();
         }
 
-        var user = request is UserRestoreCommand
-            ? await userRepository.GetDeletedAsync(command.TargetUserId, cancellationToken)
-            : await userRepository.GetAsync([it => it.Id == command.TargetUserId], cancellationToken);
+        // fail-closed：目标不可见（不存在 / 被全局过滤器排除 / 已软删）时不得放行到处理器，
+        // 避免「查不到就不校验」成为绕过数据范围的入口
+        var user = (request is UserRestoreCommand
+                ? await userRepository.GetDeletedAsync(command.TargetUserId, cancellationToken)
+                : await userRepository.GetAsync([it => it.Id == command.TargetUserId], cancellationToken))
+            ?? throw new BusinessException(ErrorCodes.AuthForbidden, "目标用户不存在或不在可见范围内，已拒绝访问");
 
-        if (user is not null)
-        {
-            await dataScopeFilter.EnsureInScopeAsync(user.DeptId, user.Id, user.CreatedBy, cancellationToken);
-        }
-
+        await dataScopeFilter.EnsureInScopeAsync(user.DeptId, user.Id, user.CreatedBy, cancellationToken);
         return await next();
     }
 }

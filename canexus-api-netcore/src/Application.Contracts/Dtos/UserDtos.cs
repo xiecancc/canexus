@@ -107,7 +107,7 @@ public class UserInputRequest : AggregateInputRequest
     /// <summary>用户名（唯一，创建后不可改；仅创建生效）。</summary>
     public string UserName { get; set; } = string.Empty;
 
-    /// <summary>初始密码（可空，缺省 Aa123456；仅创建生效，缺省时首登强制改密）。</summary>
+    /// <summary>初始密码（可空，缺省取参数配置 sys.user.initPassword；仅创建生效，一律首登强制改密）。</summary>
     public string? Password { get; set; }
 }
 

@@ -27,7 +27,8 @@ public interface IUserDataScopeCommand
 }
 
 /// <summary>
-/// 聚合写命令抽象基类（带载荷）：携带载荷 DTO 的写操作请求（响应统一为 bool，写操作成功与否），
+/// 聚合写命令抽象基类（带载荷）：携带载荷 DTO 的写操作请求（响应统一为 bool，写操作成功与否；
+/// 控制器须把该 bool 写入 <c>Result&lt;bool&gt;.Data</c>（T-16），不得丢弃），
 /// 载荷经 <see cref="Request"/> 暴露；创建 / 更新命令统一以本类为根，与查询侧
 /// <see cref="AggregateQuery{TRequest, TResponse}"/> 的「根 + 载荷属性」形态对称。
 /// <para>直接实现 <see cref="Request{TResponse}"/>，不继承非泛型标记 <see cref="Request"/>——
@@ -95,17 +96,17 @@ public abstract record AggregateDeleteCommand(Guid id, Guid version) : Request<b
 
 /// <summary>
 /// 标准恢复命令抽象基类：参数为目标聚合 id 与乐观锁版本号
-/// （须与聚合删除时固化的版本一致才允许恢复），响应统一为 bool。
+/// （须与待恢复墓碑的当前版本一致才允许恢复），响应统一为 bool。
 /// <para>由恢复命令处理器消费（幂等语义：聚合不存在或未删除时静默忽略）；
 /// 恢复命令 record 继承本基类并转发构造（<c>base(id, version)</c>）。</para>
 /// </summary>
 /// <param name="id">目标聚合 id。</param>
-/// <param name="version">乐观锁版本号（须与聚合删除时固化的版本一致才允许恢复）。</param>
+/// <param name="version">乐观锁版本号（须与待恢复墓碑的当前版本一致才允许恢复）。</param>
 public abstract record AggregateRestoreCommand(Guid id, Guid version) : Request<bool>, ICommand
 {
     /// <summary>目标聚合 id。</summary>
     public Guid Id { get; } = id;
 
-    /// <summary>乐观锁版本号（恢复令牌，须与聚合删除时固化的版本一致才允许恢复）。</summary>
+    /// <summary>乐观锁版本号（恢复令牌，须与待恢复墓碑的当前版本一致才允许恢复）。</summary>
     public Guid Version { get; } = version;
 }

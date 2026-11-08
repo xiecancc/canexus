@@ -10,7 +10,13 @@ using MediatR;
 using MiniExcelLibs;
 
 namespace Application.Queries;
-/// <summary>Excel 导出共享支撑：分页循环全量拉取（每页 500、总上限 10000）与 xlsx 文件构建。</summary>
+/// <summary>分页循环拉取结果：已导出行与截断标记。</summary>
+/// <typeparam name="TItem">分页行类型。</typeparam>
+/// <param name="Rows">已导出行（不超过 ExcelExportSupport.MaxRows）。</param>
+/// <param name="Truncated">是否仍有数据未导出（达到行数上限或上游分页口径差异）。</param>
+internal sealed record ExportCollectResult<TItem>(IReadOnlyList<TItem> Rows, bool Truncated);
+
+/// <summary>Excel 导出共享支撑：分页循环全量拉取（每页 500、总上限 10000，硬裁剪）与 xlsx 文件构建。</summary>
 internal static class ExcelExportSupport
 {
     /// <summary>每页拉取行数（与分页请求的 PageSize 上限一致）。</summary>
@@ -19,43 +25,66 @@ internal static class ExcelExportSupport
     /// <summary>导出总行数上限（防止单次导出拖垮内存；超出部分截断并在文件名处如实导出已有行）。</summary>
     public const int MaxRows = 10000;
 
-    /// <summary>按页循环拉取全量行（首次拉取后以 Total 收敛循环次数）。</summary>
+    /// <summary>按页循环拉取全量行（首页前检查取消；总行数硬裁剪至 <see cref="MaxRows"/>，含单页超额场景）。</summary>
     /// <typeparam name="TItem">分页行类型。</typeparam>
-    /// <param name="fetchPage">按页拉取委托（入参页码，返回页行与总数）。</param>
+    /// <param name="fetchPage">按页拉取委托（入参页码与取消令牌，返回页行与总数）。</param>
     /// <param name="cancellationToken">取消令牌。</param>
-    /// <returns>全量行（不超过 <see cref="MaxRows"/>）。</returns>
-    public static async Task<List<TItem>> CollectAsync<TItem>(
-        Func<int, Task<(IReadOnlyList<TItem> Items, long Total)>> fetchPage,
+    /// <returns>已导出行（不超过 <see cref="MaxRows"/>）与是否发生截断。</returns>
+    public static async Task<ExportCollectResult<TItem>> CollectAsync<TItem>(
+        Func<int, CancellationToken, Task<(IReadOnlyList<TItem> Items, long Total)>> fetchPage,
         CancellationToken cancellationToken)
     {
-        var (firstPage, total) = await fetchPage(1);
-        var rows = new List<TItem>(firstPage);
+        cancellationToken.ThrowIfCancellationRequested();
+        var (firstPage, total) = await fetchPage(1, cancellationToken);
+        var rows = new List<TItem>(Math.Min(MaxRows, Math.Max(firstPage.Count, 0)));
+        AppendWithinLimit(rows, firstPage);
+
         var pageCount = (int)Math.Ceiling(Math.Min(total, MaxRows) / (double)PageRows);
-        for (var pageIndex = 2; pageIndex <= pageCount; pageIndex++)
+        for (var pageIndex = 2; pageIndex <= pageCount && rows.Count < MaxRows; pageIndex++)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var (items, _) = await fetchPage(pageIndex);
-            rows.AddRange(items);
+            var (items, _) = await fetchPage(pageIndex, cancellationToken);
+            AppendWithinLimit(rows, items);
         }
 
-        return rows;
+        // 如实反映「还有数据未导出」：总数大于实际导出行数即为截断（无论因上限还是上游分页口径差异）
+        return new ExportCollectResult<TItem>(rows, total > rows.Count);
     }
 
-    /// <summary>将导出行写入 xlsx 内存流并构建文件响应。</summary>
+    /// <summary>按剩余额度追加当页行，绝不越过 <see cref="MaxRows"/>。</summary>
+    /// <typeparam name="TItem">分页行类型。</typeparam>
+    /// <param name="rows">累计行集合。</param>
+    /// <param name="items">当页拉取的行。</param>
+    private static void AppendWithinLimit<TItem>(List<TItem> rows, IReadOnlyList<TItem> items)
+    {
+        var remaining = MaxRows - rows.Count;
+        if (remaining <= 0 || items.Count == 0)
+        {
+            return;
+        }
+
+        rows.AddRange(items.Take(remaining));
+    }
+
+    /// <summary>将导出行写入 xlsx 内存流并构建文件响应（截断时在文件名标注实际导出行数）。</summary>
     /// <typeparam name="TRow">Excel 行类型（MiniExcel POCO，列名经 ExcelColumnName 标注）。</typeparam>
     /// <param name="sheetName">工作表名。</param>
     /// <param name="rows">导出行集合。</param>
+    /// <param name="truncated">是否因行数上限发生截断。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>导出文件响应（字节 + 建议文件名 + MIME）。</returns>
     public static async Task<ExportFileResponse> BuildExcelAsync<TRow>(
-        string sheetName, IEnumerable<TRow> rows, CancellationToken cancellationToken)
+        string sheetName, IEnumerable<TRow> rows, bool truncated, CancellationToken cancellationToken)
     {
+        var rowList = rows as IReadOnlyList<TRow> ?? rows.ToList();
+        cancellationToken.ThrowIfCancellationRequested();
         using var stream = new MemoryStream();
-        await stream.SaveAsAsync(rows, sheetName: sheetName, cancellationToken: cancellationToken);
+        await stream.SaveAsAsync(rowList, sheetName: sheetName, cancellationToken: cancellationToken);
+        var suffix = truncated ? $"_已截断{rowList.Count}行" : string.Empty;
         return new ExportFileResponse
         {
             Content = stream.ToArray(),
-            FileName = $"{sheetName}_{DateTime.UtcNow:yyyyMMddHHmmss}.xlsx"
+            FileName = $"{sheetName}_{DateTime.UtcNow:yyyyMMddHHmmss}{suffix}.xlsx"
         };
     }
 
@@ -110,15 +139,14 @@ public sealed class UserExportQueryHandler(ISender sender) : QueryHandler<UserEx
     /// <inheritdoc />
     protected override async Task<ExportFileResponse> HandleAsync(UserExportQuery query, CancellationToken cancellationToken)
     {
-        var rows = await ExcelExportSupport.CollectAsync<UserPagedResponse>(async pageIndex =>
+        var collected = await ExcelExportSupport.CollectAsync<UserPagedResponse>(async (pageIndex, token) =>
         {
-            query.Request.PageIndex = pageIndex;
-            query.Request.PageSize = ExcelExportSupport.PageRows;
-            var page = await sender.Send(new UserQueryPaged(query.Request), cancellationToken);
+            var pageRequest = query.Request.CloneForPage<UserPageRequest>(pageIndex, ExcelExportSupport.PageRows);
+            var page = await sender.Send(new UserQueryPaged(pageRequest), token);
             return (page.Items, page.Total);
         }, cancellationToken);
 
-        var excelRows = rows.Select(row => new UserExportRow
+        var excelRows = collected.Rows.Select(row => new UserExportRow
         {
             UserName = row.UserName,
             NickName = row.NickName,
@@ -130,7 +158,7 @@ public sealed class UserExportQueryHandler(ISender sender) : QueryHandler<UserEx
             CreatedAt = row.CreatedAt.ToString("yyyy-MM-dd HH:mm:ss")
         });
 
-        return await ExcelExportSupport.BuildExcelAsync("用户列表", excelRows, cancellationToken);
+        return await ExcelExportSupport.BuildExcelAsync("用户列表", excelRows, collected.Truncated, cancellationToken);
     }
 }
 
@@ -142,15 +170,14 @@ public sealed class RoleExportQueryHandler(ISender sender) : QueryHandler<RoleEx
     /// <inheritdoc />
     protected override async Task<ExportFileResponse> HandleAsync(RoleExportQuery query, CancellationToken cancellationToken)
     {
-        var rows = await ExcelExportSupport.CollectAsync<RolePagedResponse>(async pageIndex =>
+        var collected = await ExcelExportSupport.CollectAsync<RolePagedResponse>(async (pageIndex, token) =>
         {
-            query.Request.PageIndex = pageIndex;
-            query.Request.PageSize = ExcelExportSupport.PageRows;
-            var page = await sender.Send(new RoleQueryPaged(query.Request), cancellationToken);
+            var pageRequest = query.Request.CloneForPage<RolePageRequest>(pageIndex, ExcelExportSupport.PageRows);
+            var page = await sender.Send(new RoleQueryPaged(pageRequest), token);
             return (page.Items, page.Total);
         }, cancellationToken);
 
-        var excelRows = rows.Select(row => new RoleExportRow
+        var excelRows = collected.Rows.Select(row => new RoleExportRow
         {
             RoleName = row.RoleName,
             RoleKey = row.RoleKey,
@@ -159,7 +186,7 @@ public sealed class RoleExportQueryHandler(ISender sender) : QueryHandler<RoleEx
             CreatedAt = row.CreatedAt.ToString("yyyy-MM-dd HH:mm:ss")
         });
 
-        return await ExcelExportSupport.BuildExcelAsync("角色列表", excelRows, cancellationToken);
+        return await ExcelExportSupport.BuildExcelAsync("角色列表", excelRows, collected.Truncated, cancellationToken);
     }
 }
 
@@ -171,15 +198,14 @@ public sealed class OperLogExportQueryHandler(ISender sender) : QueryHandler<Ope
     /// <inheritdoc />
     protected override async Task<ExportFileResponse> HandleAsync(OperLogExportQuery query, CancellationToken cancellationToken)
     {
-        var rows = await ExcelExportSupport.CollectAsync<OperLogPagedResponse>(async pageIndex =>
+        var collected = await ExcelExportSupport.CollectAsync<OperLogPagedResponse>(async (pageIndex, token) =>
         {
-            query.Request.PageIndex = pageIndex;
-            query.Request.PageSize = ExcelExportSupport.PageRows;
-            var page = await sender.Send(new OperLogQueryPaged(query.Request), cancellationToken);
+            var pageRequest = query.Request.CloneForPage<OperLogPageRequest>(pageIndex, ExcelExportSupport.PageRows);
+            var page = await sender.Send(new OperLogQueryPaged(pageRequest), token);
             return (page.Items, page.Total);
         }, cancellationToken);
 
-        var excelRows = rows.Select(row => new OperLogExportRow
+        var excelRows = collected.Rows.Select(row => new OperLogExportRow
         {
             Title = row.Title,
             BusinessType = ExcelExportSupport.ToText(row.BusinessType),
@@ -193,7 +219,7 @@ public sealed class OperLogExportQueryHandler(ISender sender) : QueryHandler<Ope
             OperTime = row.OperTime?.ToString("yyyy-MM-dd HH:mm:ss") ?? string.Empty
         });
 
-        return await ExcelExportSupport.BuildExcelAsync("操作日志", excelRows, cancellationToken);
+        return await ExcelExportSupport.BuildExcelAsync("操作日志", excelRows, collected.Truncated, cancellationToken);
     }
 }
 
@@ -205,15 +231,14 @@ public sealed class LoginLogExportQueryHandler(ISender sender) : QueryHandler<Lo
     /// <inheritdoc />
     protected override async Task<ExportFileResponse> HandleAsync(LoginLogExportQuery query, CancellationToken cancellationToken)
     {
-        var rows = await ExcelExportSupport.CollectAsync<LoginLogPagedResponse>(async pageIndex =>
+        var collected = await ExcelExportSupport.CollectAsync<LoginLogPagedResponse>(async (pageIndex, token) =>
         {
-            query.Request.PageIndex = pageIndex;
-            query.Request.PageSize = ExcelExportSupport.PageRows;
-            var page = await sender.Send(new LoginLogQueryPaged(query.Request), cancellationToken);
+            var pageRequest = query.Request.CloneForPage<LoginLogPageRequest>(pageIndex, ExcelExportSupport.PageRows);
+            var page = await sender.Send(new LoginLogQueryPaged(pageRequest), token);
             return (page.Items, page.Total);
         }, cancellationToken);
 
-        var excelRows = rows.Select(row => new LoginLogExportRow
+        var excelRows = collected.Rows.Select(row => new LoginLogExportRow
         {
             UserName = row.UserName,
             Ip = row.Ip,
@@ -223,6 +248,6 @@ public sealed class LoginLogExportQueryHandler(ISender sender) : QueryHandler<Lo
             LoginTime = row.LoginTime?.ToString("yyyy-MM-dd HH:mm:ss") ?? string.Empty
         });
 
-        return await ExcelExportSupport.BuildExcelAsync("登录日志", excelRows, cancellationToken);
+        return await ExcelExportSupport.BuildExcelAsync("登录日志", excelRows, collected.Truncated, cancellationToken);
     }
 }

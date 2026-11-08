@@ -48,6 +48,8 @@ public sealed class AuditLogBehavior<TRequest, TResponse>(
     /// <inheritdoc />
     public async Task<TResponse> Handle(TRequest request, RequestHandlerDelegate<TResponse> next, CancellationToken cancellationToken)
     {
+        // 已取消的请求在管道入口即中止；业务成功 / 失败路径的审计写入仍用 CancellationToken.None 保证落库
+        cancellationToken.ThrowIfCancellationRequested();
         // 仅审计写命令；查询请求直接透放
         if (request is not ICommand)
         {
@@ -102,7 +104,9 @@ public sealed class AuditLogBehavior<TRequest, TResponse>(
                 UserId = currentUser.UserId,
                 TraceId = operationContext.TraceId,
                 Status = success ? ExecutionStatus.Success : ExecutionStatus.Failure,
-                ErrorMsg = exception is null ? null : Truncate(exception.Message),
+                ErrorMsg = exception is null
+                    ? null
+                    : Truncate(SensitiveDataMasker.MaskFreeText(exception.Message)),
                 CostMs = costMs,
                 OperTime = DateTime.UtcNow
             }, cancellationToken);

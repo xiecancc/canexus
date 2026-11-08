@@ -192,7 +192,7 @@ public abstract class AggregateDeleteCommandHandler<TCommand, TEntity>(
         // 变更前捕获聚合快照（软删除可能回填墓碑字段，事件携带删除前状态）
         var snapshot = entity.Snapshot<TEntity>();
 
-        await Repository.DeleteAsync(command.Id, cancellationToken);
+        await Repository.DeleteAsync(command.Id, cancellationToken, command.Version);
 
         // 关键节点发布删除领域事件（响应动作由监听器处理）
         await EventPublisher.PublishAsync(CreateEvent(snapshot), cancellationToken);
@@ -288,7 +288,7 @@ public abstract class AggregateRestoreCommandHandler<TCommand, TEntity>(
     protected sealed override async Task<bool> HandleAsync(TCommand command, CancellationToken cancellationToken)
     {
         // 幂等恢复：主键不存在或未删除时仓储静默忽略（返回 false），不发布事件
-        if (!await Repository.RestoreAsync(command.Id, cancellationToken))
+        if (!await Repository.RestoreAsync(command.Id, cancellationToken, command.Version))
         {
             return false;
         }

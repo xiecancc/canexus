@@ -9,7 +9,9 @@ namespace Domain.Shared.Json;
 /// 零依赖的 <c>Domain.Shared</c>（共享内核），而非 <c>Infrastructure.Shared</c>（基础设施横切关注点）。</para>
 /// <list type="bullet">
 /// <item>统一配置（<see cref="WebOptions"/>）：Web 默认约定（camelCase 属性名、反序列化忽略大小写、字符串数字兼容读取）
-/// 叠加中文不转义（UnsafeRelaxedJsonEscaping），HTTP 响应与日志中的中文保持可读；</item>
+/// 叠加中文不转义（UnsafeRelaxedJsonEscaping），HTTP 响应与日志中的中文保持可读；
+/// T-16 起全应用唯一一份 JSON 配置——Outbox 载荷序列化与健康报告写出均复用本单例，
+/// 不再自建 Options；忽略大小写的读取策略同时兼容存量 PascalCase Outbox 载荷；</item>
 /// <item><see cref="Serialize{TValue}(TValue)"/> / <see cref="Deserialize{TValue}(string)"/>：标准版本，
 /// 非法输入抛 JsonException，由调用方按自身异常策略处理（请求链路上的异常统一进入全局异常处理）；</item>
 /// <item><see cref="TryDeserialize{TValue}"/>：容错版本，解析失败返回 false 不抛异常，

@@ -4,7 +4,12 @@ namespace Domain.Shared.Results;
 
 /// <summary>
 /// 统一响应结果（无数据载荷版本）。
-/// <para>响应体固定为 <c>{ code, message, data }</c> 结构：成功码 200，业务失败码见 <see cref="ErrorCodes"/> 分段规则。</para>
+/// <para>响应体为 <c>{ code, message }</c>：成功码 200，业务失败码见 <see cref="ErrorCodes"/> 分段规则；
+/// 带载荷的成功响应由 <see cref="Result{T}"/> 追加 <c>data</c> 字段。</para>
+/// <para>T-16 契约约定：成功工厂只保留 <see cref="Ok()"/>（无载荷 / 默认消息）、
+/// <see cref="OkMessage(string)"/>（无载荷 / 自定义消息）与 <see cref="Ok{T}(T, string)"/>（带载荷）三种入口。
+/// 不再提供 <c>Ok(string message)</c> 重载——它与 <c>Ok&lt;string&gt;(data)</c> 的单字符串实参形态无法区分，
+/// 会把本应作为 data 的字符串静默改写成 message。</para>
 /// </summary>
 public class Result
 {
@@ -21,14 +26,18 @@ public class Result
     [JsonIgnore]
     public bool IsSuccess => Code == SuccessCode;
 
-    /// <summary>创建成功响应（无数据载荷）。</summary>
+    /// <summary>创建成功响应（无数据载荷，使用默认提示消息）。</summary>
+    /// <returns>统一响应结果。</returns>
+    public static Result Ok() => new() { Code = SuccessCode, Message = "操作成功" };
+
+    /// <summary>创建成功响应（无数据载荷，自定义提示消息）。</summary>
     /// <param name="message">提示消息。</param>
     /// <returns>统一响应结果。</returns>
-    public static Result Ok(string message = "操作成功") => new() { Code = SuccessCode, Message = message };
+    public static Result OkMessage(string message) => new() { Code = SuccessCode, Message = message };
 
     /// <summary>创建成功响应（带数据载荷）。</summary>
     /// <typeparam name="T">数据载荷类型。</typeparam>
-    /// <param name="data">响应数据。</param>
+    /// <param name="data">响应数据（字符串同样是合法载荷，不会被当作提示消息）。</param>
     /// <param name="message">提示消息。</param>
     /// <returns>带数据的统一响应结果。</returns>
     public static Result<T> Ok<T>(T data, string message = "操作成功") => new() { Code = SuccessCode, Message = message, Data = data };

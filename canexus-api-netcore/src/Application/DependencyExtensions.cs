@@ -14,7 +14,7 @@ namespace Application;
 /// <summary>应用层依赖注册扩展。</summary>
 public static class DependencyExtensions
 {
-    /// <summary>注册应用层能力：MediatR（CQRS 分发 + 领域事件通知）、Pipeline Behaviors（验证 / 数据范围守卫 / 日志 / 性能 / 事务）、FluentValidation 验证器、AutoMapper 映射、领域事件发布器、权限校验与数据范围过滤。</summary>
+    /// <summary>注册应用层能力：MediatR（命令 / 查询请求分发 + 领域事件通知）、Pipeline Behaviors（审计 / 验证 / 数据范围守卫 / 日志 / 性能 / 事务）、FluentValidation 验证器、AutoMapper 映射、领域事件发布器、权限校验与数据范围过滤。</summary>
     /// <param name="services">服务集合。</param>
     /// <returns>服务集合。</returns>
     public static IServiceCollection AddApplicationServices(this IServiceCollection services)
@@ -35,7 +35,8 @@ public static class DependencyExtensions
             configuration.AddBehavior(typeof(IPipelineBehavior<,>), typeof(PerformanceBehavior<,>));
             configuration.AddBehavior(typeof(IPipelineBehavior<,>), typeof(TransactionBehavior<,>));
 
-            // 通知发布策略：逐监听器异常隔离（单个监听器失败仅记录日志，不阻断其余监听器与业务请求）
+            // 通知发布策略：逐监听器隔离（单个监听器失败不阻断其余监听器），但失败须以聚合异常向上
+            // 传播给 Outbox 投递服务进入重试，绝不把消息标记为已处理（见 IsolatedNotificationPublisher）
             configuration.NotificationPublisherType = typeof(IsolatedNotificationPublisher);
         });
 

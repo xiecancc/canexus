@@ -1,6 +1,5 @@
 
 using Domain.Shared.Exceptions;
-using Domain.Shared.Json;
 using Domain.Shared.Localization;
 using Domain.Shared.Results;
 
@@ -78,19 +77,10 @@ public sealed class GlobalExceptionHandlingMiddleware(RequestDelegate next, ILog
         }
     }
 
-    /// <summary>将统一响应结果写入 HTTP 响应（附带 X-Trace-Id 响应头供客户端反馈定位）。</summary>
-    private static async Task WriteResultAsync(HttpContext context, int statusCode, Result result)
-    {
-        // 响应已开始输出时无法改写状态码，只能中止后续写入，避免破坏响应流
-        if (context.Response.HasStarted)
-        {
-            return;
-        }
-
-        context.Response.Clear();
-        context.Response.StatusCode = statusCode;
-        context.Response.ContentType = "application/json;charset=utf-8";
-        context.Response.Headers["X-Trace-Id"] = context.TraceIdentifier;
-        await context.Response.WriteAsync(JsonHelper.Serialize(result));
-    }
+    /// <summary>统一响应写入委托到全站唯一实现（含 X-Trace-Id 与响应已开始时的短路）。</summary>
+    /// <param name="context">HTTP 上下文。</param>
+    /// <param name="statusCode">HTTP 状态码。</param>
+    /// <param name="result">统一响应。</param>
+    private static Task WriteResultAsync(HttpContext context, int statusCode, Result result) =>
+        UnifiedResponseWriter.WriteResultAsync(context, statusCode, result);
 }

@@ -6,7 +6,6 @@ namespace Domain.Shared.Results;
 /// <item><c>400xx</c>：通用/公共段，对应 HTTP 400；</item>
 /// <item><c>401xx</c>：认证段，对应 HTTP 401；</item>
 /// <item><c>403xx</c>：权限段，对应 HTTP 403；</item>
-/// <item><c>404xx</c>：资源不存在段，对应 HTTP 404；</item>
 /// <item><c>4002xx、4003xx……</c>：业务模块段（第 4 位起为模块编号，末两位段内自增），对应 HTTP 400：
 /// 用户 = 4002xx、角色 = 4003xx、菜单 = 4004xx、部门 = 4005xx……后续模块按序追加；</item>
 /// <item><c>50000</c>：系统内部错误，对应 HTTP 500。</item>
@@ -255,7 +254,12 @@ public static class ErrorCodes
 
     /// <summary>根据业务错误码映射 HTTP 状态码（全局异常处理中间件使用）。</summary>
     /// <param name="errorCode">业务错误码。</param>
-    /// <returns>HTTP 状态码：认证段 401、权限段 403、资源段 404、系统段 500，其余默认 400。</returns>
+    /// <returns>HTTP 状态码：认证段 401、权限段 403、系统段 500，其余默认 400。</returns>
+    /// <remarks>
+    /// T-16：移除从未被任何常量使用的 404xx 死分支（404xx 段已无常量，保留只会误导后续按「资源段 404」新增错误码）。
+    /// <see cref="AuthCaptchaError"/> 落在 401xx 段但特判为 400：验证码错误属于登录表单输入校验失败，
+    /// 若返回 401 会触发前端 <c>utils/request.ts</c> 的刷新令牌重试链路；此处 HTTP 语义优先于分段字面值。
+    /// </remarks>
     public static int GetHttpStatusCode(int errorCode) => errorCode switch
     {
         Result.SuccessCode => 200,
@@ -263,7 +267,6 @@ public static class ErrorCodes
         CommonTooManyRequests => 429,
         >= 40100 and <= 40199 => 401,
         >= 40300 and <= 40399 => 403,
-        >= 40400 and <= 40499 => 404,
         CommonSystemError => 500,
         _ => 400
     };

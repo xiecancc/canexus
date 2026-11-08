@@ -9,6 +9,7 @@ using Domain.Services;
 using Domain.Shared.Results;
 using Infrastructure;
 using Infrastructure.DataAccess;
+using Infrastructure.Shared.DataAccess;
 using Infrastructure.Shared.Options;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.Mvc;
@@ -38,23 +39,13 @@ public class Program
                 .ReadFrom.Services(services)
                 .Enrich.FromLogContext());
 
-            // JWT 密钥启动强校验（S3）：非 Development 环境缺失 / 为空 / 使用默认不安全值直接启动失败；
-            // Development 环境允许回退到开发专用密钥，但必须输出明确告警，不允许静默使用弱密钥。
+            // Development 环境允许 JWT 密钥回退到开发专用值，但必须输出明确告警，不允许静默使用弱密钥。
             var jwtSecret = builder.Configuration["Jwt:Secret"];
             var insecureJwtSecret = string.IsNullOrWhiteSpace(jwtSecret)
                 || string.Equals(jwtSecret, JwtOption.InsecureDefaultSecret, StringComparison.Ordinal);
-            if (!builder.Environment.IsDevelopment())
+            if (builder.Environment.IsDevelopment() && insecureJwtSecret)
             {
-                if (insecureJwtSecret)
-                {
-                    Log.Fatal("启动失败：非 Development 环境 Jwt:Secret 未配置、为空或仍为默认不安全值 {DefaultSecret}", JwtOption.InsecureDefaultSecret);
-                    throw new InvalidOperationException(
-                        $"Jwt:Secret 未配置或仍为默认不安全值 {JwtOption.InsecureDefaultSecret}；非 Development 环境必须提供至少 32 位的独立随机密钥");
-                }
-            }
-            else if (insecureJwtSecret)
-            {
-                Log.Warning("当前为 Development 环境且 Jwt:Secret 未配置或仍为默认不安全值，已启用开发回退密钥；生产环境必须显式配置至少 32 位随机密钥");
+                Log.Warning("当前为 Development 环境且 Jwt:Secret 未配置或仍为默认不安全值，已启用开发回退密钥；生产环境必须显式配置至少 32 字节的独立随机密钥");
                 builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
                 {
                     ["Jwt:Secret"] = JwtOption.DevelopmentFallbackSecret
@@ -143,9 +134,21 @@ public class Program
 
             var app = builder.Build();
 
+            // 启动期配置基线：非 Development 校验密钥类配置，Production 额外校验传输 / 限流 / 租户 /
+            // 转发头 / L2 缓存基线，一次性列出全部不合规项后阻止启动（避免逐项试错式上线）。
+            // 必须在 Build() 之后用 app.Configuration 校验：WebApplicationFactory.ConfigureAppConfiguration
+            // 注入的测试密钥在 Build() 时才合并进 ConfigurationManager，提前校验会让集成测试宿主误判为空密钥
+            ProductionConfigurationValidator.Validate(app.Configuration, app.Environment);
+
             // 启动期一致性校验（P2-B4）：扫描控制器 / Action 的 [RequirePermission] 声明，与集中注册表比对；
             // 存在未声明权限即阻止启动（新增权限必须先在 PermissionDefinitions 集中声明）
             PermissionsStartupValidator.Validate(typeof(Program).Assembly);
+
+            // 启动期一致性校验（写命令验证器覆盖）：ValidationBehavior 对无验证器的请求直接放行，
+            // 故新增写命令必须同时补 IValidator<T>，缺失即在启动前汇总报错而不是静默绕过校验
+            WriteCommandValidatorStartupValidator.Validate(
+                typeof(Application.Contracts.Abstractions.ICommand).Assembly,
+                typeof(Application.Validators.Common.WriteCommandValidator<,>).Assembly);
 
             // 反向代理转发头解析（P0-S5）：部署在 Nginx / SLB 之后时（Forwarded:Enabled=true）解析 X-Forwarded-*，
             // 还原真实客户端 IP 供限流分区与操作日志使用；须先于任何消费 RemoteIpAddress 的中间件挂载。
@@ -191,14 +194,25 @@ public class Program
             // Swagger 文档管道（仅开发环境：/openapi/v1.json + /swagger UI）
             app.UseSwaggerDocumentation();
 
-            // 启动时初始化数据库：自动建库 + CodeFirst 同步表结构 + 幂等种子数据
+            // 启动时按「库 / 结构 / 种子」三层分别判定：库与结构由 DbInitializer 判定（结构就绪即跳过任何 DDL），
+            // 种子由 SeedDataInitializer 幂等补齐；三层结论写入启动日志与 /health/ready
             using (var scope = app.Services.CreateScope())
             {
+                var initializationState = scope.ServiceProvider.GetRequiredService<DatabaseInitializationState>();
                 var dbInitializer = scope.ServiceProvider.GetRequiredService<DbInitializer>();
                 await dbInitializer.InitializeAsync();
 
                 var seedDataInitializer = scope.ServiceProvider.GetRequiredService<SeedDataInitializer>();
                 await seedDataInitializer.InitializeAsync();
+
+                // 启动期校验内置锚点（超管角色唯一 / admin 存在且启用 / 绑定关系存在），失败即阻止启动
+                await seedDataInitializer.ValidateBuiltInAnchorsAsync();
+                initializationState.MarkSeed(DatabaseInitializationStage.Ready);
+
+                var summary = initializationState.Snapshot();
+                app.Logger.LogInformation(
+                    "数据库初始化完成：库={Database} 结构={Schema} 种子={Seed} 结构版本={AppliedVersion}/{ExpectedVersion}",
+                    summary.Database, summary.Schema, summary.Seed, summary.AppliedVersion, summary.ExpectedVersion);
 
                 // 装载运行中（Status=1）的定时任务进 Quartz 调度器（需在种子数据之后执行）
                 var jobScheduleManager = scope.ServiceProvider.GetRequiredService<IJobScheduleManager>();
@@ -209,16 +223,17 @@ public class Program
 
             // 健康检查端点（匿名访问，供负载均衡 / 运维探针调用，JSON 报告便于监控采集）：
             // /health/live 仅进程存活自检；/health/ready 含数据库 / 缓存 / 调度器就绪探测
+            // FallbackPolicy 要求所有端点默认认证，健康检查作为匿名探针显式放行
             app.MapHealthChecks("/health/live", new HealthCheckOptions
             {
                 Predicate = check => check.Tags.Contains("live"),
                 ResponseWriter = HealthReportWriter.WriteAsync
-            });
+            }).AllowAnonymous();
             app.MapHealthChecks("/health/ready", new HealthCheckOptions
             {
                 Predicate = check => check.Tags.Contains("ready"),
                 ResponseWriter = HealthReportWriter.WriteAsync
-            });
+            }).AllowAnonymous();
 
             app.Run();
         }

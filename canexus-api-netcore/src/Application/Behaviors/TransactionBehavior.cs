@@ -34,13 +34,22 @@ public sealed class TransactionBehavior<TRequest, TResponse>(
     /// <inheritdoc />
     public async Task<TResponse> Handle(TRequest request, RequestHandlerDelegate<TResponse> next, CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         // 非写命令（查询 / 其他请求）直接透放：只读路径零事务开销
         if (request is not ICommand)
         {
             return await next();
         }
 
-        var response = await unitOfWork.RunInTransactionAsync(() => next(), cancellationToken);
+        // MediatR 12.4.1 的 RequestHandlerDelegate 不带令牌参数：令牌由 Send 在构建管道时捕获，
+        // 这里再在事务委托入口显式检查一次，取消时由 UseTranAsync 捕获异常回滚而非提交
+        var response = await unitOfWork.RunInTransactionAsync(
+            () =>
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                return next();
+            },
+            cancellationToken);
 
         // 提交后投递：本请求事务内持久化的领域事件在此同步分发（失败不影响响应，转后台重试）
         await DeliverPendingOutboxAsync(cancellationToken);

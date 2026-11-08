@@ -19,6 +19,9 @@ public sealed class ValidationBehavior<TRequest, TResponse>(IEnumerable<IValidat
     /// <inheritdoc />
     public async Task<TResponse> Handle(TRequest request, RequestHandlerDelegate<TResponse> next, CancellationToken cancellationToken)
     {
+        // MediatR 12.4.1 的 RequestHandlerDelegate 不带令牌参数，令牌由 Send 在构建管道时捕获；
+        // 此处显式检查，保证取消在进入后续行为 / 处理器前即中止（不白跑校验与事务）
+        cancellationToken.ThrowIfCancellationRequested();
         if (!validators.Any())
         {
             return await next();

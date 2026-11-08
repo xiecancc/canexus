@@ -75,3 +75,19 @@ public sealed class UserUpdateRolesCommandValidator : AbstractValidator<UserUpda
 
 /// <summary>删除用户命令验证器（乐观锁版本号入口兜底）。</summary>
 public sealed class UserDeleteCommandValidator() : DeleteCommandValidator<UserDeleteCommand>;
+
+/// <summary>批量导入用户命令验证器（写命令入口覆盖：文件流非空且可读）。</summary>
+/// <remarks>构造函数。</remarks>
+public sealed class UserImportCommandValidator : AbstractValidator<UserImportCommand>
+{
+    /// <summary>构造函数：装配文件流规则。</summary>
+    public UserImportCommandValidator()
+    {
+        RuleFor(command => command.Content)
+            .NotNull()
+            .WithMessage("导入文件内容不能为空");
+        RuleFor(command => command.Content)
+            .Must(stream => stream is null || stream.CanRead)
+            .WithMessage("导入文件流不可读");
+    }
+}

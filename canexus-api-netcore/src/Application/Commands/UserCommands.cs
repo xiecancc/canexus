@@ -7,13 +7,52 @@ using Domain.Events;
 using Domain.Repositories;
 using Domain.Services.Auth;
 using Domain.Services.Events;
+using Domain.Services.Rules;
 using Domain.Services.Users;
 using Domain.Shared.Constants;
 using Domain.Shared.Enums;
 using Domain.Shared.Exceptions;
 using Domain.Shared.Results;
+using Infrastructure.Shared.Caching;
+using Infrastructure.Shared.Tenants;
 
 namespace Application.Commands;
+/// <summary>用户初始密码解析：把「参数配置」中的 sys.user.initPassword 作为创建 / 导入用户的唯一缺省口令来源。</summary>
+internal static class UserPasswordSupport
+{
+    /// <summary>读取用户初始密码（经参数值缓存；配置缺失或为空时要求调用方显式提供密码）。</summary>
+    /// <param name="configRepository">参数配置仓储（只读）。</param>
+    /// <param name="cache">业务缓存端口。</param>
+    /// <param name="tenantId">当前租户 Id（缓存键按租户隔离，null 表示平台范围）。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>用户初始密码明文。</returns>
+    public static async Task<string> ResolveInitialPasswordAsync(
+        IDomainRepository<SysConfig> configRepository,
+        ICache cache,
+        Guid? tenantId,
+        CancellationToken cancellationToken)
+    {
+        var configKey = ConfigConstants.InitPasswordKey;
+        var cacheKey = ConfigRules.ValueCacheKey(configKey, tenantId);
+        var cached = await cache.GetAsync<string>(cacheKey, cancellationToken);
+        if (!string.IsNullOrWhiteSpace(cached))
+        {
+            return cached;
+        }
+
+        var config = (await configRepository.GetListAsync(
+            [c => c.ConfigKey == configKey], cancellationToken: cancellationToken)).FirstOrDefault();
+        if (config is null || string.IsNullOrWhiteSpace(config.ConfigValue))
+        {
+            throw new BusinessException(ErrorCodes.CommonValidationFailed,
+                "未配置用户初始密码，请显式填写密码或在「参数配置」中设置 sys.user.initPassword");
+        }
+
+        // 仅缓存非空值：配置缺失时抛出的业务异常不进入缓存，补配后立即生效
+        await cache.SetAsync(cacheKey, config.ConfigValue, CacheTtl.Medium, cancellationToken);
+        return config.ConfigValue;
+    }
+}
 /// <summary>用户-角色关联的共享业务逻辑（角色存在性校验与全量替换，供多个用户命令处理器复用）。</summary>
 internal static class UserRoleSupport
 {
@@ -50,8 +89,11 @@ public sealed class UserCreateCommandHandler(
     IAggregateRepository<SysRole> roleRepository,
     IAggregateTreeRepository<SysDept> deptRepository,
     IDomainRepository<SysUserRole> userRoleRepository,
+    IDomainRepository<SysConfig> configRepository,
     IPasswordHasher passwordHasher,
-    IDomainEventPublisher domainEventPublisher) : RequestHandler<UserCreateCommand, bool>
+    ICache cache,
+    IDomainEventPublisher domainEventPublisher,
+    ITenantContext tenantContext) : RequestHandler<UserCreateCommand, bool>
 {
     /// <inheritdoc />
     protected override async Task<bool> HandleAsync(UserCreateCommand command, CancellationToken cancellationToken)
@@ -69,14 +111,18 @@ public sealed class UserCreateCommandHandler(
             throw new BusinessException(ErrorCodes.CommonDataNotFound, "所属部门不存在");
         }
 
+        // 密码缺省取「参数配置」sys.user.initPassword（而非代码常量），使用初始密码时强制首登改密
+        var useInitialPassword = string.IsNullOrWhiteSpace(request.Password);
+        var password = useInitialPassword
+            ? await UserPasswordSupport.ResolveInitialPasswordAsync(configRepository, cache, tenantContext.TenantId, cancellationToken)
+            : request.Password!;
+
         var user = new SysUser
         {
             UserName = userName,
             NickName = request.NickName.Trim(),
-            // 密码缺省使用默认密码（DTO 注释约定），BCrypt 存储；使用默认初始密码时强制首登改密
-            PasswordHash = passwordHasher.Hash(
-                string.IsNullOrWhiteSpace(request.Password) ? UserConstants.DefaultPassword : request.Password),
-            MustChangePassword = string.IsNullOrWhiteSpace(request.Password),
+            PasswordHash = passwordHasher.Hash(password),
+            MustChangePassword = useInitialPassword,
             DeptId = request.DeptId,
             Email = request.Email,
             Phone = request.Phone,
@@ -116,7 +162,7 @@ public sealed class UserDeleteCommandHandler(
         var snapshot = user.Snapshot<SysUser>();
 
         // 软删除用户与其角色关联（保持可追溯）；关联表按条件物理删除（单条 SQL）
-        await userRepository.DeleteAsync(command.Id, cancellationToken);
+        await userRepository.DeleteAsync(command.Id, cancellationToken, command.Version);
         await userRoleRepository.DeleteAsync(ur => ur.UserId == command.Id, cancellationToken);
 
         // 关键节点发布用户删除领域事件（携带删除前的用户状态）
@@ -240,6 +286,11 @@ public sealed class UserUpdateRolesCommandHandler(
     {
         var user = await userRepository.GetAsync([it => it.Id == command.Id], cancellationToken)
             ?? throw new BusinessException(ErrorCodes.UserNotFound, $"用户 {command.Id} 不存在");
+
+        // 角色全量替换同样以命令携带的 Version 做 CAS：经聚合仓储 OptLock 更新轮换版本令牌，
+        // 陈旧版本直接抛 40005，且旧快照在替换关联表之后也无法再覆盖新状态（与替换同处业务事务）。
+        user.ApplyVersion(command.Version);
+        await userRepository.UpdateAsync(user, cancellationToken);
         await UserRoleSupport.ValidateRolesAsync(roleRepository, command.Request.RoleIds, cancellationToken);
 
         // 变更前查询既有角色 Id 集合（全量替换随后执行）
