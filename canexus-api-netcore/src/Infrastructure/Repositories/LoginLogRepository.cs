@@ -27,8 +27,7 @@ public class LoginLogRepository(ISqlSugarClient client, IUserContext currentUser
     /// <inheritdoc />
     public async Task ClearAsync(DateTime fromInclusive, DateTime toExclusive, CancellationToken cancellationToken = default)
     {
-        var delete = Client.Deleteable<SysLoginLog>()
-            .Where(log => log.CreatedAt >= fromInclusive && log.CreatedAt < toExclusive);
+        var delete = BuildHardDelete(log => log.CreatedAt >= fromInclusive && log.CreatedAt < toExclusive);
         if (CurrentTenantId is { } tenantId)
         {
             delete = delete.Where(log => log.TenantId == tenantId);
@@ -40,7 +39,7 @@ public class LoginLogRepository(ISqlSugarClient client, IUserContext currentUser
     /// <inheritdoc />
     public async Task HardDeleteAsync(Guid id, CancellationToken cancellationToken = default)
     {
-        var delete = Client.Deleteable<SysLoginLog>().In(id);
+        var delete = BuildHardDelete(log => log.Id == id);
         if (CurrentTenantId is { } tenantId)
         {
             delete = delete.Where(log => log.TenantId == tenantId);
@@ -56,7 +55,7 @@ public class LoginLogRepository(ISqlSugarClient client, IUserContext currentUser
         CancellationToken cancellationToken = default)
     {
         var total = new RefAsync<int>();
-        var query = Client.Queryable<SysLoginLog>();
+        var query = BuildQuery();
         if (predicate is not null)
         {
             query = query.Where(predicate);

@@ -22,7 +22,7 @@ public class JobLogRepository(ISqlSugarClient client, IUserContext currentUser, 
         CancellationToken cancellationToken = default)
     {
         var total = new RefAsync<int>();
-        var query = Client.Queryable<SysJobLog>();
+        var query = BuildQuery();
         if (predicate is not null)
         {
             query = query.Where(predicate);

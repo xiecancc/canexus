@@ -25,10 +25,10 @@ public class AggregateTreeRepository<TAggregate>(ISqlSugarClient client, IUserCo
     /// <inheritdoc />
     public virtual async Task<List<TAggregate>> GetChildrenAsync(Guid parentId, CancellationToken cancellationToken = default)
     {
-        return await Client.Queryable<TAggregate>()
+        return await BuildQuery()
             .Where(it => it.ParentId == parentId)
             .OrderBy(it => it.Id)
-            .ToListAsync();
+            .ToListAsync(cancellationToken);
     }
 
     /// <inheritdoc />
@@ -41,7 +41,7 @@ public class AggregateTreeRepository<TAggregate>(ISqlSugarClient client, IUserCo
         // 广度优先逐层下探，visited 防御环状脏数据导致死循环
         while (currentIds.Count > 0)
         {
-            var children = await Client.Queryable<TAggregate>()
+            var children = await BuildQuery()
                 .Where(it => currentIds.Contains(it.ParentId))
                 .OrderBy(it => it.Id)
                 .ToListAsync();
