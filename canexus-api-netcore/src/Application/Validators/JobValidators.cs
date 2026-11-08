@@ -50,7 +50,7 @@ public class JobRequestValidator<TRequest> : AbstractValidator<TRequest>
                 var jobType = request.JobType?.Trim() ?? string.Empty;
                 if (!ScheduleManager.IsValidJobType(jobType))
                 {
-                    throw new BusinessException(ErrorCodes.JobTypeInvalid, $"任务类型「{jobType}」不可解析或未实现调度任务接口");
+                    throw new BusinessException(ErrorCodes.JobTypeInvalid, $"任务类型「{jobType}」不在已登记作业白名单内");
                 }
             });
     }
@@ -82,3 +82,14 @@ public sealed class JobUpdateStatusCommandValidator : AbstractValidator<JobUpdat
 
 /// <summary>删除定时任务命令验证器（乐观锁版本号入口兜底）。</summary>
 public sealed class JobDeleteCommandValidator() : DeleteCommandValidator<JobDeleteCommand>;
+
+/// <summary>立即执行一次任务命令验证器（目标 Id 入口兜底）。</summary>
+/// <remarks>构造函数。</remarks>
+public sealed class JobRunOnceCommandValidator : AbstractValidator<JobRunOnceCommand>
+{
+    /// <summary>构造函数：装配目标 Id 规则。</summary>
+    public JobRunOnceCommandValidator()
+    {
+        RuleFor(command => command.Id).NoEmptyRule("定时任务 Id 不能为空");
+    }
+}

@@ -199,6 +199,8 @@ public sealed class JobScheduleManager(
             .WithIdentity(jobKey)
             .WithDescription(job.JobName)
             .UsingJobData(JobExecuteWrapper.JobIdKey, job.Id.ToString())
+            // 执行期包装器把失败传播为 JobExecutionException，此处登记恢复语义供调度器在实例故障后重跑
+            .RequestRecovery()
             .StoreDurably()
             .Build();
     }
@@ -257,13 +259,17 @@ public sealed class JobScheduleManager(
         return trigger is ICronTrigger cronTrigger ? cronTrigger.CronExpressionString : null;
     }
 
-    /// <summary>校验任务类型可解析且实现 Quartz IJob，不合法抛出业务异常（拒绝入调度）。</summary>
+    /// <summary>
+    /// 校验任务类型可解析：入调度 / 立即执行时接受白名单标识与已登记历史别名（存量库升级后仍可运行）；
+    /// 新写入一律由 <see cref="IsValidJobType"/> 只接受白名单标识，杜绝任意 CLR 类型名。
+    /// </summary>
     /// <param name="job">任务定义。</param>
     private static void EnsureJobTypeValid(SysJob job)
     {
         if (JobTypeResolver.Resolve(job.JobType) is null)
         {
-            throw new BusinessException(ErrorCodes.JobTypeInvalid, $"任务「{job.JobName}」类型「{job.JobType}」不可解析或未实现 Quartz IJob，已拒绝入调度");
+            throw new BusinessException(ErrorCodes.JobTypeInvalid,
+                $"任务「{job.JobName}」类型「{job.JobType}」不在已登记白名单内（允许值：{string.Join(" / ", JobTypeResolver.AllowedKeys)}），已拒绝入调度");
         }
     }
 
@@ -271,5 +277,5 @@ public sealed class JobScheduleManager(
     public bool IsValidCronExpression(string cronExpression) => CronExpression.IsValidExpression(cronExpression);
 
     /// <inheritdoc />
-    public bool IsValidJobType(string jobType) => JobTypeResolver.Resolve(jobType) is not null;
+    public bool IsValidJobType(string jobType) => JobTypeResolver.IsAllowedInput(jobType);
 }

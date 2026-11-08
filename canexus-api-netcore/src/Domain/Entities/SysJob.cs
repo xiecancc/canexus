@@ -21,8 +21,8 @@ public class SysJob : AggregateBase
     [SugarColumn(ColumnDescription = "Cron 表达式（创建 / 更新时经调度端口校验）。", Length = 100)]
     public virtual string CronExpression { get; set; } = string.Empty;
 
-    /// <summary>任务类型（实现 Quartz.IJob 的程序集限定类型名，如内置示例 Infrastructure.Scheduling.NoOpJob, Infrastructure）。</summary>
-    [SugarColumn(ColumnDescription = "任务类型（实现 Quartz.IJob 的程序集限定类型名，如内置示例 Infrastructure.Scheduling.NoOpJob, Infrastructure）。", Length = 255)]
+    /// <summary>任务类型（已登记业务作业白名单标识，如内置示例 noop；不接受 CLR 程序集限定名）。</summary>
+    [SugarColumn(ColumnDescription = "任务类型（已登记业务作业白名单标识，如内置示例 noop；不接受 CLR 程序集限定名）。", Length = 255)]
     public virtual string JobType { get; set; } = string.Empty;
 
     /// <summary>状态（见 <see cref="Domain.Shared.Enums.CommonStatus"/>：1 运行即入调度，0 暂停即出调度——启停语义在调度域的表现）。</summary>

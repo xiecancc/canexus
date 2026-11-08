@@ -15,9 +15,10 @@ public sealed class LoginLogCleanCommandHandler(ILoginLogRepository loginLogRepo
     /// <inheritdoc />
     protected override async Task HandleAsync(LoginLogCleanCommand command, CancellationToken cancellationToken)
     {
-        await loginLogRepository.ClearAsync(cancellationToken);
+        // 日期粒度归一化：EndTime 含当天，转为次日零点独占上界（避免当天 00:00 之后的记录漏删）
+        await loginLogRepository.ClearAsync(command.BeginTime.Date, command.EndTime.Date.AddDays(1), cancellationToken);
 
-        // 关键节点发布登录日志删除领域事件（清空全部：聚合根标识为 null，无单条定位）
+        // 关键节点发布登录日志删除领域事件（按范围清空：聚合根标识为 null，无单条定位）
         await domainEventPublisher.PublishAsync(new LogDeletedEvent(LogDeletedEvent.LoginLogType), cancellationToken);
     }
 }
@@ -31,9 +32,10 @@ public sealed class OperLogCleanCommandHandler(IOperLogRepository operLogReposit
     /// <inheritdoc />
     protected override async Task HandleAsync(OperLogCleanCommand command, CancellationToken cancellationToken)
     {
-        await operLogRepository.ClearAsync(cancellationToken);
+        // 日期粒度归一化：EndTime 含当天，转为次日零点独占上界（避免当天 00:00 之后的记录漏删）
+        await operLogRepository.ClearAsync(command.BeginTime.Date, command.EndTime.Date.AddDays(1), cancellationToken);
 
-        // 关键节点发布操作日志删除领域事件（清空全部：聚合根标识为 null，无单条定位）
+        // 关键节点发布操作日志删除领域事件（按范围清空：聚合根标识为 null，无单条定位）
         await domainEventPublisher.PublishAsync(new LogDeletedEvent(LogDeletedEvent.OperLogType), cancellationToken);
     }
 }

@@ -50,16 +50,18 @@ public class JobExecuteWrapper(
             TriggerTime = DateTime.UtcNow
         };
         var stopwatch = Stopwatch.StartNew();
+        Exception? failure = null;
         try
         {
             var targetType = JobTypeResolver.Resolve(job.JobType)
-                ?? throw new BusinessException(ErrorCodes.JobTypeInvalid, $"任务类型「{job.JobType}」不可解析或未实现 Quartz IJob");
+                ?? throw new BusinessException(ErrorCodes.JobTypeInvalid, $"任务类型「{job.JobType}」不在已登记白名单内");
 
             var instance = (IJob)(serviceProvider.GetService(targetType) ?? Activator.CreateInstance(targetType)!);
             await instance.Execute(context);
         }
         catch (Exception exception)
         {
+            failure = exception;
             log.Status = ExecutionStatus.Failure;
             log.Result = "执行失败";
             log.Exception = TruncateException(exception.ToString());
@@ -78,6 +80,13 @@ public class JobExecuteWrapper(
                 // 日志写入失败不影响调度主流程：仅记录告警
                 logger.LogWarning(logException, "写入定时任务执行日志失败：{JobName}", job.JobName);
             }
+        }
+
+        // 失败必须传播给 Quartz：否则包装器吞掉异常会被判定为执行成功，
+        // 既不触发 JobDetail.RequestRecovery 的恢复路径，也不产生调度器级失败记录
+        if (failure is not null)
+        {
+            throw new JobExecutionException($"定时任务「{job.JobName}」执行失败", failure, refireImmediately: false);
         }
     }
 

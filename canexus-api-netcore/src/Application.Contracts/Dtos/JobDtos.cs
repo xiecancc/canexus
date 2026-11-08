@@ -28,7 +28,7 @@ public class JobPagedResponse : AggregatePagedResponse
     /// <summary>Cron 表达式。</summary>
     public string CronExpression { get; set; } = string.Empty;
 
-    /// <summary>任务类型（程序集限定类型名）。</summary>
+    /// <summary>任务类型（已登记业务作业白名单标识）。</summary>
     public string JobType { get; set; } = string.Empty;
 
     /// <summary>是否允许并发执行。</summary>

@@ -39,7 +39,7 @@ public interface IJobScheduleManager
     public bool IsValidCronExpression(string cronExpression);
 
     /// <summary>校验任务类型是否可用：程序集限定名可解析且实现底层调度器的任务接口。</summary>
-    /// <param name="jobType">程序集限定类型名（如 Infrastructure.Scheduling.NoOpJob, Infrastructure）。</param>
+    /// <param name="jobType">已登记业务作业白名单标识（如 noop）。</param>
     /// <returns>可用返回 true。</returns>
     public bool IsValidJobType(string jobType);
 }
