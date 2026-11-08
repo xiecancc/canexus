@@ -1,6 +1,7 @@
 
 using System.Text.Encodings.Web;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace Domain.Shared.Json;
 /// <summary>
@@ -12,6 +13,9 @@ namespace Domain.Shared.Json;
 /// 叠加中文不转义（UnsafeRelaxedJsonEscaping），HTTP 响应与日志中的中文保持可读；
 /// T-16 起全应用唯一一份 JSON 配置——Outbox 载荷序列化与健康报告写出均复用本单例，
 /// 不再自建 Options；忽略大小写的读取策略同时兼容存量 PascalCase Outbox 载荷；</item>
+/// <item>写出优化：<c>DefaultIgnoreCondition = WhenWritingNull</c> 省略 null 属性，减小响应 / 日志 / 事件载荷体积；
+/// <c>ReferenceHandler = IgnoreCycles</c> 在实体导航属性成环时把回边写为 null，避免序列化抛异常或栈溢出；
+/// <c>WriteIndented = false</c> 保持紧凑输出，不产生格式化空白。三者仅影响写出，反序列化行为不变；</item>
 /// <item><see cref="Serialize{TValue}(TValue)"/> / <see cref="Deserialize{TValue}(string)"/>：标准版本，
 /// 非法输入抛 JsonException，由调用方按自身异常策略处理（请求链路上的异常统一进入全局异常处理）；</item>
 /// <item><see cref="TryDeserialize{TValue}"/>：容错版本，解析失败返回 false 不抛异常，
@@ -20,10 +24,19 @@ namespace Domain.Shared.Json;
 /// </summary>
 public static class JsonHelper
 {
-    /// <summary>统一序列化配置：Web 默认约定 + 中文不转义（全局共用单例，线程安全）。</summary>
+    /// <summary>
+    /// 统一序列化配置：Web 默认约定 + 中文不转义 + 省略 null + 循环引用保护 + 紧凑输出
+    /// （全局共用单例，线程安全；System.Text.Json 首次使用后会冻结配置，故须在类型初始化时一次配置完）。
+    /// </summary>
     public static JsonSerializerOptions WebOptions { get; } = new(JsonSerializerDefaults.Web)
     {
-        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+        // 省略值为 null 的属性：响应 / 日志 / Outbox 载荷更小，读取侧缺省即为 null（往返仍成立）
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+        // 忽略循环引用：导航属性成环时回边写出 null，避免 JsonException（含 MaxDepth 溢出）中断序列化
+        ReferenceHandler = ReferenceHandler.IgnoreCycles,
+        // 紧凑输出：不写缩进与换行，减少传输体积（显式声明，避免后续误改为美化输出）
+        WriteIndented = false
     };
 
     /// <summary>序列化为 JSON 文本（统一配置）。</summary>
