@@ -1,11 +1,14 @@
 
+using Application;
 using Application.Events;
 using Application.Permissions;
 using Domain.Entities;
 using Domain.Events;
+using Domain.Services.Events;
 using Domain.Services.Rules;
 using Infrastructure.Shared.Caching;
 using MediatR;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -106,44 +109,53 @@ public class RecordingCache : ICache
     }
 }
 
-/// <summary>领域事件发布器单元测试：领域事件经非泛型通知信封发布给监听器。</summary>
+/// <summary>领域事件发布端口契约（T-16）：应用层只保留一个已注册的 Outbox 事务发布器，不再有未注册的备用实现。</summary>
 [TestFixture]
-public class MediatRDomainEventPublisherTests
+public class DomainEventPublisherRegistrationTests
 {
-    private static readonly Guid UserId = Guid.Parse("00000000-0000-0000-0000-000000000001");
-
-    /// <summary>验证发布领域事件时被包装为非泛型通知信封投递给监听器。</summary>
+    /// <summary>AddApplicationServices 把端口唯一绑定到 OutboxDomainEventPublisher（Scoped）。</summary>
     [Test]
-    public async Task PublishAsync_WrapsDomainEventIntoNotification()
+    public void AddApplicationServices_RegistersOutboxPublisherOnly()
     {
-        // 领域事件被包装为非泛型通知信封后经 MediatR 发布
-        var publisher = new RecordingPublisher();
-        var domainEventPublisher = new MediatRDomainEventPublisher(publisher);
-        var domainEvent = new UserPasswordResetEvent(UserId);
+        var services = new ServiceCollection();
+        services.AddApplicationServices();
 
-        await domainEventPublisher.PublishAsync(domainEvent);
+        var descriptors = services
+            .Where(descriptor => descriptor.ServiceType == typeof(IDomainEventPublisher))
+            .ToArray();
 
         Assert.Multiple(() =>
         {
-            Assert.That(publisher.Published, Has.Count.EqualTo(1));
-            Assert.That(publisher.Published[0], Is.InstanceOf<DomainEventNotification>());
-            var notification = (DomainEventNotification)publisher.Published[0];
-            Assert.That(notification.DomainEvent, Is.SameAs(domainEvent));
+            Assert.That(descriptors, Has.Length.EqualTo(1), "端口不得注册多个实现");
+            Assert.That(descriptors[0].ImplementationType, Is.EqualTo(typeof(OutboxDomainEventPublisher)));
+            Assert.That(descriptors[0].Lifetime, Is.EqualTo(ServiceLifetime.Scoped));
         });
+    }
+
+    /// <summary>应用层程序集内不存在第二套 IDomainEventPublisher 实现（防止死实现回流）。</summary>
+    [Test]
+    public void ApplicationAssembly_ContainsSinglePublisherImplementation()
+    {
+        var implementations = typeof(OutboxDomainEventPublisher).Assembly.GetTypes()
+            .Where(type => !type.IsAbstract
+                && !type.IsInterface
+                && typeof(IDomainEventPublisher).IsAssignableFrom(type))
+            .ToArray();
+
+        Assert.That(implementations, Is.EqualTo(new[] { typeof(OutboxDomainEventPublisher) }));
     }
 }
 
-/// <summary>监听器隔离通知发布策略单元测试：单监听器异常不阻断其余监听器，取消异常原样传播。</summary>
+/// <summary>监听器隔离通知发布策略单元测试：单监听器异常不阻断其余监听器但须聚合传播，取消异常原样传播。</summary>
 [TestFixture]
 public class IsolatedNotificationPublisherTests
 {
     private static readonly DomainEventNotification Notification = new(new UserPasswordResetEvent(Guid.NewGuid()));
 
-    /// <summary>验证单个监听器抛异常时其余监听器仍照常执行。</summary>
+    /// <summary>验证单个监听器抛异常时其余监听器仍照常执行，且失败以聚合异常向上传播（Outbox 据此重试）。</summary>
     [Test]
-    public async Task Publish_OneListenerThrows_RemainingListenersStillExecute()
+    public void Publish_OneListenerThrows_RemainingListenersStillExecute_AndFailurePropagates()
     {
-        // 前一个监听器抛异常：降级记录日志，其余监听器照常执行，整体不抛
         var executed = new List<string>();
         NotificationHandlerExecutor[] executors =
         [
@@ -156,9 +168,39 @@ public class IsolatedNotificationPublisherTests
         ];
         var publisher = new IsolatedNotificationPublisher(NullLogger<IsolatedNotificationPublisher>.Instance);
 
-        await publisher.Publish(executors, Notification, CancellationToken.None);
+        var failure = Assert.ThrowsAsync<AggregateException>(
+            () => publisher.Publish(executors, Notification, CancellationToken.None));
 
-        Assert.That(executed, Is.EqualTo(new[] { "second" }));
+        Assert.Multiple(() =>
+        {
+            Assert.That(executed, Is.EqualTo(new[] { "second" }), "失败的监听器不得阻断其余监听器");
+            Assert.That(failure!.InnerExceptions, Has.Count.EqualTo(1), "监听器失败必须向上传播，不得被降级吞掉");
+            Assert.That(failure.InnerExceptions[0].Message, Is.EqualTo("模拟监听器故障"));
+        });
+    }
+
+    /// <summary>验证全部监听器成功时不抛异常（正常投递仍可标记 Processed）。</summary>
+    [Test]
+    public void Publish_AllListenersSucceed_DoesNotThrow()
+    {
+        var executed = new List<string>();
+        NotificationHandlerExecutor[] executors =
+        [
+            new(new object(), (_, _) =>
+            {
+                executed.Add("first");
+                return Task.CompletedTask;
+            }),
+            new(new object(), (_, _) =>
+            {
+                executed.Add("second");
+                return Task.CompletedTask;
+            }),
+        ];
+        var publisher = new IsolatedNotificationPublisher(NullLogger<IsolatedNotificationPublisher>.Instance);
+
+        Assert.DoesNotThrowAsync(() => publisher.Publish(executors, Notification, CancellationToken.None));
+        Assert.That(executed, Is.EqualTo(new[] { "first", "second" }));
     }
 
     /// <summary>验证监听器请求取消时取消异常原样传播而不被降级吞掉。</summary>

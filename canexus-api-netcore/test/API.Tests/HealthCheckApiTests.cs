@@ -26,7 +26,7 @@ public class HealthCheckApiTests
         var connectionString = ApiTestSupport.TestConnectionString;
         // API 项目根目录（appsettings.json 所在位置，含 Jwt 节、Serilog 等配置）
         var apiContentRoot = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "src", "API"));
-        _factory = new WebApplicationFactory<Program>()
+        _factory = new ApiTestFactory()
             .WithWebHostBuilder(builder =>
             {
                 builder.ConfigureAppConfiguration((_, configuration) =>
@@ -93,7 +93,29 @@ public class HealthCheckApiTests
         }
     }
 
-    /// <summary>断言响应体为合法的健康报告 JSON（含 status 字段与 entries 字典）。</summary>
+    /// <summary>/health/ready 输出数据库初始化三层结论（仅阶段状态与版本号）。</summary>
+    [Test]
+    public async Task HealthReady_ReportsInitializationStages()
+    {
+        var response = await _httpClient.GetAsync("/health/ready");
+        var body = await response.Content.ReadAsStringAsync();
+        using var document = JsonDocument.Parse(body);
+
+        Assert.That(document.RootElement.TryGetProperty("initialization", out var initialization), Is.True,
+            "健康报告应包含初始化结论");
+        Assert.That(initialization.ValueKind, Is.EqualTo(JsonValueKind.Object));
+        Assert.Multiple(() =>
+        {
+            Assert.That(initialization.GetProperty("database").GetString(), Is.EqualTo("Ready"));
+            Assert.That(initialization.GetProperty("schema").GetString(), Is.EqualTo("Ready"));
+            Assert.That(initialization.GetProperty("seed").GetString(), Is.EqualTo("Ready"));
+            Assert.That(initialization.GetProperty("appliedVersion").GetInt32(),
+                Is.EqualTo(initialization.GetProperty("expectedVersion").GetInt32()),
+                "结构版本应与代码期望一致（启动完成即就绪）");
+        });
+    }
+
+    /// <summary>断言响应体为合法且脱敏的健康报告 JSON（status + entries，不含内部描述与依赖名）。</summary>
     private static async Task AssertHealthReportBodyAsync(HttpResponseMessage response)
     {
         var body = await response.Content.ReadAsStringAsync();
@@ -107,5 +129,19 @@ public class HealthCheckApiTests
 
         Assert.That(document.RootElement.TryGetProperty("entries", out var entries), Is.True, "健康报告应包含 entries 字典");
         Assert.That(entries.ValueKind, Is.EqualTo(JsonValueKind.Object));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(body, Does.Not.Contain("description"), "匿名健康报告不得输出检查项描述");
+            Assert.That(body, Does.Not.Contain("mysql"), "匿名健康报告不得暴露内部依赖名");
+            Assert.That(body, Does.Not.Contain("quartz"), "匿名健康报告不得暴露内部依赖名");
+            Assert.That(body, Does.Not.Contain("数据库连接"), "匿名健康报告不得泄露异常 / 连接细节");
+        });
+
+        foreach (var entry in entries.EnumerateObject())
+        {
+            Assert.That(entry.Name, Does.Match(@"^check-\d+$"), "检查项键应为匿名序号");
+            Assert.That(entry.Value.TryGetProperty("status", out _), Is.True, "检查项应保留状态");
+        }
     }
 }

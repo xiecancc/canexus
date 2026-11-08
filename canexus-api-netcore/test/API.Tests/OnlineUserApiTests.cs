@@ -39,7 +39,7 @@ public class OnlineUserApiTests
     {
         var connectionString = ApiTestSupport.TestConnectionString;
         var apiContentRoot = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "src", "API"));
-        _factory = new WebApplicationFactory<Program>()
+        _factory = new ApiTestFactory()
             .WithWebHostBuilder(builder =>
             {
                 // 显式加载 API 项目的 appsettings.json，并以内存配置覆盖连接串（内存配置后注册优先级高；UseSetting 会被 appsettings.json 覆盖而失效）

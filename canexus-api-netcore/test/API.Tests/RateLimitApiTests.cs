@@ -25,7 +25,7 @@ public class RateLimitApiTests
         var connectionString = ApiTestSupport.TestConnectionString;
         // API 项目根目录（appsettings.json 所在位置，含 Jwt 节、Serilog 等配置）
         var apiContentRoot = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "src", "API"));
-        _factory = new WebApplicationFactory<Program>()
+        _factory = new ApiTestFactory()
             .WithWebHostBuilder(builder =>
             {
                 // 显式加载 API 项目的 appsettings.json，并以内存配置覆盖连接串与限流限额（内存配置后注册优先级高）

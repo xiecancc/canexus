@@ -37,7 +37,7 @@ public class EntityChangeLogApiTests
     {
         var connectionString = ApiTestSupport.TestConnectionString;
         var apiContentRoot = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "src", "API"));
-        _factory = new WebApplicationFactory<Program>()
+        _factory = new ApiTestFactory()
             .WithWebHostBuilder(builder =>
             {
                 // 显式加载 API 项目的 appsettings.json，并以内存配置覆盖连接串（内存配置后注册优先级高；UseSetting 会被 appsettings.json 覆盖而失效）
@@ -99,7 +99,11 @@ public class EntityChangeLogApiTests
                 .Where(l => l.EntityName == nameof(SysUser) && l.EntityId == userId)
                 .ToListAsync();
 
-            var nickLog = logs.FirstOrDefault(l => l.FieldName == nameof(SysUser.NickName));
+            // T-15 起新增也有 NickName 字段日志（OldValue=null），此处须取带旧值的更新记录
+            var nickLog = logs
+                .Where(l => l.FieldName == nameof(SysUser.NickName) && l.OldValue is not null)
+                .OrderByDescending(l => l.ChangedAt)
+                .FirstOrDefault();
             Assert.Multiple(() =>
             {
                 Assert.That(nickLog, Is.Not.Null, "昵称变更应产生 NickName 字段级变更日志");
@@ -125,7 +129,13 @@ public class EntityChangeLogApiTests
         var userId = await CreateUserAsync(userName);
         try
         {
-            // 原值回传（无任何业务字段变化）→ 不应产生变更日志
+            // T-15 起「新增」本身即产生字段级变更日志，故以更新前的基线数对比：
+            // 原值回传（无任何业务字段变化）不应再新增日志
+            var beforeCount = await _db.Queryable<SysEntityChangeLog>()
+                .Where(l => l.EntityName == nameof(SysUser) && l.EntityId == userId)
+                .CountAsync();
+            Assert.That(beforeCount, Is.GreaterThan(0), "新增用户应留下字段级变更日志");
+
             var user = await _db.Queryable<SysUser>().Where(u => u.Id == userId).FirstAsync();
             await SendForJsonAsync(HttpMethod.Put, $"/api/system/user/{userId}/{user.Version}", new
             {
@@ -138,12 +148,57 @@ public class EntityChangeLogApiTests
             var count = await _db.Queryable<SysEntityChangeLog>()
                 .Where(l => l.EntityName == nameof(SysUser) && l.EntityId == userId)
                 .CountAsync();
-            Assert.That(count, Is.EqualTo(0), "无字段变化不应产生变更日志");
+            Assert.That(count, Is.EqualTo(beforeCount), "无字段变化不应新增变更日志");
         }
         finally
         {
             await SendAsync(HttpMethod.Delete, $"/api/system/user/{userId}/{await ApiTestSupport.GetVersionAsync<SysUser>(_db, userId)}", null);
         }
+    }
+
+    /// <summary>T-15：新增 / 软删 / 恢复均产生字段级变更日志，且密码哈希列值不落明文。</summary>
+    [Test]
+    public async Task EntityChange_CreateDeleteRestore_AllProduceFieldLevelLogs()
+    {
+        var userName = "echglife" + Guid.NewGuid().ToString("N")[..10];
+        var userId = await CreateUserAsync(userName);
+
+        var created = await _db.Queryable<SysEntityChangeLog>()
+            .Where(l => l.EntityName == nameof(SysUser) && l.EntityId == userId)
+            .ToListAsync();
+        var passwordLog = created.FirstOrDefault(l => l.FieldName == nameof(SysUser.PasswordHash));
+        Assert.Multiple(() =>
+        {
+            Assert.That(created.Any(l => l.FieldName == nameof(SysUser.UserName) && l.OldValue is null),
+                Is.True, "新增应逐字段记录 OldValue=null 的变更日志");
+            Assert.That(passwordLog, Is.Not.Null, "密码哈希列也应出现在字段级日志中");
+            Assert.That(passwordLog!.NewValue, Is.EqualTo("******"), "敏感字段值须脱敏");
+            Assert.That(created.All(l => l.NewValue is null || !l.NewValue.Contains("Init@Change123")),
+                Is.True, "明文口令不得落到变更日志");
+        });
+
+        // 软删除：IsDeleted False → True
+        await SendAsync(HttpMethod.Delete,
+            $"/api/system/user/{userId}/{await ApiTestSupport.GetVersionAsync<SysUser>(_db, userId)}", null);
+        var afterDelete = await _db.Queryable<SysEntityChangeLog>()
+            .Where(l => l.EntityName == nameof(SysUser) && l.EntityId == userId && l.FieldName == nameof(SysUser.IsDeleted))
+            .ToListAsync();
+        Assert.That(afterDelete.Any(l => l.OldValue == "False" && l.NewValue == "True"),
+            Is.True, "软删除应产生 IsDeleted 字段级变更日志");
+
+        // 恢复：以墓碑当前 Version 发起（墓碑被软删除过滤器隐藏，需 ClearFilter 读取）
+        var tombstone = await _db.Queryable<SysUser>().ClearFilter<SysUser>()
+            .Where(u => u.Id == userId).FirstAsync();
+        await SendForJsonAsync(HttpMethod.Patch, $"/api/system/user/{userId}/{tombstone.Version}/restore", null!);
+        var afterRestore = await _db.Queryable<SysEntityChangeLog>()
+            .Where(l => l.EntityName == nameof(SysUser) && l.EntityId == userId && l.FieldName == nameof(SysUser.IsDeleted))
+            .ToListAsync();
+        Assert.That(afterRestore.Any(l => l.OldValue == "True" && l.NewValue == "False"),
+            Is.True, "恢复应产生 IsDeleted 字段级变更日志");
+
+        // 清理：再次软删除，避免遗留启用账号影响其它用例
+        await SendAsync(HttpMethod.Delete,
+            $"/api/system/user/{userId}/{await ApiTestSupport.GetVersionAsync<SysUser>(_db, userId)}", null);
     }
 
     // —— 变更日志查询 ——

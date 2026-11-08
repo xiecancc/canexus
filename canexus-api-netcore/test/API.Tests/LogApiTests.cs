@@ -36,7 +36,7 @@ public class LogApiTests
     {
         var connectionString = ApiTestSupport.TestConnectionString;
         var apiContentRoot = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "src", "API"));
-        _factory = new WebApplicationFactory<Program>()
+        _factory = new ApiTestFactory()
             .WithWebHostBuilder(builder =>
             {
                 // 显式加载 API 项目的 appsettings.json，并以内存配置覆盖连接串（内存配置后注册优先级高；UseSetting 会被 appsettings.json 覆盖而失效）
@@ -195,7 +195,7 @@ public class LogApiTests
     [Test]
     public async Task OperLog_Clean_RemovesAllLogs()
     {
-        var clean = await SendAsync(HttpMethod.Post, "/api/system/oper-log/clean", null);
+        var clean = await SendAsync(HttpMethod.Post, CleanUrl("/api/system/oper-log/clean"), null);
         Assert.That(clean.StatusCode, Is.EqualTo(HttpStatusCode.OK));
 
         // P0-S5 审计留痕：清空动作本身经 [OperLog] 写入一条清空记录（在清空执行后落库），
@@ -208,6 +208,22 @@ public class LogApiTests
             Assert.That(data.GetProperty("items").GetArrayLength(), Is.EqualTo(1));
             Assert.That(data.GetProperty("items")[0].GetProperty("title").GetString(), Is.EqualTo("操作日志"), "留痕记录应为操作日志模块");
             Assert.That(data.GetProperty("items")[0].GetProperty("businessType").GetInt32(), Is.EqualTo(8), "业务类型应为清空（Clean=8）");
+        });
+    }
+
+    /// <summary>危险清空命令缺确认或时间范围时须被拒绝，不得再出现一次请求清空全表。</summary>
+    [Test]
+    public async Task OperLog_Clean_WithoutConfirmOrRange_IsRejected()
+    {
+        var today = DateTime.UtcNow.ToString("yyyy-MM-dd");
+        var missingConfirm = await SendAsync(HttpMethod.Post,
+            $"/api/system/oper-log/clean?beginTime={today}&endTime={today}&confirm=false", null);
+        var missingRange = await SendAsync(HttpMethod.Post, "/api/system/oper-log/clean?confirm=true", null);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(missingConfirm.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest), "未确认的清空请求应被拒");
+            Assert.That(missingRange.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest), "缺时间范围的清空请求应被拒");
         });
     }
 
@@ -239,13 +255,23 @@ public class LogApiTests
             Is.GreaterThanOrEqualTo(1), "yyyy-MM-dd 时间范围过滤应含当日");
 
         // 清空后为空
-        var clean = await SendAsync(HttpMethod.Post, "/api/system/login-log/clean", null);
+        var clean = await SendAsync(HttpMethod.Post, CleanUrl("/api/system/login-log/clean"), null);
         Assert.That(clean.StatusCode, Is.EqualTo(HttpStatusCode.OK));
         var afterClean = await GetJsonAsync("/api/system/login-log/page?pageIndex=1&pageSize=10");
         Assert.That(afterClean.RootElement.GetProperty("data").GetProperty("total").GetInt64(), Is.EqualTo(0));
     }
 
     // —— 测试辅助 ——
+
+    /// <summary>构造带合法时间范围（近 30 天）与显式确认的清空请求地址。</summary>
+    /// <param name="path">清空端点路径。</param>
+    /// <returns>带查询参数的请求地址。</returns>
+    private static string CleanUrl(string path)
+    {
+        var end = DateTime.UtcNow.ToString("yyyy-MM-dd");
+        var begin = DateTime.UtcNow.AddDays(-30).ToString("yyyy-MM-dd");
+        return $"{path}?beginTime={begin}&endTime={end}&confirm=true";
+    }
 
     /// <summary>调用验证码接口并从 IMemoryCache 读取明文验证码。</summary>
     private async Task<(string CaptchaId, string CaptchaCode)> GetCaptchaAsync()

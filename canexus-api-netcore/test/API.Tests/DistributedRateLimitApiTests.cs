@@ -44,7 +44,7 @@ public class DistributedRateLimitApiTests
 
         WebApplicationFactory<Program> CreateHost(string suffix)
         {
-            var factory = new WebApplicationFactory<Program>()
+            var factory = new ApiTestFactory()
                 .WithWebHostBuilder(builder =>
                 {
                     builder.ConfigureAppConfiguration((_, configuration) =>

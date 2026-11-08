@@ -109,7 +109,7 @@ public class PermissionDefaultDenyTests
     {
         /// <summary>权限声明的端点。</summary>
         [HttpGet("compliant-perm")]
-        [RequirePermission(PermissionDefinitions.TestProtectedList)]
+        [RequirePermission(PermissionDefinitions.SystemUserList)]
         public IActionResult Action1() => Ok();
     }
 

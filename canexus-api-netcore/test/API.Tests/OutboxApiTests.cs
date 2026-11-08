@@ -40,7 +40,7 @@ public class OutboxApiTests
     {
         var connectionString = ApiTestSupport.TestConnectionString;
         var apiContentRoot = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "src", "API"));
-        _factory = new WebApplicationFactory<Program>()
+        _factory = new ApiTestFactory()
             .WithWebHostBuilder(builder =>
             {
                 builder.ConfigureAppConfiguration((_, configuration) =>
@@ -95,7 +95,8 @@ public class OutboxApiTests
                 Assert.That(row, Is.Not.Null, "领域事件应持久化到 Outbox 表");
                 Assert.That(row!.Status, Is.EqualTo(OutboxMessageStatus.Processed), "事务提交后应同步投递完成");
                 Assert.That(row.ProcessedAt, Is.Not.Null, "投递完成应记录 ProcessedAt");
-                Assert.That(row.Payload, Does.Contain("UserId"), "Outbox 载荷应包含可反序列化的事件内容");
+                // T-16：Outbox 载荷统一复用 JsonHelper.WebOptions（camelCase）
+                Assert.That(row.Payload, Does.Contain("\"userId\""), "Outbox 载荷应包含可反序列化的事件内容");
             });
         }
         finally

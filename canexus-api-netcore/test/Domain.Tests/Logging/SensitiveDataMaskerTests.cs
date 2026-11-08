@@ -70,4 +70,74 @@ public class SensitiveDataMaskerTests
             Assert.That(SensitiveDataMasker.IsSensitiveParameter(string.Empty), Is.False);
         });
     }
+
+    /// <summary>T-15：JSON / SQL / 实体字段名共用一套规则，覆盖密码哈希、令牌、证件与手机号变体。</summary>
+    [Test]
+    public void MaskSensitiveFields_CoversSensitiveFieldVariants()
+    {
+        var masked = SensitiveDataMasker.MaskSensitiveFields(
+            """{"PasswordHash":"$2a$hash","user_pwd":"p1","access_token":"tok1","idCardNo":"110101199001011234","mobile":"13800138000","telephone":"01088886666","nickName":"张三"}""");
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(masked, Does.Not.Contain("$2a$hash"));
+            Assert.That(masked, Does.Not.Contain("p1\""), "user_pwd 变体须脱敏");
+            Assert.That(masked, Does.Not.Contain("tok1"));
+            Assert.That(masked, Does.Not.Contain("110101199001011234"));
+            Assert.That(masked, Does.Not.Contain("13800138000"));
+            Assert.That(masked, Does.Not.Contain("01088886666"));
+            Assert.That(masked, Does.Contain("张三"), "非敏感字段保持原值");
+        });
+    }
+
+    /// <summary>T-15：字段判定口径统一，证件 / 手机号变体命中，普通字段不误伤。</summary>
+    [Test]
+    public void IsSensitiveField_SharesRulesAcrossAllSinks()
+    {
+        Assert.Multiple(() =>
+        {
+            Assert.That(SensitiveDataMasker.IsSensitiveField("PasswordHash"), Is.True);
+            Assert.That(SensitiveDataMasker.IsSensitiveField("id_card_no"), Is.True);
+            Assert.That(SensitiveDataMasker.IsSensitiveField("IdNo"), Is.True);
+            Assert.That(SensitiveDataMasker.IsSensitiveField("MobilePhone"), Is.True);
+            Assert.That(SensitiveDataMasker.IsSensitiveField("@RefreshTokenHash"), Is.True);
+            Assert.That(SensitiveDataMasker.IsSensitiveField("NickName"), Is.False);
+            Assert.That(SensitiveDataMasker.IsSensitiveField("OrderNum"), Is.False);
+        });
+    }
+
+    /// <summary>T-15：QueryString 中仅敏感参数值被替换，路径与其它参数保持原样。</summary>
+    [Test]
+    public void MaskQueryString_MasksOnlySensitiveValues()
+    {
+        var masked = SensitiveDataMasker.MaskQueryString(
+            "/api/system/user/page?pageIndex=1&token=eyJhbGciOi&password=plainPwd&keyword=keepme");
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(masked, Does.StartWith("/api/system/user/page?"));
+            Assert.That(masked, Does.Not.Contain("eyJhbGciOi"));
+            Assert.That(masked, Does.Not.Contain("plainPwd"));
+            Assert.That(masked, Does.Contain("pageIndex=1"));
+            Assert.That(masked, Does.Contain("keyword=keepme"));
+            Assert.That(masked, Does.Contain(SensitiveDataMasker.MaskText));
+        });
+    }
+
+    /// <summary>T-15：异常消息中的 JSON 赋值、SQL 参数赋值与 Bearer 令牌均脱敏。</summary>
+    [Test]
+    public void MaskFreeText_MasksAssignmentsAndBearerTokens()
+    {
+        const string message =
+            "SQL failed: @PasswordHash='bcrypt$secret' ; payload={\"accessToken\":\"jwt.value\"} ; Authorization: Bearer eyJhbGciOiJIUzI1NiJ9";
+        var masked = SensitiveDataMasker.MaskFreeText(message);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(masked, Does.Not.Contain("bcrypt$secret"));
+            Assert.That(masked, Does.Not.Contain("jwt.value"));
+            Assert.That(masked, Does.Not.Contain("eyJhbGciOiJIUzI1NiJ9"));
+            Assert.That(masked, Does.Contain("SQL failed"), "非敏感上下文应保留");
+        });
+    }
 }

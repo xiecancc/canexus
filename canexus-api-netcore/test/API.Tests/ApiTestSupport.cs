@@ -13,6 +13,9 @@ internal static class ApiTestSupport
     /// <summary>测试专用 JWT 签名密钥（appsettings.json 已脱敏，集成测试经内存配置覆盖注入）。</summary>
     public const string TestJwtSecret = "TestOnly@Jwt#Secret-Key-0123456789-abcdef-2026";
 
+    /// <summary>隔离测试库内置超管的固定口令（仅经 Bootstrap 配置注入测试宿主，不用于任何生产环境）。</summary>
+    public const string TestAdminPassword = "admin123";
+
     /// <summary>测试连接串：强制经环境变量 SUPER_ADMIN_TEST_CONN 注入，代码中不内置任何密码回退值。</summary>
     public static string TestConnectionString =>
         Environment.GetEnvironmentVariable("SUPER_ADMIN_TEST_CONN")

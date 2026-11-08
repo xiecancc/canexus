@@ -37,7 +37,7 @@ public class JobApiTests
     {
         var connectionString = ApiTestSupport.TestConnectionString;
         var apiContentRoot = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "src", "API"));
-        _factory = new WebApplicationFactory<Program>()
+        _factory = new ApiTestFactory()
             .WithWebHostBuilder(builder =>
             {
                 // 显式加载 API 项目的 appsettings.json，并以内存配置覆盖连接串（内存配置后注册优先级高；UseSetting 会被 appsettings.json 覆盖而失效）
@@ -80,7 +80,7 @@ public class JobApiTests
             jobName,
             jobGroup = "DEFAULT",
             cronExpression = "0/1 * * * * ?",
-            jobType = NoOpJob.TypeFullName,
+            jobType = NoOpJob.JobKey,
             status = 0,
             concurrent = false,
             description = "B10 集成测试"
@@ -96,14 +96,14 @@ public class JobApiTests
             Assert.That(row.GetProperty("jobName").GetString(), Is.EqualTo(jobName));
             Assert.That(row.GetProperty("jobGroup").GetString(), Is.EqualTo("DEFAULT"));
             Assert.That(row.GetProperty("cronExpression").GetString(), Is.EqualTo("0/1 * * * * ?"));
-            Assert.That(row.GetProperty("jobType").GetString(), Is.EqualTo(NoOpJob.TypeFullName));
+            Assert.That(row.GetProperty("jobType").GetString(), Is.EqualTo(NoOpJob.JobKey));
             Assert.That(row.GetProperty("status").GetInt32(), Is.EqualTo(0));
             Assert.That(row.GetProperty("concurrent").GetBoolean(), Is.False);
             Assert.That(row.TryGetProperty("createdAt", out _), Is.True, "列表应包含 createdAt");
         });
 
         // 2. 暂停任务立即执行一次 → 轮询执行日志出现记录（超时 15s）
-        await SendForJsonAsync(HttpMethod.Put, $"/api/monitor/job/{jobId}/run", null!);
+        await SendForJsonAsync(HttpMethod.Post, $"/api/monitor/job/{jobId}/run", null!);
         var firstLogs = await WaitForJobLogsAsync(jobId, minimumCount: 1, timeoutSeconds: 15);
         var firstLog = firstLogs[0];
         Assert.Multiple(() =>
@@ -122,7 +122,7 @@ public class JobApiTests
         Assert.That(afterChange.GetProperty("status").GetInt32(), Is.EqualTo(1), "启用后状态应为运行");
 
         // 4. 再立即执行一次 → 又一条日志
-        await SendForJsonAsync(HttpMethod.Put, $"/api/monitor/job/{jobId}/run", null!);
+        await SendForJsonAsync(HttpMethod.Post, $"/api/monitor/job/{jobId}/run", null!);
         var secondLogs = await WaitForJobLogsAsync(jobId, minimumCount: 2, timeoutSeconds: 15);
         Assert.That(secondLogs[0].GetProperty("id").GetGuid(), Is.Not.EqualTo(secondLogs[1].GetProperty("id").GetGuid()),
             "两次执行应产生两条不同日志");
@@ -148,7 +148,7 @@ public class JobApiTests
             jobName = NewJobName(),
             jobGroup = "DEFAULT",
             cronExpression = "not-a-cron",
-            jobType = NoOpJob.TypeFullName,
+            jobType = NoOpJob.JobKey,
             status = 0,
             concurrent = false
         });
@@ -200,7 +200,7 @@ public class JobApiTests
             jobName,
             jobGroup = "DEFAULT",
             cronExpression = "0/1 * * * * ?",
-            jobType = NoOpJob.TypeFullName,
+            jobType = NoOpJob.JobKey,
             status = 0,
             concurrent = false
         });
@@ -214,7 +214,7 @@ public class JobApiTests
                 jobName,
                 jobGroup = "B10_GROUP",
                 cronExpression = "0/5 * * * * ?",
-                jobType = NoOpJob.TypeFullName,
+                jobType = NoOpJob.JobKey,
                 status = 1,
                 concurrent = false,
                 description = "更新后"

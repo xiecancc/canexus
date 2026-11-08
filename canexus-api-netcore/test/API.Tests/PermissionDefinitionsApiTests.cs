@@ -1,6 +1,7 @@
 using System.Reflection;
 using API;
 using API.Authorization;
+using Domain.Shared.Permissions;
 
 namespace API.Tests;
 
@@ -21,13 +22,11 @@ public class PermissionDefinitionsApiTests
         Assert.That(undeclared, Is.Empty, $"存在未在 PermissionDefinitions 中声明的权限标识：{string.Join(", ", undeclared)}");
     }
 
-    /// <summary>验证超管放行语义所需的权限点集合（test:protected:list）已被声明。</summary>
+    /// <summary>验证测试探针权限不进入生产权限注册表（探针控制器已移入测试程序集）。</summary>
     [Test]
-    public void ProtectedTestPermission_IsDeclared()
+    public void ProbePermission_IsNotInProductionRegistry()
     {
-        var declared = PermissionsStartupValidator.FindUndeclaredFromAssembly(typeof(Program).Assembly);
-
-        Assert.That(declared, Does.Not.Contain("test:protected:list"));
+        Assert.That(PermissionDefinitions.All, Does.Not.Contain("test:protected:list"));
     }
 
     /// <summary>验证扫描实现能发现类级与 Action 级特性（至少发现全部控制器声明，数量>0）。</summary>

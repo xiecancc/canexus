@@ -1,4 +1,5 @@
 
+using Domain.Shared.Json;
 using Domain.Shared.Results;
 
 namespace Domain.Tests.Results;
@@ -46,6 +47,49 @@ public class ResultTests
         var result = Result.Ok(42);
 
         Assert.That(result.Message, Is.EqualTo("操作成功"));
+    }
+
+    /// <summary>T-16：字符串作为数据载荷时不得被旧 Ok(string message) 重载吞掉。</summary>
+    [Test]
+    public void Ok_WithStringData_PreservesDataAndUsesDefaultMessage()
+    {
+        var result = Result.Ok("字符串载荷");
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result, Is.TypeOf<Result<string>>());
+            Assert.That(result.Data, Is.EqualTo("字符串载荷"));
+            Assert.That(result.Message, Is.EqualTo("操作成功"));
+            Assert.That(result.Code, Is.EqualTo(Result.SuccessCode));
+        });
+    }
+
+    /// <summary>T-16：带载荷的字符串响应序列化后必须出现在 data 字段而非 message。</summary>
+    [Test]
+    public void Ok_WithStringData_SerializesIntoDataField()
+    {
+        var json = JsonHelper.Serialize(Result.Ok("字符串载荷"));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(json, Does.Contain("\"data\":\"字符串载荷\""));
+            Assert.That(json, Does.Contain("\"message\":\"操作成功\""));
+        });
+    }
+
+    /// <summary>T-16：无载荷但需自定义消息时须显式调用 OkMessage，响应体不带 data 字段。</summary>
+    [Test]
+    public void OkMessage_CustomMessage_ReturnsNonGenericResultWithoutData()
+    {
+        var result = Result.OkMessage("退出成功");
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.GetType(), Is.EqualTo(typeof(Result)));
+            Assert.That(result.Message, Is.EqualTo("退出成功"));
+            Assert.That(result.Code, Is.EqualTo(Result.SuccessCode));
+            Assert.That(JsonHelper.Serialize(result), Does.Not.Contain("\"data\""));
+        });
     }
 
     /// <summary>验证失败响应按入参返回错误码与消息，且标记为非成功。</summary>

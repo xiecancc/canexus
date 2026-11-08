@@ -164,23 +164,23 @@ internal sealed class InMemoryRefreshTokenRepository : ISysRefreshTokenRepositor
     }
 
     /// <inheritdoc />
-    public Task<bool> DeleteAsync(Guid id, CancellationToken cancellationToken = default)
+    public Task<bool> DeleteAsync(Guid id, CancellationToken cancellationToken = default, Guid? expectedVersion = null)
         => Task.FromResult(_store.RemoveAll(e => e.Id == id) > 0);
 
     /// <inheritdoc />
-    public Task<bool> DeleteAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken = default)
+    public Task<bool> DeleteAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken = default, Guid? expectedVersion = null)
         => Task.FromResult(_store.RemoveAll(e => ids.Contains(e.Id)) > 0);
 
     /// <inheritdoc />
-    public Task<bool> RestoreAsync(Guid id, CancellationToken cancellationToken = default)
-        => RestoreAsync(e => e.Id == id, cancellationToken);
+    public Task<bool> RestoreAsync(Guid id, CancellationToken cancellationToken = default, Guid? expectedVersion = null)
+        => RestoreAsync(e => e.Id == id, cancellationToken, expectedVersion);
 
     /// <inheritdoc />
-    public Task<bool> RestoreAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken = default)
-        => RestoreAsync(e => ids.Contains(e.Id), cancellationToken);
+    public Task<bool> RestoreAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken = default, Guid? expectedVersion = null)
+        => RestoreAsync(e => ids.Contains(e.Id), cancellationToken, expectedVersion);
 
     /// <inheritdoc />
-    public Task<bool> RestoreAsync(Expression<Func<SysRefreshToken, bool>> predicate, CancellationToken cancellationToken = default)
+    public Task<bool> RestoreAsync(Expression<Func<SysRefreshToken, bool>> predicate, CancellationToken cancellationToken = default, Guid? expectedVersion = null)
     {
         // 与 SqlSugar 实现语义对齐：仅解除已删除行的墓碑，返回是否命中
         var restored = 0;
@@ -301,7 +301,7 @@ public class JwtTokenServiceTests
     {
         Issuer = "test-issuer",
         Audience = "test-audience",
-        AccessTokenMinutes = 120,
+        AccessTokenMinutes = 30,
         RefreshTokenDays = 7,
         Secret = "unit-test-secret-key-0123456789-abcdef"
     };
@@ -343,7 +343,7 @@ public class JwtTokenServiceTests
         {
             Assert.That(pair.AccessToken, Is.Not.Empty);
             Assert.That(pair.RefreshToken, Has.Length.EqualTo(64), "refreshToken 应为 64 位十六进制随机串");
-            Assert.That(pair.ExpiresIn, Is.EqualTo(120 * 60L), "expiresIn 应为 accessToken 有效期秒数");
+            Assert.That(pair.ExpiresIn, Is.EqualTo(30 * 60L), "expiresIn 应为 accessToken 有效期秒数");
         });
 
         // refreshToken 已持久化：1 条记录，归属正确且未过期；Token 列为 SHA-256 哈希而非明文

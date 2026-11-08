@@ -25,7 +25,7 @@ namespace Infrastructure.Tests;
 [TestFixture]
 public class JobScheduleSyncTests
 {
-    private const string JobType = "Infrastructure.Scheduling.NoOpJob, Infrastructure";
+    private const string JobType = NoOpJob.JobKey;
 
     private string _tempDatabaseName = null!;
     private string _tempConnection = null!;

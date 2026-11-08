@@ -94,8 +94,8 @@ public class OutboxClaimTests
         Assert.That(second, Has.Count.EqualTo(1));
         Assert.That(second[0].ClaimOwner, Is.EqualTo("worker-b"), "租约到期后应由新 Worker 重新认领");
 
-        // 旧认领者迟到更新：带 ClaimOwner 条件，应被忽略
-        await workerA.MarkProcessedAsync(message.Id, "worker-a", DateTime.UtcNow);
+        // 旧认领者迟到更新：带 ClaimOwner 条件，应被忽略且明确返回 false（调用方不得视为已投递）
+        Assert.That(await workerA.MarkProcessedAsync(message.Id, "worker-a", DateTime.UtcNow), Is.False);
 
         var row = await _client.Queryable<OutboxMessage>().Where(it => it.Id == message.Id).FirstAsync();
         Assert.Multiple(() =>
@@ -154,6 +154,54 @@ public class OutboxClaimTests
         {
             Assert.That(row.Status, Is.EqualTo(OutboxMessageStatus.Failed), "达到重试上限应进入死信");
             Assert.That(row.NextRetryAt, Is.Null, "死信不应再有下次重试时间");
+        });
+    }
+
+    /// <summary>超期未完成投递的 Pending 消息在现有清理循环内转为死信并记录原因。</summary>
+    [Test]
+    public async Task StalePending_MarkedAsFailed_WithReason()
+    {
+        var message = OutboxMessage.Create("Test.Event", "{}");
+        message.CreatedAt = DateTime.UtcNow.AddDays(-40);
+        await _client.Insertable(message).ExecuteCommandAsync();
+
+        var repository = CreateRepository();
+        var affected = await repository.MarkStaleAsFailedAsync(DateTime.UtcNow.AddDays(-30), "超期未完成投递", 100);
+        Assert.That(affected, Is.EqualTo(1));
+
+        var row = await _client.Queryable<OutboxMessage>().Where(it => it.Id == message.Id).FirstAsync();
+        Assert.Multiple(() =>
+        {
+            Assert.That(row.Status, Is.EqualTo(OutboxMessageStatus.Failed));
+            Assert.That(row.LastError, Is.EqualTo("超期未完成投递"));
+            Assert.That(row.NextRetryAt, Is.Null);
+        });
+    }
+
+    /// <summary>清理循环删除超期的 Processed 与 Failed 记录，但保留未终态的 Pending 消息。</summary>
+    [Test]
+    public async Task DeleteCompletedBefore_RemovesProcessedAndFailed_KeepsPending()
+    {
+        var now = DateTime.UtcNow;
+        var processed = OutboxMessage.Create("Test.Event", "{}");
+        processed.Status = OutboxMessageStatus.Processed;
+        processed.ProcessedAt = now.AddDays(-10);
+        var failed = OutboxMessage.Create("Test.Event", "{}");
+        failed.Status = OutboxMessageStatus.Failed;
+        failed.CreatedAt = now.AddDays(-40);
+        var pending = OutboxMessage.Create("Test.Event", "{}");
+        await _client.Insertable(new[] { processed, failed, pending }).ExecuteCommandAsync();
+
+        var repository = CreateRepository();
+        var deleted = await repository.DeleteCompletedBeforeAsync(now.AddDays(-7), now.AddDays(-30), 100);
+        Assert.That(deleted, Is.EqualTo(2));
+
+        var remaining = await _client.Queryable<OutboxMessage>().ToListAsync();
+        Assert.Multiple(() =>
+        {
+            Assert.That(remaining, Has.Count.EqualTo(1));
+            Assert.That(remaining[0].Id, Is.EqualTo(pending.Id));
+            Assert.That(remaining[0].Status, Is.EqualTo(OutboxMessageStatus.Pending));
         });
     }
 

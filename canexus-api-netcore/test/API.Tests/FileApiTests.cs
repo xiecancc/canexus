@@ -37,7 +37,7 @@ public class FileApiTests
         var connectionString = ApiTestSupport.TestConnectionString;
         var apiContentRoot = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "src", "API"));
         _uploadRoot = Path.Combine(Path.GetTempPath(), "super-admin-test-uploads", Guid.NewGuid().ToString("N"));
-        _factory = new WebApplicationFactory<Program>()
+        _factory = new ApiTestFactory()
             .WithWebHostBuilder(builder =>
             {
                 builder.ConfigureAppConfiguration((_, configuration) =>
@@ -109,7 +109,10 @@ public class FileApiTests
         Assert.Multiple(() =>
         {
             Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
-            Assert.That(response.Content.Headers.ContentType?.MediaType, Is.EqualTo("text/plain"));
+            Assert.That(response.Content.Headers.ContentType?.MediaType, Is.EqualTo("application/octet-stream"),
+                "下载响应固定为二进制类型，不回显库中 MIME");
+            Assert.That(response.Headers.TryGetValues("X-Content-Type-Options", out var nosniff), Is.True);
+            Assert.That(nosniff, Does.Contain("nosniff"));
             Assert.That(response.Content.Headers.ContentDisposition?.FileName, Is.Not.Null.And.Not.Empty);
         });
         var downloaded = await response.Content.ReadAsByteArrayAsync();
@@ -129,6 +132,34 @@ public class FileApiTests
             Assert.That(body.GetProperty("code").GetInt32(), Is.EqualTo(401202));
             Assert.That(body.GetProperty("message").GetString(), Does.Contain("不支持的文件类型"));
         });
+    }
+
+    /// <summary>伪装后缀被内容签名校验拒绝（声明 .png 但内容是文本）。</summary>
+    [Test]
+    public async Task Upload_Rejects_ContentSignatureMismatch()
+    {
+        var response = await UploadRawAsync("disguised.png", "image/png", "this is not a png"u8.ToArray());
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+            Assert.That(body.GetProperty("code").GetInt32(), Is.EqualTo(401202));
+            Assert.That(body.GetProperty("message").GetString(), Does.Contain("与文件内容不符"));
+        });
+    }
+
+    /// <summary>客户端声明的 MIME 不参与判定：落库 ContentType 由内容签名推导。</summary>
+    [Test]
+    public async Task Upload_Ignores_ClientDeclaredMime()
+    {
+        var uploaded = await UploadAsync("mime-probe.txt", "text/html", "plain text payload"u8.ToArray());
+        Assert.That(uploaded.GetProperty("code").GetInt32(), Is.EqualTo(Result.SuccessCode));
+        var fileId = uploaded.GetProperty("data").GetProperty("id").GetGuid();
+
+        var detail = await GetJsonAsync($"/api/system/file/{fileId}");
+        Assert.That(detail.RootElement.GetProperty("data").GetProperty("contentType").GetString(),
+            Is.EqualTo("text/plain"), "客户端声明 text/html 不得污染落库 MIME");
     }
 
     /// <summary>验证大小上限：超过 1MB 的合法扩展名文件被拒绝（401203）。</summary>

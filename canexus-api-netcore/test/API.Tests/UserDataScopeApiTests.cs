@@ -52,7 +52,7 @@ public class UserDataScopeApiTests
     public async Task OneTimeSetUpAsync()
     {
         var apiContentRoot = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "src", "API"));
-        _factory = new WebApplicationFactory<Program>()
+        _factory = new ApiTestFactory()
             .WithWebHostBuilder(builder =>
             {
                 builder.ConfigureAppConfiguration((_, configuration) =>
@@ -157,7 +157,8 @@ public class UserDataScopeApiTests
         var target = await CreateUserAsync(NewUserName("out-res"), _deptB);
         await SoftDeleteUserAsync(target.Id);
 
-        var response = await SendAsOperatorAsync(HttpMethod.Patch, $"/api/system/user/{target.Id}/{Guid.NewGuid()}/restore");
+        var response = await SendAsOperatorAsync(HttpMethod.Patch,
+            $"/api/system/user/{target.Id}/{await GetTombstoneVersionAsync(target.Id)}/restore");
         await AssertForbiddenCodeAsync(response);
 
         var tombstone = await _db.Queryable<SysUser>()
@@ -197,7 +198,9 @@ public class UserDataScopeApiTests
         var target = await CreateUserAsync(NewUserName("in-res"), _deptA);
         await SoftDeleteUserAsync(target.Id);
 
-        var response = await SendAsOperatorAsync(HttpMethod.Patch, $"/api/system/user/{target.Id}/{Guid.NewGuid()}/restore");
+        // T-09 起恢复命令同样走 Version CAS，须回传墓碑当前版本而非随机占位值
+        var response = await SendAsOperatorAsync(HttpMethod.Patch,
+            $"/api/system/user/{target.Id}/{await GetTombstoneVersionAsync(target.Id)}/restore");
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK), "范围内恢复应成功");
 
         var row = await _db.Queryable<SysUser>().Where(u => u.Id == target.Id).FirstAsync();
@@ -299,6 +302,17 @@ public class UserDataScopeApiTests
     {
         var user = await _db.Queryable<SysUser>().Where(u => u.Id == userId).FirstAsync();
         Assert.That(user, Is.Not.Null, "目标用户应存在");
+        return user!.Version;
+    }
+
+    /// <summary>读取软删除墓碑的当前 Version（临时清除全局软删除过滤器）。</summary>
+    private async Task<Guid> GetTombstoneVersionAsync(Guid userId)
+    {
+        var user = await _db.Queryable<SysUser>()
+            .ClearFilter<SysUser>()
+            .Where(u => u.Id == userId)
+            .FirstAsync();
+        Assert.That(user, Is.Not.Null, "目标墓碑应存在");
         return user!.Version;
     }
 

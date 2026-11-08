@@ -30,7 +30,7 @@ public class OptionValidationTests
         {
             _ = services.BuildServiceProvider().GetRequiredService<IOptions<JwtOption>>().Value;
         });
-        Assert.That(ex!.Message, Does.Contain("Jwt:Secret 长度不得小于 32 字符"));
+        Assert.That(ex!.Message, Does.Contain("Jwt:Secret 按 UTF-8 编码后不得少于 32 字节"));
     }
 
     /// <summary>验证合法配置注册选项后具体类型可注入且与 IOptions 为同一实例。</summary>
@@ -184,7 +184,7 @@ public class OptionValidationTests
         var option = new JwtOption { Secret = "short" };
 
         var ex = Assert.Throws<ArgumentException>(() => option.Validate());
-        Assert.That(ex!.Message, Does.Contain("不得小于 32 字符"));
+        Assert.That(ex!.Message, Does.Contain("不得少于 32 字节"));
     }
 
     /// <summary>验证 JWT 密钥仍为模板默认不安全值时校验抛出异常（S3 启动强校验）。</summary>
@@ -197,14 +197,14 @@ public class OptionValidationTests
         Assert.That(ex!.Message, Does.Contain("默认不安全值"));
     }
 
-    /// <summary>验证 accessToken 有效期超过一天时校验抛出异常。</summary>
+    /// <summary>验证 accessToken 有效期超过短时令牌窗口（30 分钟）时校验抛出异常。</summary>
     [Test]
-    public void JwtOption_AccessTokenMinutesExceedsOneDay_Throws()
+    public void JwtOption_AccessTokenMinutesExceedsWindow_Throws()
     {
         var option = new JwtOption
         {
             Secret = "valid-secret-key-0123456789-abcdef",
-            AccessTokenMinutes = 1_441
+            AccessTokenMinutes = 31
         };
 
         Assert.Throws<ArgumentOutOfRangeException>(() => option.Validate());
