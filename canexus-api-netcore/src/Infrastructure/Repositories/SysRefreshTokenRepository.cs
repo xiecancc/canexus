@@ -4,6 +4,7 @@ using Domain.Entities;
 using Domain.Repositories;
 using Domain.Services.Users;
 using Domain.Shared.Paging;
+using Infrastructure.Shared.Tenants;
 using SqlSugar;
 
 namespace Infrastructure.Repositories;
@@ -11,7 +12,8 @@ namespace Infrastructure.Repositories;
 /// <remarks>构造函数。</remarks>
 /// <param name="client">SqlSugar 客户端。</param>
 /// <param name="currentUser">当前用户上下文。</param>
-public class SysRefreshTokenRepository(ISqlSugarClient client, IUserContext currentUser) : AggregateRepository<SysRefreshToken>(client, currentUser), ISysRefreshTokenRepository
+/// <param name="tenantContext">当前租户上下文（写入侧显式补偿租户条件）。</param>
+public class SysRefreshTokenRepository(ISqlSugarClient client, IUserContext currentUser, ITenantContext tenantContext) : AggregateRepository<SysRefreshToken>(client, currentUser, tenantContext), ISysRefreshTokenRepository
 {
     /// <summary>刷新令牌为高频自写数据（轮换 / 吊销 / 过期清理），记录字段级变更日志无审计价值，关闭。</summary>
     protected override bool EntityChangeLogEnabled => false;
@@ -26,19 +28,30 @@ public class SysRefreshTokenRepository(ISqlSugarClient client, IUserContext curr
     /// <inheritdoc />
     public virtual async Task<int> RevokeAllForUserAsync(Guid userId, DateTime revokedAt, CancellationToken cancellationToken = default)
     {
-        return await Client.Updateable<SysRefreshToken>()
+        // 刷新令牌吊销是匿名请求路径的可执行写入，不能依赖 QueryFilter：按令牌所属租户收敛
+        var update = Client.Updateable<SysRefreshToken>()
             .SetColumns(t => t.RevokedAt == revokedAt)
-            .Where(t => t.UserId == userId && t.RevokedAt == null && t.ExpiresAt > revokedAt)
-            .ExecuteCommandAsync(cancellationToken);
+            .Where(t => t.UserId == userId && t.RevokedAt == null && t.ExpiresAt > revokedAt);
+        if (CurrentTenantId is { } tenantId)
+        {
+            update = update.Where(t => t.TenantId == tenantId);
+        }
+
+        return await update.ExecuteCommandAsync(cancellationToken);
     }
 
     /// <inheritdoc />
     public virtual async Task<int> RevokeByIdAsync(Guid id, DateTime revokedAt, CancellationToken cancellationToken = default)
     {
-        return await Client.Updateable<SysRefreshToken>()
+        var update = Client.Updateable<SysRefreshToken>()
             .SetColumns(t => t.RevokedAt == revokedAt)
-            .Where(t => t.Id == id && t.RevokedAt == null && t.ExpiresAt > revokedAt)
-            .ExecuteCommandAsync(cancellationToken);
+            .Where(t => t.Id == id && t.RevokedAt == null && t.ExpiresAt > revokedAt);
+        if (CurrentTenantId is { } tenantId)
+        {
+            update = update.Where(t => t.TenantId == tenantId);
+        }
+
+        return await update.ExecuteCommandAsync(cancellationToken);
     }
 
     /// <inheritdoc />
@@ -66,8 +79,13 @@ public class SysRefreshTokenRepository(ISqlSugarClient client, IUserContext curr
     /// <inheritdoc />
     public virtual async Task<int> RemoveExpiredAsync(DateTime now, CancellationToken cancellationToken = default)
     {
-        return await Client.Deleteable<SysRefreshToken>()
-            .Where(t => t.ExpiresAt < now || t.RevokedAt != null)
-            .ExecuteCommandAsync(cancellationToken);
+        var delete = Client.Deleteable<SysRefreshToken>()
+            .Where(t => t.ExpiresAt < now || t.RevokedAt != null);
+        if (CurrentTenantId is { } tenantId)
+        {
+            delete = delete.Where(t => t.TenantId == tenantId);
+        }
+
+        return await delete.ExecuteCommandAsync(cancellationToken);
     }
 }

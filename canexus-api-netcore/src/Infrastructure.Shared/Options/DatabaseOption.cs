@@ -15,11 +15,20 @@ public sealed class DatabaseOption : OptionBase
     /// <summary>数据库类型，默认 MySQL。</summary>
     public DbType DbType { get; set; } = DbType.MySql;
 
-    /// <summary>是否自动建库建表（数据库 / 表不存在时自动创建），默认 true。</summary>
+    /// <summary>是否允许用剥离库名的管理连接自动建库（库不存在时），默认 true；生产建议显式关闭。</summary>
+    public bool AutoCreateDatabase { get; set; } = true;
+
+    /// <summary>是否自动建库建表（表不存在时自动创建），默认 true；Production 基线要求显式配置为 false。</summary>
     public bool AutoCreateTable { get; set; } = true;
 
-    /// <summary>是否自动同步表结构（按实体定义同步列、索引差异），默认 true。</summary>
+    /// <summary>是否自动同步表结构（按实体定义同步列、索引差异），默认 true；Production 基线要求显式配置为 false。</summary>
     public bool AutoSyncStructure { get; set; } = true;
+
+    /// <summary>
+    /// 是否允许在 Production 由应用执行「结构初始化」（首次建表 / 引擎修正），默认 false。
+    /// <para>结构已就绪时无论此开关为何都不执行 DDL；仅结构未初始化的全新生产库，需运维显式授权一次。</para>
+    /// </summary>
+    public bool AllowSchemaInitialization { get; set; }
 
     /// <summary>是否启用数据库迁移机制（P1-A3：基线登记 + 增量迁移 + 启动校验），默认 true。</summary>
     public bool MigrationsEnabled { get; set; } = true;

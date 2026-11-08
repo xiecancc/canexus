@@ -4,6 +4,7 @@ using Domain.Entities;
 using Domain.Repositories;
 using Domain.Services.Users;
 using Domain.Shared.Paging;
+using Infrastructure.Shared.Tenants;
 using SqlSugar;
 
 namespace Infrastructure.Repositories;
@@ -11,7 +12,8 @@ namespace Infrastructure.Repositories;
 /// <remarks>构造函数。</remarks>
 /// <param name="client">SqlSugar 客户端。</param>
 /// <param name="currentUser">当前用户上下文。</param>
-public class JobLogRepository(ISqlSugarClient client, IUserContext currentUser) : AggregateRepository<SysJobLog>(client, currentUser), IJobLogRepository
+/// <param name="tenantContext">当前租户上下文（写入侧显式补偿租户条件）。</param>
+public class JobLogRepository(ISqlSugarClient client, IUserContext currentUser, ITenantContext tenantContext) : AggregateRepository<SysJobLog>(client, currentUser, tenantContext), IJobLogRepository
 {
     /// <inheritdoc />
     public async Task<PagedResponse<SysJobLog>> GetPagedDescAsync(

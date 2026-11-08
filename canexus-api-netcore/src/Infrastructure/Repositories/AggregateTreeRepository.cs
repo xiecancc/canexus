@@ -4,6 +4,7 @@ using Domain.Repositories;
 using Domain.Services.Users;
 using Domain.Shared.Exceptions;
 using Domain.Shared.Results;
+using Infrastructure.Shared.Tenants;
 using SqlSugar;
 
 namespace Infrastructure.Repositories;
@@ -17,7 +18,8 @@ namespace Infrastructure.Repositories;
 /// <remarks>构造函数。</remarks>
 /// <param name="client">SqlSugar 客户端。</param>
 /// <param name="currentUser">当前用户上下文。</param>
-public class AggregateTreeRepository<TAggregate>(ISqlSugarClient client, IUserContext currentUser) : AggregateRepository<TAggregate>(client, currentUser), IAggregateTreeRepository<TAggregate>
+/// <param name="tenantContext">当前租户上下文（写入侧显式补偿租户条件）。</param>
+public class AggregateTreeRepository<TAggregate>(ISqlSugarClient client, IUserContext currentUser, ITenantContext tenantContext) : AggregateRepository<TAggregate>(client, currentUser, tenantContext), IAggregateTreeRepository<TAggregate>
     where TAggregate : AggregateTreeBase<TAggregate>, new()
 {
     /// <inheritdoc />

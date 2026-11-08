@@ -46,8 +46,8 @@ public interface IOutboxMessageRepository
     /// <param name="owner">认领者标识（条件校验，防止覆盖新认领者结果）。</param>
     /// <param name="processedAt">投递完成时间。</param>
     /// <param name="cancellationToken">取消令牌。</param>
-    /// <returns>表示异步操作的任务。</returns>
-    public Task MarkProcessedAsync(Guid id, string owner, DateTime processedAt, CancellationToken cancellationToken = default);
+    /// <returns>更新成功返回 true；认领已易主 / 消息状态已变（命中 0 行）返回 false，调用方不得视为已投递。</returns>
+    public Task<bool> MarkProcessedAsync(Guid id, string owner, DateTime processedAt, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// 记录一次投递失败（独立连接提交）；达到重试上限时置为失败（死信），否则回到 Pending 并按退避时间等待重试。
@@ -63,10 +63,26 @@ public interface IOutboxMessageRepository
     /// <returns>表示异步操作的任务。</returns>
     public Task RecordFailureAsync(Guid id, string owner, string error, int attemptCount, int maxAttempts, DateTime nextRetryAt, CancellationToken cancellationToken = default);
 
-    /// <summary>清理已成功投递且早于保留截止时间的消息（P1-R3：防止 Outbox 表无限增长；分批删除，单批受 maxRows 限制）。</summary>
-    /// <param name="cutoffUtc">保留截止时间（UTC）：ProcessedAt 早于该值的消息被清理。</param>
+    /// <summary>
+    /// 把长期未完成投递的 Pending / Processing 消息转为 Failed（死信），避免退避异常 / 副本崩溃造成记录无限堆积。
+    /// 仅处理创建时间早于截止时间的消息；分批执行，单批受 maxRows 限制。
+    /// </summary>
+    /// <param name="createdBeforeUtc">超期判定截止时间（UTC）。</param>
+    /// <param name="reason">写入 LastError 的超期原因。</param>
+    /// <param name="maxRows">单批最大处理行数。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>实际转为 Failed 的行数。</returns>
+    public Task<int> MarkStaleAsFailedAsync(DateTime createdBeforeUtc, string reason, int maxRows, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 清理终态消息（P1-R3：防止 Outbox 表无限增长；分批删除，单批受 maxRows 限制）：
+    /// Processed 且 ProcessedAt 早于对应截止时间，或 Failed 且 CreatedAt 早于对应截止时间。
+    /// Pending / Processing 不直接删除，须先经 <see cref="MarkStaleAsFailedAsync"/> 转死信。
+    /// </summary>
+    /// <param name="processedCutoffUtc">已投递消息的保留截止时间（UTC）；null 表示不清理 Processed。</param>
+    /// <param name="failedCutoffUtc">死信消息的保留截止时间（UTC）；null 表示不清理 Failed。</param>
     /// <param name="maxRows">单批最大删除行数。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>实际删除的行数。</returns>
-    public Task<int> DeleteProcessedBeforeAsync(DateTime cutoffUtc, int maxRows, CancellationToken cancellationToken = default);
+    public Task<int> DeleteCompletedBeforeAsync(DateTime? processedCutoffUtc, DateTime? failedCutoffUtc, int maxRows, CancellationToken cancellationToken = default);
 }

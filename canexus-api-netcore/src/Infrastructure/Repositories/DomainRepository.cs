@@ -3,6 +3,7 @@ using System.Linq.Expressions;
 using Domain.Entities;
 using Domain.Repositories;
 using Domain.Shared.Paging;
+using Infrastructure.Shared.Tenants;
 using SqlSugar;
 
 namespace Infrastructure.Repositories;
@@ -17,11 +18,15 @@ namespace Infrastructure.Repositories;
 /// <typeparam name="TEntity">实体类型。</typeparam>
 /// <remarks>构造函数。</remarks>
 /// <param name="client">SqlSugar 客户端（单例 SqlSugarScope，内部按异步上下文隔离）。</param>
-public class DomainRepository<TEntity>(ISqlSugarClient client) : IDomainRepository<TEntity>
+/// <param name="tenantContext">当前租户上下文（写入侧显式补偿租户条件）。</param>
+public class DomainRepository<TEntity>(ISqlSugarClient client, ITenantContext tenantContext) : IDomainRepository<TEntity>
     where TEntity : DomainBase, new()
 {
     /// <summary>SqlSugar 客户端（单例 SqlSugarScope，内部按异步上下文隔离）。</summary>
     protected ISqlSugarClient Client => client;
+
+    /// <summary>当前租户 Id；null 表示平台范围（与全局查询过滤器的「平台可见全部」口径一致）。</summary>
+    protected Guid? CurrentTenantId => tenantContext.TenantId;
 
     /// <inheritdoc />
     public virtual async Task<List<TEntity>> GetListAsync(
@@ -133,10 +138,16 @@ public class DomainRepository<TEntity>(ISqlSugarClient client) : IDomainReposito
     /// <inheritdoc />
     public virtual async Task<bool> DeleteAsync(Expression<Func<TEntity, bool>> predicate, CancellationToken cancellationToken = default)
     {
-        // 批量物理删除：单条 DELETE ... WHERE；聚合根软删除场景请勿使用本方法
-        return await client.Deleteable<TEntity>()
-            .Where(predicate)
-            .ExecuteCommandAsync(cancellationToken) > 0;
+        // 批量物理删除：单条 DELETE ... WHERE；聚合根软删除场景请勿使用本方法。
+        // QueryFilter 只保证查询侧隔离（是否作用于 Deleteable 取决于 ORM 版本），写入侧显式补租户条件：
+        // 平台上下文（null）保持全量，租户上下文只允许删本租户行。
+        var delete = client.Deleteable<TEntity>().Where(predicate);
+        if (CurrentTenantId is { } tenantId)
+        {
+            delete = delete.Where(it => it.TenantId == tenantId);
+        }
+
+        return await delete.ExecuteCommandAsync(cancellationToken) > 0;
     }
 
     /// <inheritdoc />

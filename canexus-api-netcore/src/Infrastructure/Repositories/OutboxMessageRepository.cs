@@ -114,9 +114,9 @@ public sealed class OutboxMessageRepository(ISqlSugarClient client) : IOutboxMes
     }
 
     /// <inheritdoc />
-    public async Task MarkProcessedAsync(Guid id, string owner, DateTime processedAt, CancellationToken cancellationToken = default)
+    public async Task<bool> MarkProcessedAsync(Guid id, string owner, DateTime processedAt, CancellationToken cancellationToken = default)
     {
-        await Client.CopyNew()
+        var affected = await Client.CopyNew()
             .Updateable<OutboxMessage>()
             .SetColumns(message => new OutboxMessage
             {
@@ -131,6 +131,8 @@ public sealed class OutboxMessageRepository(ISqlSugarClient client) : IOutboxMes
                 && message.Status == OutboxMessageStatus.Processing
                 && message.ClaimOwner == owner)
             .ExecuteCommandAsync(cancellationToken);
+
+        return affected > 0;
     }
 
     /// <inheritdoc />
@@ -156,14 +158,77 @@ public sealed class OutboxMessageRepository(ISqlSugarClient client) : IOutboxMes
     }
 
     /// <inheritdoc />
-    public async Task<int> DeleteProcessedBeforeAsync(DateTime cutoffUtc, int maxRows, CancellationToken cancellationToken = default)
+    public async Task<int> MarkStaleAsFailedAsync(DateTime createdBeforeUtc, string reason, int maxRows, CancellationToken cancellationToken = default)
     {
-        // 分批清理：先取目标 Id（独立连接只读），再按 Id 集合删除（避免大范围 DELETE 长事务锁表）
+        // 分批：先取超期 Id（独立连接只读），再按 Id 集合条件更新，避免大范围 UPDATE 长事务锁表
         var ids = await Client.CopyNew()
             .Queryable<OutboxMessage>()
-            .Where(message => message.Status == OutboxMessageStatus.Processed
+            .Where(message => (message.Status == OutboxMessageStatus.Pending
+                    || message.Status == OutboxMessageStatus.Processing)
+                && message.CreatedAt < createdBeforeUtc)
+            .Take(maxRows)
+            .Select(message => message.Id)
+            .ToListAsync(cancellationToken);
+
+        if (ids.Count == 0)
+        {
+            return 0;
+        }
+
+        var error = reason.Length <= 1000 ? reason : reason[..1000];
+        return await Client.CopyNew()
+            .Updateable<OutboxMessage>()
+            .SetColumns(message => new OutboxMessage
+            {
+                Status = OutboxMessageStatus.Failed,
+                LastError = error,
+                ClaimOwner = null,
+                ClaimedAt = null,
+                LeaseUntil = null,
+                NextRetryAt = null
+            })
+            .Where(message => ids.Contains(message.Id)
+                && (message.Status == OutboxMessageStatus.Pending || message.Status == OutboxMessageStatus.Processing))
+            .ExecuteCommandAsync(cancellationToken);
+    }
+
+    /// <inheritdoc />
+    public async Task<int> DeleteCompletedBeforeAsync(DateTime? processedCutoffUtc, DateTime? failedCutoffUtc, int maxRows, CancellationToken cancellationToken = default)
+    {
+        // 两个保留期为独立开关：null 表示该终态不清理，避免用 DateTime.MinValue 生成越界的 SQL 参数
+        if (processedCutoffUtc is null && failedCutoffUtc is null)
+        {
+            return 0;
+        }
+
+        // 分批清理：先取目标 Id（独立连接只读），再按 Id 集合删除（避免大范围 DELETE 长事务锁表）
+        var query = Client.CopyNew().Queryable<OutboxMessage>();
+        if (processedCutoffUtc is not null && failedCutoffUtc is not null)
+        {
+            var processedCutoff = processedCutoffUtc.Value;
+            var failedCutoff = failedCutoffUtc.Value;
+            query = query.Where(message =>
+                (message.Status == OutboxMessageStatus.Processed
+                    && message.ProcessedAt != null
+                    && message.ProcessedAt < processedCutoff)
+                || (message.Status == OutboxMessageStatus.Failed
+                    && message.CreatedAt < failedCutoff));
+        }
+        else if (processedCutoffUtc is not null)
+        {
+            var cutoff = processedCutoffUtc.Value;
+            query = query.Where(message => message.Status == OutboxMessageStatus.Processed
                 && message.ProcessedAt != null
-                && message.ProcessedAt < cutoffUtc)
+                && message.ProcessedAt < cutoff);
+        }
+        else
+        {
+            var cutoff = failedCutoffUtc!.Value;
+            query = query.Where(message => message.Status == OutboxMessageStatus.Failed
+                && message.CreatedAt < cutoff);
+        }
+
+        var ids = await query
             .Take(maxRows)
             .Select(message => message.Id)
             .ToListAsync(cancellationToken);

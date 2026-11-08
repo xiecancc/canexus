@@ -35,32 +35,37 @@ public interface IAggregateRepository<TEntity> : IDomainRepository<TEntity>
     /// 主键不存在时静默忽略（幂等）。</summary>
     /// <param name="id">主键。</param>
     /// <param name="cancellationToken">取消令牌。</param>
+    /// <param name="expectedVersion">客户端提交的乐观锁版本令牌；非 null 时追加 Version CAS 条件，命中 0 行抛并发冲突；null 保持幂等静默忽略语义。</param>
     /// <returns>受影响行数 &gt; 0 返回 true（不存在时为 false）。</returns>
-    public Task<bool> DeleteAsync(Guid id, CancellationToken cancellationToken = default);
+    public Task<bool> DeleteAsync(Guid id, CancellationToken cancellationToken = default, Guid? expectedVersion = null);
 
     /// <summary>按主键集合软删除：单条 SQL 按列更新（仓储兜底填充更新人 / 更新时间并轮换版本令牌）；
     /// 主键均不存在或均已删除时静默忽略（幂等）。</summary>
     /// <param name="ids">主键集合。</param>
     /// <param name="cancellationToken">取消令牌。</param>
+    /// <param name="expectedVersion">客户端提交的乐观锁版本令牌；非 null 时追加 Version CAS 条件，命中 0 行抛并发冲突；null 保持幂等静默忽略语义。</param>
     /// <returns>受影响行数 &gt; 0 返回 true。</returns>
-    public Task<bool> DeleteAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken = default);
+    public Task<bool> DeleteAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken = default, Guid? expectedVersion = null);
 
     /// <summary>按条件恢复软删除的聚合（解除墓碑，单条 SQL 按列更新）；无匹配时静默忽略（幂等）。
     /// 注意：恢复为按列更新，仓储兜底填充更新人 / 更新时间并轮换版本令牌。</summary>
     /// <param name="predicate">恢复条件。</param>
     /// <param name="cancellationToken">取消令牌。</param>
+    /// <param name="expectedVersion">客户端提交的乐观锁版本令牌；非 null 时追加 Version CAS 条件，命中 0 行抛并发冲突；null 保持幂等静默忽略语义。</param>
     /// <returns>受影响行数 &gt; 0 返回 true。</returns>
-    public Task<bool> RestoreAsync(Expression<Func<TEntity, bool>> predicate, CancellationToken cancellationToken = default);
+    public Task<bool> RestoreAsync(Expression<Func<TEntity, bool>> predicate, CancellationToken cancellationToken = default, Guid? expectedVersion = null);
 
     /// <summary>按主键恢复软删除的聚合（解除墓碑）；主键不存在或未删除时静默忽略（幂等）。</summary>
     /// <param name="id">主键。</param>
     /// <param name="cancellationToken">取消令牌。</param>
+    /// <param name="expectedVersion">客户端提交的乐观锁版本令牌；非 null 时追加 Version CAS 条件，命中 0 行抛并发冲突；null 保持幂等静默忽略语义。</param>
     /// <returns>受影响行数 &gt; 0 返回 true。</returns>
-    public Task<bool> RestoreAsync(Guid id, CancellationToken cancellationToken = default);
+    public Task<bool> RestoreAsync(Guid id, CancellationToken cancellationToken = default, Guid? expectedVersion = null);
 
     /// <summary>按主键集合恢复软删除的聚合（解除墓碑，单条 SQL）；主键均不存在或均未删除时静默忽略（幂等）。</summary>
     /// <param name="ids">主键集合。</param>
     /// <param name="cancellationToken">取消令牌。</param>
+    /// <param name="expectedVersion">客户端提交的乐观锁版本令牌；非 null 时追加 Version CAS 条件，命中 0 行抛并发冲突；null 保持幂等静默忽略语义。</param>
     /// <returns>受影响行数 &gt; 0 返回 true。</returns>
-    public Task<bool> RestoreAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken = default);
+    public Task<bool> RestoreAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken = default, Guid? expectedVersion = null);
 }

@@ -1,28 +1,43 @@
 
+using System.Security.Cryptography;
 using Domain.Entities;
 using Domain.Services.Auth;
+using Domain.Services.Rules;
 using Domain.Shared.Constants;
 using Domain.Shared.Enums;
+using Infrastructure.Shared.Caching;
 using Infrastructure.Shared.Locking;
+using Infrastructure.Shared.Options;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using SqlSugar;
 
 namespace Infrastructure.DataAccess;
 /// <summary>
-/// 种子数据初始化器：启动时幂等执行，提供基础运行数据。
+/// 种子数据初始化器：启动时幂等执行，按可变性分层提供基础运行数据。
 /// <list type="bullet">
-/// <item>默认部门树：总公司 / 研发部 / 市场部；</item>
-/// <item>超管角色 super_admin（DataScope=All）与 admin 用户（初始密码 admin123，BCrypt 存储）；</item>
-/// <item>完整菜单树（增量幂等，按名称 / path / perms 判重缺失才插入，同名菜单 / 按钮 component / perms 过时原位纠偏）：首页、系统管理（用户 / 角色 / 岗位 / 部门 / 菜单 / 字典 / 参数 / 通知公告 / 租户）、监控（操作日志 / 登录日志 / 缓存监控）、系统工具（定时任务，monitor:job），含按钮级权限标识；</item>
-/// <item>字典（sys_normal_disable / sys_user_sex / sys_yes_no / sys_oper_type / sys_notice_type）、参数（初始密码 / 验证码开关）与示例通知公告按缺失项幂等追加。</item>
+/// <item>代码契约类（菜单 / 按钮权限标识、字典、系统参数键）：代码常量为唯一真相，按稳定键补缺、只纠鉴权相关的 perms，不覆盖显示名 / 排序 / 图标等展示数据；写入后失效对应业务缓存；</item>
+/// <item>系统锚点类（super_admin 角色、admin 用户）：按固定 Id / 稳定键查缺补齐，只插不覆盖，绝不重置用户已修改的口令；</item>
+/// <item>部署配置类（初始口令、示例公告、默认部门树）：口令由运行时配置注入，生产未提供即由宿主拒绝启动，非生产随机生成且仅经控制台披露；演示数据在 Production 环境恒定不写入。</item>
 /// </list>
+/// <para>整体在一个事务内完成；启动期另由 <see cref="ValidateBuiltInAnchorsAsync"/> 校验系统锚点完整性。</para>
 /// </summary>
 /// <remarks>构造函数。</remarks>
 /// <param name="client">SqlSugar 客户端。</param>
 /// <param name="passwordHasher">密码哈希器（种子账号密码加密）。</param>
 /// <param name="distributedLock">分布式锁（多实例并发启动时保护种子初始化的 check-then-insert 竞态）。</param>
+/// <param name="bootstrap">启动引导配置（初始口令 / 演示数据开关）。</param>
+/// <param name="cache">业务缓存端口（种子写入后失效参数值 / 字典数据缓存）。</param>
+/// <param name="hostEnvironment">宿主环境（用于判定演示数据是否允许写入）。</param>
 /// <param name="logger">日志。</param>
-public sealed class SeedDataInitializer(ISqlSugarClient client, IPasswordHasher passwordHasher, IDistributedLock distributedLock, ILogger<SeedDataInitializer> logger)
+public sealed class SeedDataInitializer(
+    ISqlSugarClient client,
+    IPasswordHasher passwordHasher,
+    IDistributedLock distributedLock,
+    BootstrapOption bootstrap,
+    ICache cache,
+    IHostEnvironment hostEnvironment,
+    ILogger<SeedDataInitializer> logger)
 {
     /// <summary>由种子序号生成确定性占位主键（格式 00000000-0000-0000-0000-{序号:D12}，保证 36 位）。</summary>
     private static Guid SeedId(long n) => Guid.Parse($"00000000-0000-0000-0000-{n:D12}");
@@ -44,7 +59,7 @@ public sealed class SeedDataInitializer(ISqlSugarClient client, IPasswordHasher 
     /// <summary>种子初始化锁键（多实例并发启动时串行化；判重逻辑本身幂等，锁为正确性增强）。</summary>
     private const string SeedLockKey = "seed:initialize";
 
-    /// <summary>初始化种子数据（幂等：基础数据仅当对应表为空时插入，字典与参数按缺失项追加，整体在一个事务内完成）。</summary>
+    /// <summary>初始化种子数据（幂等：全部按稳定键 / 固定 Id 查缺补齐，只插不覆盖，整体在一个事务内完成）。</summary>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>表示异步操作的任务。</returns>
     public async Task InitializeAsync(CancellationToken cancellationToken = default)
@@ -58,17 +73,20 @@ public sealed class SeedDataInitializer(ISqlSugarClient client, IPasswordHasher 
             logger.LogWarning("未能获取种子初始化锁（其他实例正在初始化或锁后端异常），按无锁路径继续（判重幂等兜底）");
         }
 
+        // 演示数据仅属部署配置类：Production 环境恒定跳过，非生产由 Bootstrap:SeedDemoData 控制
+        var seedDemoData = bootstrap.SeedDemoData && !hostEnvironment.IsProduction();
+
         await client.Ado.BeginTranAsync();
         try
         {
-            await SeedDeptsAsync();
+            await SeedDeptsAsync(seedDemoData);
             await SeedRoleAsync();
             await SeedAdminUserAsync();
             await SeedMenusAsync();
             await EnsureDictDataMenuAsync();
             await SeedDictsAsync();
             await SeedConfigsAsync();
-            await SeedNoticesAsync();
+            await SeedNoticesAsync(seedDemoData);
             await client.Ado.CommitTranAsync();
         }
         catch
@@ -78,25 +96,90 @@ public sealed class SeedDataInitializer(ISqlSugarClient client, IPasswordHasher 
         }
     }
 
-    /// <summary>种子默认部门树：总公司（研发部、市场部）。</summary>
-    private async Task SeedDeptsAsync()
+    /// <summary>
+    /// 启动期校验系统锚点完整性：超管角色存在且唯一、admin 账号存在且启用、两者绑定关系存在。
+    /// <para>不满足时直接抛异常阻止宿主启动，避免运行时依赖可变字符串判定超管导致越权或无法登录。</para>
+    /// </summary>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>表示异步操作的任务。</returns>
+    /// <exception cref="InvalidOperationException">任一内置锚点缺失、重复、被停用或未绑定时抛出。</exception>
+    public async Task ValidateBuiltInAnchorsAsync(CancellationToken cancellationToken = default)
     {
-        if (await client.Queryable<SysDept>().CountAsync() > 0)
+        cancellationToken.ThrowIfCancellationRequested();
+
+        // 固定锚点先取到局部变量：SqlSugar 表达式解析器无法读取 private static readonly 字段
+        var superAdminRoleId = SuperAdminRoleId;
+        var adminUserId = AdminUserId;
+
+        var roleCount = await client.Queryable<SysRole>()
+            .CountAsync(r => r.RoleKey == RoleConstants.SuperAdminRoleKey);
+        if (roleCount != 1)
+        {
+            throw new InvalidOperationException(
+                $"内置数据锚点校验失败：超管角色 {RoleConstants.SuperAdminRoleKey} 期望唯一 1 条，实际 {roleCount} 条");
+        }
+
+        var role = await client.Queryable<SysRole>()
+            .FirstAsync(r => r.Id == superAdminRoleId || r.RoleKey == RoleConstants.SuperAdminRoleKey)
+            ?? throw new InvalidOperationException("内置数据锚点校验失败：未找到内置超管角色");
+
+        var adminCount = await client.Queryable<SysUser>()
+            .CountAsync(u => u.Id == adminUserId || u.UserName == UserConstants.AdminUserName);
+        if (adminCount != 1)
+        {
+            throw new InvalidOperationException(
+                $"内置数据锚点校验失败：内置账号 {UserConstants.AdminUserName} 期望唯一 1 条，实际 {adminCount} 条");
+        }
+
+        var admin = await client.Queryable<SysUser>()
+            .FirstAsync(u => u.Id == adminUserId || u.UserName == UserConstants.AdminUserName);
+        if (admin is null || admin.Status != CommonStatus.Enabled)
+        {
+            throw new InvalidOperationException("内置数据锚点校验失败：内置超管账号不存在或已停用");
+        }
+
+        var bound = await client.Queryable<SysUserRole>()
+            .CountAsync(ur => ur.UserId == admin.Id && ur.RoleId == role.Id) > 0;
+        if (!bound)
+        {
+            throw new InvalidOperationException("内置数据锚点校验失败：内置超管账号未绑定超管角色");
+        }
+    }
+
+    /// <summary>种子默认部门树（演示数据）：按固定 Id 逐条补缺，只插不覆盖。</summary>
+    /// <param name="seedDemoData">是否允许写入演示数据。</param>
+    private async Task SeedDeptsAsync(bool seedDemoData)
+    {
+        if (!seedDemoData)
         {
             return;
         }
 
-        await InsertAsync(new SysDept { Id = DeptCompanyId, ParentId = RootParentId, DeptName = "总公司", OrderNum = 1 });
-        await InsertAsync(new SysDept { Id = DeptRdId, ParentId = DeptCompanyId, DeptName = "研发部", OrderNum = 1 });
-        await InsertAsync(new SysDept { Id = DeptMarketId, ParentId = DeptCompanyId, DeptName = "市场部", OrderNum = 2 });
+        var departments = new[]
+        {
+            new SysDept { Id = DeptCompanyId, ParentId = RootParentId, DeptName = "总公司", OrderNum = 1 },
+            new SysDept { Id = DeptRdId, ParentId = DeptCompanyId, DeptName = "研发部", OrderNum = 1 },
+            new SysDept { Id = DeptMarketId, ParentId = DeptCompanyId, DeptName = "市场部", OrderNum = 2 }
+        };
+        var ids = departments.Select(d => d.Id).ToArray();
+        var existing = (await client.Queryable<SysDept>()
+            .Where(d => ids.Contains(d.Id))
+            .Select(d => d.Id)
+            .ToListAsync()).ToHashSet();
 
-        logger.LogInformation("种子数据：默认部门树已初始化");
+        foreach (var dept in departments.Where(d => !existing.Contains(d.Id)))
+        {
+            await InsertAsync(dept);
+        }
     }
 
-    /// <summary>种子超管角色：super_admin（数据范围为全部）。</summary>
+    /// <summary>种子超管角色：按固定 Id / RoleKey 判重，缺失才插入，绝不覆盖既有角色定义。</summary>
     private async Task SeedRoleAsync()
     {
-        if (await client.Queryable<SysRole>().CountAsync() > 0)
+        var superAdminRoleId = SuperAdminRoleId;
+        var exists = await client.Queryable<SysRole>()
+            .CountAsync(r => r.Id == superAdminRoleId || r.RoleKey == RoleConstants.SuperAdminRoleKey) > 0;
+        if (exists)
         {
             return;
         }
@@ -110,35 +193,113 @@ public sealed class SeedDataInitializer(ISqlSugarClient client, IPasswordHasher 
             Description = "内置超管角色，放行全部权限"
         });
 
-        logger.LogInformation("种子数据：超管角色 super_admin 已初始化");
+        logger.LogInformation("种子数据：超管角色 super_admin 已补齐");
     }
 
-    /// <summary>种子 admin 用户（用户名 admin，初始密码 admin123）并绑定超管角色。</summary>
+    /// <summary>
+    /// 种子 admin 用户：按固定 Id / 用户名判重，缺失才插入；初始口令来自运行时配置（非生产随机生成），
+    /// 默认强制首登改密（隔离测试宿主可经 Bootstrap:RequirePasswordChangeOnSeed 关闭）；
+    /// 已自行改密的账号绝不重置口令，仅补齐与超管角色的绑定关系。
+    /// </summary>
     private async Task SeedAdminUserAsync()
     {
-        if (await client.Queryable<SysUser>().CountAsync() > 0)
+        var adminUserId = AdminUserId;
+        var superAdminRoleId = SuperAdminRoleId;
+        var admin = await client.Queryable<SysUser>()
+            .FirstAsync(u => u.Id == adminUserId || u.UserName == UserConstants.AdminUserName);
+
+        if (admin is null)
         {
-            return;
+            var password = ResolveBootstrapPassword();
+            await InsertAsync(new SysUser
+            {
+                Id = AdminUserId,
+                UserName = UserConstants.AdminUserName,
+                NickName = "超级管理员",
+                PasswordHash = passwordHasher.Hash(password),
+                MustChangePassword = bootstrap.RequirePasswordChangeOnSeed,
+                DeptId = DeptCompanyId,
+                Description = "内置超管账号"
+            });
+
+            // 日志只描述状态，不输出任何口令
+            logger.LogInformation("种子数据：admin 账号已补齐（首登改密要求={RequireChange}）", bootstrap.RequirePasswordChangeOnSeed);
+        }
+        else if (bootstrap.RequirePasswordChangeOnSeed
+            && passwordHasher.Verify(UserConstants.LegacySeedPassword, admin.PasswordHash))
+        {
+            // 存量账号仍使用历史初始口令（即从未改过密码）：一次性轮换为运行时口令并要求首登改密。
+            // 已自行修改过口令的账号不做任何变更，避免每次启动重置用户凭据。
+            var password = ResolveBootstrapPassword();
+            if (string.Equals(password, UserConstants.LegacySeedPassword, StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException(
+                    "Bootstrap:AdminInitialPassword 不得仍为历史内置口令，请更换后重启");
+            }
+
+            admin.PasswordHash = passwordHasher.Hash(password);
+            admin.MustChangePassword = true;
+            await client.Updateable(admin)
+                .UpdateColumns(u => new { u.PasswordHash, u.MustChangePassword })
+                .ExecuteCommandAsync();
+            logger.LogInformation("种子数据：内置 admin 仍使用历史初始口令，已轮换并要求首登改密");
+        }
+        else if (!bootstrap.RequirePasswordChangeOnSeed)
+        {
+            // 隔离测试宿主：显式关闭首登改密时，按运行时注入的测试口令复位内置 admin 凭据并清除改密标记，
+            // 保证既有集成测试的固定登录凭据在重复启动 / 历史库复用后仍然有效；
+            // Production 由启动期基线校验禁止关闭该开关，已自行改密的真实账号不受影响
+            var password = ResolveBootstrapPassword();
+            admin.PasswordHash = passwordHasher.Hash(password);
+            admin.MustChangePassword = false;
+            await client.Updateable(admin)
+                .UpdateColumns(u => new { u.PasswordHash, u.MustChangePassword })
+                .ExecuteCommandAsync();
+            logger.LogInformation("种子数据：隔离测试宿主已复位内置 admin 测试凭据");
         }
 
-        await InsertAsync(new SysUser
+        var role = await client.Queryable<SysRole>()
+            .FirstAsync(r => r.Id == superAdminRoleId || r.RoleKey == RoleConstants.SuperAdminRoleKey);
+        var roleId = role?.Id ?? superAdminRoleId;
+        var userId = admin?.Id ?? AdminUserId;
+        var bound = await client.Queryable<SysUserRole>()
+            .CountAsync(ur => ur.UserId == userId && ur.RoleId == roleId) > 0;
+        if (!bound)
         {
-            Id = AdminUserId,
-            UserName = UserConstants.AdminUserName,
-            NickName = "超级管理员",
-            PasswordHash = passwordHasher.Hash("admin123"),
-            DeptId = DeptCompanyId,
-            Description = "内置超管账号"
-        });
+            await InsertAsync(new SysUserRole { UserId = userId, RoleId = roleId });
+        }
+    }
 
-        await InsertAsync(new SysUserRole { UserId = AdminUserId, RoleId = SuperAdminRoleId });
+    /// <summary>解析内置超管的初始口令：优先取运行时配置，非生产环境未提供时生成一次性随机口令。</summary>
+    /// <returns>明文初始口令（仅用于即时哈希，不持久化、不写入日志）。</returns>
+    private string ResolveBootstrapPassword()
+    {
+        if (!string.IsNullOrWhiteSpace(bootstrap.AdminInitialPassword))
+        {
+            return bootstrap.AdminInitialPassword;
+        }
 
-        logger.LogInformation("种子数据：admin 账号已初始化（初始密码 admin123）");
+        if (hostEnvironment.IsProduction())
+        {
+            throw new InvalidOperationException(
+                "Bootstrap:AdminInitialPassword 未配置；Production 环境必须显式提供内置超管初始口令");
+        }
+
+        // 14 位一次性口令：固定字母前缀 + 4 位随机数字 + 8 位随机字母，保证同时含字母与数字
+        var password = "Aa"
+            + RandomNumberGenerator.GetString("23456789", 4)
+            + RandomNumberGenerator.GetString("ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz", 8);
+
+        // 直接写标准输出而非 ILogger：Serilog 文件 sink 会落 logs/log-*.txt，口令不得进入文件日志。
+        // 仅非生产环境、仅在账号真正首次创建时输出一次。
+        Console.WriteLine($"[bootstrap] 内置超管 admin 一次性初始口令：{password}（仅本次启动显示，首次登录须修改密码）");
+        return password;
     }
 
     /// <summary>
     /// 种子完整菜单树（增量幂等）：目录 / 菜单按「菜单类型 + 名称 + 路由」判重、按钮按「父菜单 + 权限标识」判重，
     /// 缺失项才插入；同名菜单 / 按钮已存在但 component / perms 过时（如定时任务 tool:job → monitor:job）则按名称原位纠偏更新。
+    /// 纠偏仅涉及组件路径与鉴权标识两类代码契约字段，不触碰显示名 / 排序 / 图标 / 可见性等展示数据。
     /// 超管按 roleKey 放行全部权限，无需角色-菜单关联。
     /// </summary>
     private async Task SeedMenusAsync()
@@ -184,7 +345,7 @@ public sealed class SeedDataInitializer(ISqlSugarClient client, IPasswordHasher 
         await EnsureMenuAsync(Menu(MenuType.Menu, SeedId(202), "登录日志", "logininfor", "monitor/logininfor/index", "monitor:logininfor:list", "logininfor", order: 2, parentId: SeedId(200)));
         await EnsureButtonsAsync(SeedId(202), "monitor:logininfor", "登录日志", startId: 2021,
             ("查询", "query"), ("删除", "remove"), ("清空", "clean"), ("导出", "export"));
-        await EnsureMenuAsync(Menu(MenuType.Menu, SeedId(203), "缓存监控", "cache", "monitor/cache/index", "monitor:cache:list", "redis", order: 3, parentId: SeedId(200)));
+        await EnsureMenuAsync(Menu(MenuType.Menu, SeedId(203), "缓存监控", "cache", "monitor/cache/index", "monitor/cache:list", "redis", order: 3, parentId: SeedId(200)));
 
         // 系统工具目录
         await EnsureMenuAsync(Menu(MenuType.Directory, SeedId(300), "系统工具", "tool", null, icon: "tool", order: 4));
@@ -289,7 +450,7 @@ public sealed class SeedDataInitializer(ISqlSugarClient client, IPasswordHasher 
         logger.LogInformation("种子数据：字典数据隐藏页菜单已补充");
     }
 
-    /// <summary>种子字典数据（按 dictType + dictValue 幂等追加，缺失项才插入，不破坏既有数据）。</summary>
+    /// <summary>种子字典数据（按 dictType + dictValue 幂等追加，缺失项才插入，插入后失效该类型的字典数据缓存）。</summary>
     private async Task SeedDictsAsync()
     {
         var inserted = false;
@@ -326,12 +487,12 @@ public sealed class SeedDataInitializer(ISqlSugarClient client, IPasswordHasher 
         }
     }
 
-    /// <summary>种子系统参数（按 configKey 幂等追加，缺失项才插入）。</summary>
+    /// <summary>种子系统参数（按 configKey 幂等追加，缺失项才插入，插入后失效参数值缓存）。</summary>
     private async Task SeedConfigsAsync()
     {
         var inserted = false;
 
-        inserted |= await EnsureConfigAsync(ConfigConstants.InitPasswordKey, UserConstants.DefaultPassword, "用户初始密码", description: "新增用户时的缺省初始密码");
+        inserted |= await EnsureConfigAsync(ConfigConstants.InitPasswordKey, UserConstants.DefaultPassword, "用户初始密码", description: "新增用户时未显式填写密码所采用的初始密码，使用后强制首登改密");
         inserted |= await EnsureConfigAsync(ConfigConstants.CaptchaEnabledKey, "true", "登录验证码开关", description: "是否开启登录验证码校验（true 开启 / false 关闭）");
 
         if (inserted)
@@ -353,7 +514,7 @@ public sealed class SeedDataInitializer(ISqlSugarClient client, IPasswordHasher 
         return true;
     }
 
-    /// <summary>确保字典数据存在（按 dictType + dictValue 判重，缺失时插入）。</summary>
+    /// <summary>确保字典数据存在（按 dictType + dictValue 判重，缺失时插入并失效该类型缓存）。</summary>
     /// <returns>本次是否执行了插入。</returns>
     private async Task<bool> EnsureDictDataAsync(string dictType, string label, string value, TagType tagType, int orderNum)
     {
@@ -371,10 +532,11 @@ public sealed class SeedDataInitializer(ISqlSugarClient client, IPasswordHasher 
             OrderNum = orderNum,
             Status = CommonStatus.Enabled
         });
+        await InvalidateCacheAsync(DictRules.DataTypeCacheKey(dictType));
         return true;
     }
 
-    /// <summary>确保系统参数存在（按 configKey 判重，缺失时插入）。</summary>
+    /// <summary>确保系统参数存在（按 configKey 判重，缺失时插入并失效参数值缓存）。</summary>
     /// <returns>本次是否执行了插入。</returns>
     private async Task<bool> EnsureConfigAsync(string configKey, string configValue, string configName, bool builtIn = true, string? description = null)
     {
@@ -391,12 +553,19 @@ public sealed class SeedDataInitializer(ISqlSugarClient client, IPasswordHasher 
             BuiltIn = builtIn,
             Description = description
         });
+        await InvalidateCacheAsync(ConfigRules.ValueCacheKey(configKey));
         return true;
     }
 
-    /// <summary>种子示例通知公告（按标题判重，缺失项才插入）：一条上线通知（类型 1，正常）+ 一条维护公告（类型 2，关闭）。</summary>
-    private async Task SeedNoticesAsync()
+    /// <summary>种子示例通知公告（演示数据，按标题判重，缺失项才插入）。</summary>
+    /// <param name="seedDemoData">是否允许写入演示数据。</param>
+    private async Task SeedNoticesAsync(bool seedDemoData)
     {
+        if (!seedDemoData)
+        {
+            return;
+        }
+
         var inserted = false;
 
         inserted |= await EnsureNoticeAsync(new SysNotice
@@ -475,6 +644,20 @@ public sealed class SeedDataInitializer(ISqlSugarClient client, IPasswordHasher 
             KeepAlive = keepAlive,
             Status = CommonStatus.Enabled
         };
+
+    /// <summary>失效种子写入涉及的缓存键：缓存后端异常仅告警，不阻断数据库初始化事务。</summary>
+    /// <param name="key">业务缓存键。</param>
+    private async Task InvalidateCacheAsync(string key)
+    {
+        try
+        {
+            await cache.RemoveAsync(key);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            logger.LogWarning(exception, "种子数据缓存失效失败：{CacheKey}（不影响初始化，后续访问将回源）", key);
+        }
+    }
 
     /// <summary>插入实体（审计字段与 Guid 主键生成由数据访问层 Aop 自动填充）。</summary>
     /// <remarks>显式设置 Id 的种子数据直接写入该主键；Guid 主键非自增，无需 OffIdentity。</remarks>

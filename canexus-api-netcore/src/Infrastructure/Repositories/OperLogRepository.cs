@@ -2,6 +2,7 @@
 using Domain.Entities;
 using Domain.Repositories;
 using Domain.Services.Users;
+using Infrastructure.Shared.Tenants;
 using SqlSugar;
 
 namespace Infrastructure.Repositories;
@@ -9,17 +10,32 @@ namespace Infrastructure.Repositories;
 /// <remarks>构造函数。</remarks>
 /// <param name="client">SqlSugar 客户端。</param>
 /// <param name="currentUser">当前用户上下文。</param>
-public class OperLogRepository(ISqlSugarClient client, IUserContext currentUser) : AggregateRepository<SysOperLog>(client, currentUser), IOperLogRepository
+/// <param name="tenantContext">当前租户上下文（写入侧显式补偿租户条件）。</param>
+public class OperLogRepository(ISqlSugarClient client, IUserContext currentUser, ITenantContext tenantContext) : AggregateRepository<SysOperLog>(client, currentUser, tenantContext), IOperLogRepository
 {
     /// <inheritdoc />
-    public async Task ClearAsync(CancellationToken cancellationToken = default)
+    public async Task ClearAsync(DateTime fromInclusive, DateTime toExclusive, CancellationToken cancellationToken = default)
     {
-        await Client.Deleteable<SysOperLog>().ExecuteCommandAsync(cancellationToken);
+        // Deleteable 不走查询侧全局过滤器：显式补时间范围与租户条件，危险清空不得全表 / 跨租户执行
+        var delete = Client.Deleteable<SysOperLog>()
+            .Where(log => log.CreatedAt >= fromInclusive && log.CreatedAt < toExclusive);
+        if (CurrentTenantId is { } tenantId)
+        {
+            delete = delete.Where(log => log.TenantId == tenantId);
+        }
+
+        await delete.ExecuteCommandAsync(cancellationToken);
     }
 
     /// <inheritdoc />
     public async Task HardDeleteAsync(Guid id, CancellationToken cancellationToken = default)
     {
-        await Client.Deleteable<SysOperLog>().In(id).ExecuteCommandAsync(cancellationToken);
+        var delete = Client.Deleteable<SysOperLog>().In(id);
+        if (CurrentTenantId is { } tenantId)
+        {
+            delete = delete.Where(log => log.TenantId == tenantId);
+        }
+
+        await delete.ExecuteCommandAsync(cancellationToken);
     }
 }

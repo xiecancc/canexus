@@ -33,7 +33,7 @@ internal static class SqlSugarClientFactory
         //（不支持热加载，连接与过滤器构造一次性定型）
         var options = monitor.CurrentValue;
 
-        // 单例服务被闭包捕获是安全的：TenantContext 基于 AsyncLocal、其余为无状态开关
+        // 单例服务被闭包捕获是安全的：TenantContext 与 DataFilter 的状态均基于 AsyncLocal（按请求隔离），其余为无状态服务
         var tenantContext = serviceProvider.GetRequiredService<ITenantContext>();
         var dataFilter = serviceProvider.GetRequiredService<IDataFilter>();
         var currentUser = serviceProvider.GetRequiredService<IUserContext>();

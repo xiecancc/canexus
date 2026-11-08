@@ -24,4 +24,20 @@ public class PagedRequest
             ? DefaultPageSize
             : value > MaxPageSize ? MaxPageSize : value;
     }
+
+    /// <summary>按指定页码 / 页大小复制一份同类型请求（浅拷贝全部筛选条件，不改动原对象）。</summary>
+    /// <remarks>导出等场景需以同一筛选条件逐页取数；直接改写共享请求对象会在并发 / 嵌套请求间互相污染，
+    /// 且会把导出用的 PageSize 回写到调用方持有的对象上。<c>MemberwiseClone</c> 保留运行时具体类型与全部派生字段。</remarks>
+    /// <typeparam name="TRequest">具体请求类型（须继承 <see cref="PagedRequest"/>）。</typeparam>
+    /// <param name="pageIndex">目标页索引。</param>
+    /// <param name="pageSize">目标页大小。</param>
+    /// <returns>筛选条件与原请求一致的新实例。</returns>
+    /// <exception cref="InvalidCastException">泛型参数与当前实例的实际类型不一致时抛出。</exception>
+    public TRequest CloneForPage<TRequest>(int pageIndex, int pageSize) where TRequest : PagedRequest
+    {
+        var clone = (TRequest)MemberwiseClone();
+        clone.PageIndex = pageIndex;
+        clone.PageSize = pageSize;
+        return clone;
+    }
 }

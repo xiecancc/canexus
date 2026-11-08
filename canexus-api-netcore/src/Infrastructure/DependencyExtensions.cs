@@ -16,6 +16,7 @@ using Infrastructure.Repositories;
 using Infrastructure.Scheduling;
 using Infrastructure.Shared.Caching;
 using Infrastructure.Shared.Contexts;
+using Infrastructure.Shared.DataAccess;
 using Infrastructure.Shared.Filtering;
 using Infrastructure.Shared.Locking;
 using Infrastructure.Shared.Options;
@@ -95,6 +96,7 @@ public static class DependencyExtensions
     public static IServiceCollection RegisterOptions(this IServiceCollection services, IConfiguration configuration)
     {
         services.RegisterOption<CacheOption>(configuration, "Cache");
+        services.RegisterOption<BootstrapOption>(configuration, "Bootstrap");
         services.RegisterOption<DatabaseOption>(configuration, "Database");
         services.RegisterOption<JwtOption>(configuration, "Jwt");
         services.RegisterOption<CorsOption>(configuration, "Cors");
@@ -327,6 +329,8 @@ public static class DependencyExtensions
         services.AddSingleton<ISchemaMigration, Infrastructure.DataAccess.Migrations.AddOperLogAuditColumnsMigration>();
         // 请求上下文（P0 默认审计）：供 AuditLogBehavior 读取链路 TraceId、并与 OperLogActionFilter 协同去重
         services.AddSingleton<IOperationContext, Infrastructure.Logging.HttpContextOperationContext>();
+        // 数据库初始化三层结论（库 / 结构 / 种子）：启动期写、运行期只读，供 /health/ready 输出脱敏状态
+        services.AddSingleton<DatabaseInitializationState>();
         services.AddSingleton<DbInitializer>();
 
         return services;

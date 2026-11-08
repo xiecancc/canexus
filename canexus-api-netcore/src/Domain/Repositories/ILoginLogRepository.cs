@@ -16,10 +16,12 @@ public interface ILoginLogRepository : IAggregateRepository<SysLoginLog>
     /// <returns>表示异步操作的任务。</returns>
     public Task InsertIndependentAsync(SysLoginLog log, CancellationToken cancellationToken = default);
 
-    /// <summary>清空全部登录日志（物理删除）。</summary>
+    /// <summary>按时间范围清空登录日志（物理删除；仅删除 CreatedAt 落在 [fromInclusive, toExclusive) 且当前租户可见的记录）。</summary>
+    /// <param name="fromInclusive">起始时间（含，UTC）。</param>
+    /// <param name="toExclusive">结束时间（不含，UTC）。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>表示异步操作的任务。</returns>
-    public Task ClearAsync(CancellationToken cancellationToken = default);
+    public Task ClearAsync(DateTime fromInclusive, DateTime toExclusive, CancellationToken cancellationToken = default);
 
     /// <summary>按 Id 物理删除单条登录日志（与清空策略一致）。</summary>
     /// <param name="id">日志 Id。</param>

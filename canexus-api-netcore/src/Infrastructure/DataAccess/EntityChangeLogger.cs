@@ -2,6 +2,7 @@
 using System.Collections.Concurrent;
 using System.Reflection;
 using Domain.Entities;
+using Domain.Shared.Logging;
 
 namespace Infrastructure.DataAccess;
 /// <summary>
@@ -44,9 +45,7 @@ internal static class EntityChangeLogger
         }
 
         var entityType = newEntity.GetType();
-        foreach (var property in PropertyCache.GetOrAdd(entityType, static type => [.. type
-                     .GetProperties(BindingFlags.Public | BindingFlags.Instance)
-                     .Where(p => p.CanRead && p.CanWrite && !ExcludedProperties.Contains(p.Name))]))
+        foreach (var property in GetComparableProperties(entityType))
         {
             var oldValue = property.GetValue(oldEntity);
             var newValue = property.GetValue(newEntity);
@@ -55,13 +54,14 @@ internal static class EntityChangeLogger
                 continue;
             }
 
+            var sensitive = SensitiveDataMasker.IsSensitiveField(property.Name);
             logs.Add(new SysEntityChangeLog
             {
                 EntityName = entityType.Name,
                 EntityId = newEntity.Id,
                 FieldName = property.Name,
-                OldValue = Format(oldValue),
-                NewValue = Format(newValue),
+                OldValue = Format(oldValue, sensitive),
+                NewValue = Format(newValue, sensitive),
                 ChangedAt = changedAt,
                 ChangedBy = changedBy
             });
@@ -70,14 +70,84 @@ internal static class EntityChangeLogger
         return logs;
     }
 
-    /// <summary>格式化字段值用于存储：null 保持 null，其余取 ToString 并截断超长。</summary>
+    /// <summary>为新插入的聚合生成逐字段「新增」日志（OldValue 为 null，敏感字段值脱敏）。</summary>
+    /// <param name="entity">新插入的实体。</param>
+    /// <param name="changedAt">变更时间。</param>
+    /// <param name="changedBy">变更人（无登录上下文时为 null）。</param>
+    /// <returns>变更日志集合。</returns>
+    public static List<SysEntityChangeLog> BuildCreated(AggregateBase entity, DateTime changedAt, Guid? changedBy)
+    {
+        var logs = new List<SysEntityChangeLog>();
+        var entityType = entity.GetType();
+        foreach (var property in GetComparableProperties(entityType))
+        {
+            var value = property.GetValue(entity);
+            if (value is null || value is string text && text.Length == 0)
+            {
+                continue;
+            }
+
+            logs.Add(new SysEntityChangeLog
+            {
+                EntityName = entityType.Name,
+                EntityId = entity.Id,
+                FieldName = property.Name,
+                OldValue = null,
+                NewValue = Format(value, SensitiveDataMasker.IsSensitiveField(property.Name)),
+                ChangedAt = changedAt,
+                ChangedBy = changedBy
+            });
+        }
+
+        return logs;
+    }
+
+    /// <summary>为软删除 / 恢复生成字段级 IsDeleted 变更日志。</summary>
+    /// <param name="entityType">聚合实体类型。</param>
+    /// <param name="entityId">实体主键。</param>
+    /// <param name="newDeleted">变更后的软删除标记（true = 软删除，false = 恢复）。</param>
+    /// <param name="changedAt">变更时间。</param>
+    /// <param name="changedBy">变更人（无登录上下文时为 null）。</param>
+    /// <returns>单字段变更日志。</returns>
+    public static SysEntityChangeLog BuildLifecycleChange(
+        Type entityType, Guid entityId, bool newDeleted, DateTime changedAt, Guid? changedBy)
+    {
+        return new SysEntityChangeLog
+        {
+            EntityName = entityType.Name,
+            EntityId = entityId,
+            FieldName = nameof(AggregateBase.IsDeleted),
+            OldValue = (!newDeleted).ToString(),
+            NewValue = newDeleted.ToString(),
+            ChangedAt = changedAt,
+            ChangedBy = changedBy
+        };
+    }
+
+    /// <summary>取实体可对比属性（带类型缓存）。</summary>
+    /// <param name="entityType">实体类型。</param>
+    /// <returns>属性列表。</returns>
+    private static IReadOnlyList<PropertyInfo> GetComparableProperties(Type entityType)
+    {
+        return PropertyCache.GetOrAdd(entityType, static type => [.. type
+            .GetProperties(BindingFlags.Public | BindingFlags.Instance)
+            .Where(p => p.CanRead && p.CanWrite && !ExcludedProperties.Contains(p.Name))]);
+    }
+
+    /// <summary>格式化字段值用于存储：null 保持 null，敏感字段替换为掩码，其余取 ToString 并截断超长。</summary>
     /// <param name="value">原始字段值。</param>
+    /// <param name="sensitive">字段名是否命中脱敏规则。</param>
     /// <returns>存储字符串。</returns>
-    private static string? Format(object? value)
+    private static string? Format(object? value, bool sensitive)
     {
         if (value is null)
         {
             return null;
+        }
+
+        if (sensitive)
+        {
+            return SensitiveDataMasker.MaskText;
         }
 
         var text = value.ToString();

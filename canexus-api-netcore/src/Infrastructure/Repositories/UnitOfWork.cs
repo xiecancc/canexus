@@ -18,7 +18,7 @@ public sealed class UnitOfWork(ISqlSugarClient client) : IUnitOfWork
     public Task<T> RunInTransactionAsync<T>(Func<Task<T>> action, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        return RunCoreAsync(action);
+        return RunCoreAsync(action, cancellationToken);
     }
 
     /// <inheritdoc />
@@ -34,12 +34,21 @@ public sealed class UnitOfWork(ISqlSugarClient client) : IUnitOfWork
     }
 
     /// <summary>UseTranAsync：开启事务 → 执行委托 → 成功提交 / 异常回滚并捕获，统一在此原样透出。</summary>
+    /// <remarks>SqlSugar 的 Ado.UseTranAsync 没有取消通道：在委托入口再次检查令牌，
+    /// 使取消在进入业务写入前触发回滚；已发出的 ADO 命令不可中断，命令超时为物理下限。</remarks>
     /// <typeparam name="T">委托返回值类型。</typeparam>
     /// <param name="action">事务内执行的委托。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>委托返回值。</returns>
-    private async Task<T> RunCoreAsync<T>(Func<Task<T>> action)
+    private async Task<T> RunCoreAsync<T>(Func<Task<T>> action, CancellationToken cancellationToken)
     {
-        var result = await client.Ado.UseTranAsync(action);
+        Task<T> GuardedAction()
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return action();
+        }
+
+        var result = await client.Ado.UseTranAsync(GuardedAction);
         if (!result.IsSuccess)
         {
             throw result.ErrorException ?? new BusinessException(ErrorCodes.CommonOperationFailed, "事务执行失败，已回滚");

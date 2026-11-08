@@ -20,6 +20,12 @@ public interface ISchemaMigration
     /// <summary>本次迁移创建的表名清单（无则空）。</summary>
     public IReadOnlyList<string> CreatedTableNames => Array.Empty<string>();
 
+    /// <summary>
+    /// 迁移脚本正文（幂等 SQL，逐条在事务内执行）。脚本指纹由正文计算，正文变更在启动期被发现；
+    /// 纯登记型迁移（历史基线由 CodeFirst 建表）返回空清单。
+    /// </summary>
+    public IReadOnlyList<string> Scripts => Array.Empty<string>();
+
     /// <summary>应用迁移脚本（在事务内执行，失败整体回滚；原生 SQL 必须经 <paramref name="sql"/> 执行器运行，
     /// 裸 Ado.ExecuteCommand 不挂接事务，会自动提交）。</summary>
     /// <param name="client">SqlSugar 客户端（ORM 操作与事务同连接）。</param>
