@@ -588,15 +588,18 @@ await userRoleRepository.HardDeleteAsync(ur => ur.UserId == command.Id, ct);
 5. 开发期数据库可直接删除重建；CodeFirst 无法表达的结构变更追加幂等 `ISchemaMigration` 脚本，禁止依赖生产环境自动改表；
 6. 补充对应层级的测试。
 
-### 任务完成后的固定动作
+### 任务完成后的固定动作（强制交付门禁）
 
-每次开发或修复完成后，按固定顺序执行，保持双端仓库同步：
+适用范围：本仓库后续**所有**任务与操作——功能开发、Bug 修复、重构、依赖包（NuGet / npm）增减或升级、
+配置 / 脚本 / 文档 / 规范调整、测试补充等。只要产生待提交改动，一律按以下顺序执行：不得跳过、不得调换、
+不得因「只是文档或配置改动」而省略，不得以任一远端为唯一来源，也无需另行确认。
 
 1. **立即运行全量测试**：`dotnet test api.slnx`，确认全部用例通过
-   （集成测试需先设置 `SUPER_ADMIN_TEST_CONN`，且测试库必须是 `super_admin_test`）；
+   （集成测试需先设置 `SUPER_ADMIN_TEST_CONN` 为有效连接串，且测试库必须是 `super_admin_test`）；
+   出现失败必须先修复并复跑至全绿，禁止带红提交；
 2. **同步 README**：补充功能说明、使用方式与本次变更记录；任何影响安装、配置、接口、目录结构、
-   依赖版本或运维方式的改动同样必须更新本文件；提交前执行 `python3 scripts/check-readme-types.py`
-   与 `dotnet format api.slnx --verify-no-changes`；
+   依赖版本、运维方式或开发规范的改动同样必须更新本文件；提交前执行 `python3 scripts/check-readme-types.py`
+   与 `dotnet format api.slnx --verify-no-changes`（本机 `python3` 为商店占位程序，改用 `python`）；
 3. **提交并双端推送**：测试全部无误后 `git add` 本次相关修改并 `git commit`，随后直接推送到
    `gitee` 与 `origin`（GitHub）两个远程仓库：
 
@@ -605,7 +608,8 @@ await userRoleRepository.HardDeleteAsync(ur => ur.UserId == command.Id, ct);
    git push origin master
    ```
 
-   保持双端同步，不以任一远端为唯一来源。
+   保持双端同步，并核对工作区干净、local / gitee / github 三端 refs 一致；
+   任一推送失败须重试或明确报告，不得留下单端不同步。
 
 ## 常见问题
 
@@ -695,6 +699,16 @@ Development 可不启用（缓存退化为进程内 L1、限流失效为单实�
 不要修改 `.editorconfig` 降级。
 
 ## 变更记录
+
+### 2026-11-09（三）：固化交付门禁为项目规范
+
+- 将「全量测试 → 更新 README（功能说明 / 使用方式 / 本次变更记录）→ 提交 → gitee + GitHub 双端推送」
+  明确为**强制交付门禁**，适用范围由「开发或修复后」扩展到本仓库后续所有任务与操作：
+  含依赖包（NuGet / npm）增减升级、配置 / 脚本 / 文档 / 规范调整、测试补充等。
+  只要产生待提交改动即须执行，不得跳过步骤、不得调换顺序、不得只推一端，也无需另行确认。
+- 补充失败处理：测试出现失败必须先修复并复跑至全绿，禁止带红提交；推送失败须重试或明确报告。
+- 补充收尾校验：工作区干净、local / gitee / github 三端 refs 一致。
+- 同步更新「开发规范 → 任务完成后的固定动作」章节与项目长期规范记忆体；本次仅文档与规范调整，代码零改动。
 
 ### 2026-11-09（二）：DeletedAt 软删除时间戳 + 干净迁移框架
 
