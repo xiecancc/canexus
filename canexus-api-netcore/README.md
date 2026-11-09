@@ -592,7 +592,8 @@ await userRoleRepository.HardDeleteAsync(ur => ur.UserId == command.Id, ct);
 
 适用范围：本仓库后续**所有**任务与操作——功能开发、Bug 修复、重构、依赖包（NuGet / npm）增减或升级、
 配置 / 脚本 / 文档 / 规范调整、测试补充等。只要产生待提交改动，一律按以下顺序执行：不得跳过、不得调换、
-不得因「只是文档或配置改动」而省略，不得以任一远端为唯一来源，也无需另行确认。
+不得因「只是文档或配置改动」而省略，也无需另行确认。**推送以 gitee 为准**：GitHub 可达时同步推两端，
+GitHub 推送失败时仅推送 gitee 即可。
 
 1. **立即运行全量测试**：`dotnet test api.slnx`，确认全部用例通过
    （集成测试需先设置 `SUPER_ADMIN_TEST_CONN` 为有效连接串，且测试库必须是 `super_admin_test`）；
@@ -600,16 +601,19 @@ await userRoleRepository.HardDeleteAsync(ur => ur.UserId == command.Id, ct);
 2. **同步 README**：补充功能说明、使用方式与本次变更记录；任何影响安装、配置、接口、目录结构、
    依赖版本、运维方式或开发规范的改动同样必须更新本文件；提交前执行 `python3 scripts/check-readme-types.py`
    与 `dotnet format api.slnx --verify-no-changes`（本机 `python3` 为商店占位程序，改用 `python`）；
-3. **提交并双端推送**：测试全部无误后 `git add` 本次相关修改并 `git commit`，随后直接推送到
-   `gitee` 与 `origin`（GitHub）两个远程仓库：
+3. **提交并推送**：测试全部无误后 `git add` 本次相关修改并 `git commit`，随后推送 `gitee`；
+   GitHub 可达时再推 `origin`（GitHub）：
 
    ```bash
    git push gitee master
    git push origin master
    ```
 
-   保持双端同步，并核对工作区干净、local / gitee / github 三端 refs 一致；
-   任一推送失败须重试或明确报告，不得留下单端不同步。
+   **GitHub 推送失败（代理 502 / 网络超时 / 隧道不通等）时，仅推送 gitee 即可**：不反复重试、
+   不阻塞交付、不视为交付失败，在结果中说明 GitHub 未同步及原因即可；后续网络恢复可顺手补推，
+   但不作为待办阻塞项。
+4. **收尾校验**：确认 `git status` 干净（还原 pre-push hook 生成的前端声明文件等噪音），
+   核对 local / gitee refs 一致；GitHub 本次推送成功时再一并核对三端 refs。
 
 ## 常见问题
 
@@ -699,6 +703,15 @@ Development 可不启用（缓存退化为进程内 L1、限流失效为单实�
 不要修改 `.editorconfig` 降级。
 
 ## 变更记录
+
+### 2026-11-09（四）：GitHub 不可达时仅推送 gitee
+
+- 用户明确放行：GitHub 推送失败（代理 502 / 网络超时 / 隧道不通等）时**仅推送 gitee 即可**，
+  不反复重试、不阻塞交付、不视为交付失败；只需在结果中说明 GitHub 未同步及原因，
+  后续网络恢复可顺手补推但不作为待办阻塞项。
+- 门禁第 3 步由「强制双端推送」调整为「以 gitee 为准，GitHub 可达时同步」；
+  收尾校验由「三端 refs 一致」调整为「local / gitee 一致，GitHub 本次推送成功时再核对三端」。
+- 同步更新项目长期规范记忆体与用户级记忆体；本次仅文档与规范调整，代码零改动。
 
 ### 2026-11-09（三）：固化交付门禁为项目规范
 
