@@ -19,7 +19,7 @@ public abstract class AggregateInputRequest
 /// 聚合详情响应基类：在 <see cref="AggregatePagedResponse"/> 最小根（Id / Version / CreatedAt / Description）之上，
 /// 补充镜像 <c>AggregateBase</c> 的租户归属（TenantId）、创建人（CreatedBy）与更新审计（UpdatedAt / UpdatedBy）。
 /// <para>详情 / 树节点等全量读模型以本类为根；前端将 <see cref="AggregatePagedResponse.Version"/> 原样回传即可完成修改 / 删除的乐观锁校验闭环。
-/// 软删除标记 IsDeleted 不对外暴露：查询语义已默认过滤已删数据，恢复流程经恢复命令（AggregateRestoreCommand）承载。</para>
+/// 软删除时间戳 DeletedAt 不对外暴露：查询语义已默认过滤已删数据，恢复流程经恢复命令（AggregateRestoreCommand）承载。</para>
 /// </summary>
 public abstract class AggregateDetailResponse : AggregatePagedResponse
 {

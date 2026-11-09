@@ -9,7 +9,7 @@ namespace Domain.Entities;
 /// <para>写入与业务命令同事务（命令失败则事件一并回滚，事件与业务状态强一致）；
 /// 处理状态更新经独立连接（CopyNew）提交，不依赖原事务的存活。</para>
 /// <para>基础设施消息实体（P1-R3）：不继承 AggregateBase / DomainBase——Outbox 记录是基础设施
-/// 消息而非业务聚合，不参与乐观锁（Version）、软删除（IsDeleted，若过滤生效会静默吞掉待投递消息）
+/// 消息而非业务聚合，不参与乐观锁（Version）、软删除（DeletedAt，若过滤生效会静默吞掉待投递消息）
 /// 与租户过滤（消息必须全局可见，投递方可能处于任意租户上下文），也不受审计 Aop 自动填充；
 /// 主键与创建时间在 <see cref="Create"/> 工厂显式赋值。</para>
 /// </summary>

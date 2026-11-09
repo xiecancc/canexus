@@ -44,7 +44,7 @@ public sealed class TokenVersionService(ISqlSugarClient client, ICache cache, IO
                     ? TokenVersionState.Missing
                     : new TokenVersionState(
                         user.TokenVersion,
-                        user.Status == Domain.Shared.Enums.CommonStatus.Enabled && !user.IsDeleted);
+                        user.Status == Domain.Shared.Enums.CommonStatus.Enabled && user.DeletedAt == null);
             },
             CacheTtl.Medium,
             cancellationToken);

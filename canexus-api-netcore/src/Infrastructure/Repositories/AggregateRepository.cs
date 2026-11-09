@@ -12,28 +12,30 @@ using SqlSugar;
 namespace Infrastructure.Repositories;
 /// <summary>
 /// 基于 SqlSugar 的聚合仓储实现（对应 <see cref="AggregateBase"/>）：
-/// 继承领域仓储（查询 / 插入），补充乐观并发更新能力；删除 / 恢复族（按主键 / 集合 / 条件）
-/// 统一实现为软删除与解除墓碑（单条 SQL 按列更新，显式轮换版本令牌并填充更新人 / 更新时间）。
-/// <para>审计字段（创建人与时间、软删除标记、实体更新的更新人与时间）由 Aop.DataExecuting 自动填充；
-/// 按列更新路径绕过了该切面，故软删除 / 恢复在仓储内显式补齐更新审计与版本轮换（盲区兜底）；
-/// 实体更新经 SqlSugar ExecuteCommandWithOptLock 做框架级乐观并发控制（UPDATE ... WHERE Version = 传入值，
-/// 受影响 0 行即冲突），版本冲突时抛出业务异常（错误码 CommonConcurrencyConflict）。</para>
-/// <para>CRUD 构建器复用领域仓储的查询 / 插入 / 更新 / 物理删除构建器；本类的 <c>SoftDeleteAsync</c> 族为软删除，
-/// 经 <c>BuildUpdate</c> 产出的更新对象按列更新实现。基类继承的 <see cref="DomainRepository{TEntity}.HardDeleteAsync"/>
-/// 仍是物理删除，两条通道显式分离、互不改写：派生仓储默认调用软删除，
-/// 确需彻底清除数据时显式调用物理删除并自行承担不可恢复与审计缺失的风险。</para>
+/// 继承领域仓储（查询 / 插入 / 物理删除），补充乐观并发更新、软删除与恢复能力。
+/// <para><b>乐观并发全覆盖</b>：更新、软删除、恢复三条写入路径统一经
+/// <c>ExecuteCommandWithOptLockAsync</c> 生成 <c>UPDATE ... WHERE Version = 传入值</c>，
+/// 命中 0 行即抛并发冲突业务异常；成功后由框架自动轮换版本令牌。
+/// 软删除 / 恢复按列只更新 <see cref="AggregateBase.DeletedAt"/>、更新审计与版本列，
+/// 版本轮换使旧快照的更新失效，杜绝「墓碑被旧快照复活」。
+/// 命令携带版本令牌时以其作为 CAS 条件（陈旧令牌直接冲突），未携带时取库中当前版本。</para>
+/// <para>软删除以可空时间戳 <see cref="AggregateBase.DeletedAt"/> 为墓碑：null 表示未删除，
+/// 非 null 表示删除发生时间；恢复即重新置为 null。全局查询过滤器按同一口径过滤，
+/// 恢复类操作需先 <c>ClearFilter</c> 读取墓碑，并显式补回租户条件。</para>
+/// <para>删除通道显式分离：派生仓储默认调用软删除 <c>SoftDeleteAsync</c>；
+/// 基类继承的 <see cref="DomainRepository{TEntity}.HardDeleteAsync"/> 仍是物理删除
+/// （单条 DELETE，不可恢复），仅在确需彻底清除数据时显式调用。</para>
 /// </summary>
 /// <typeparam name="TEntity">聚合根实体类型。</typeparam>
 /// <remarks>构造函数。</remarks>
 /// <param name="client">SqlSugar 客户端。</param>
-/// <param name="currentUser">当前用户上下文（软删除 / 恢复按列更新的更新审计人取值来源）。</param>
+/// <param name="currentUser">当前用户上下文（软删除 / 恢复的更新审计人取值来源）。</param>
 /// <param name="tenantContext">当前租户上下文（写入侧显式补偿租户条件）。</param>
 public class AggregateRepository<TEntity>(ISqlSugarClient client, IUserContext currentUser, ITenantContext tenantContext)
     : DomainRepository<TEntity>(client, tenantContext), IAggregateRepository<TEntity>
     where TEntity : AggregateBase, new()
 {
-    /// <summary>当前用户上下文（软删除 / 恢复按列更新的更新审计人取值来源；无登录上下文时为 null，
-    /// 可空语义下不记录操作人）。</summary>
+    /// <summary>当前用户上下文（更新审计人取值来源；无登录上下文时为 null，可空语义下不记录操作人）。</summary>
     protected IUserContext CurrentUser => currentUser;
 
     /// <summary>是否记录字段级变更日志（新增 / 更新 / 软删 / 恢复均写 sys_entity_change_log）；
@@ -50,7 +52,7 @@ public class AggregateRepository<TEntity>(ISqlSugarClient client, IUserContext c
         // 避免恢复前校验因默认查询过滤而读不到目标行，同时不放大跨租户读取范围。
         var query = BuildQuery()
             .ClearFilter<TEntity>()
-            .Where(it => it.Id == id && it.IsDeleted);
+            .Where(it => it.Id == id && it.DeletedAt != null);
 
         if (CurrentUser.TenantId is { } tenantId)
         {
@@ -168,127 +170,168 @@ public class AggregateRepository<TEntity>(ISqlSugarClient client, IUserContext c
     }
 
     /// <inheritdoc />
-    public virtual async Task<bool> SoftDeleteAsync(Guid id, CancellationToken cancellationToken = default, Guid? expectedVersion = null)
-        => await SoftDeleteAsync(it => it.Id == id, cancellationToken, expectedVersion);
+    public virtual Task<bool> SoftDeleteAsync(Guid id, CancellationToken cancellationToken = default, Guid? expectedVersion = null)
+        => SoftDeleteAsync(it => it.Id == id, cancellationToken, expectedVersion);
 
     /// <inheritdoc />
-    public virtual async Task<bool> SoftDeleteAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken = default, Guid? expectedVersion = null)
-        => await SoftDeleteAsync(it => ids.Contains(it.Id), cancellationToken, expectedVersion);
+    public virtual Task<bool> SoftDeleteAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken = default, Guid? expectedVersion = null)
+        => SoftDeleteAsync(it => ids.Contains(it.Id), cancellationToken, expectedVersion);
 
     /// <inheritdoc />
-    public virtual async Task<bool> SoftDeleteAsync(Expression<Func<TEntity, bool>> predicate, CancellationToken cancellationToken = default, Guid? expectedVersion = null)
-        => await ExecDeleteOrRestore(false, predicate, cancellationToken, expectedVersion);
+    public virtual Task<bool> SoftDeleteAsync(Expression<Func<TEntity, bool>> predicate, CancellationToken cancellationToken = default, Guid? expectedVersion = null)
+        => ExecDeleteOrRestoreAsync(false, predicate, cancellationToken, expectedVersion);
 
     /// <inheritdoc />
-    public virtual async Task<bool> RestoreAsync(Guid id, CancellationToken cancellationToken = default, Guid? expectedVersion = null)
-        => await RestoreAsync(it => it.Id == id, cancellationToken, expectedVersion);
+    public virtual Task<bool> RestoreAsync(Guid id, CancellationToken cancellationToken = default, Guid? expectedVersion = null)
+        => RestoreAsync(it => it.Id == id, cancellationToken, expectedVersion);
 
     /// <inheritdoc />
-    public virtual async Task<bool> RestoreAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken = default, Guid? expectedVersion = null)
-        => await RestoreAsync(it => ids.Contains(it.Id), cancellationToken, expectedVersion);
+    public virtual Task<bool> RestoreAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken = default, Guid? expectedVersion = null)
+        => RestoreAsync(it => ids.Contains(it.Id), cancellationToken, expectedVersion);
 
     /// <inheritdoc />
-    public virtual async Task<bool> RestoreAsync(Expression<Func<TEntity, bool>> predicate, CancellationToken cancellationToken = default, Guid? expectedVersion = null)
-        => await ExecDeleteOrRestore(true, predicate, cancellationToken, expectedVersion);
+    public virtual Task<bool> RestoreAsync(Expression<Func<TEntity, bool>> predicate, CancellationToken cancellationToken = default, Guid? expectedVersion = null)
+        => ExecDeleteOrRestoreAsync(true, predicate, cancellationToken, expectedVersion);
 
     /// <summary>
-    /// 软删除 / 解除墓碑的共享核心：单条 UPDATE 按列翻转 <see cref="AggregateBase.IsDeleted"/>，
-    /// 同时轮换 <see cref="AggregateBase.Version"/> 并兜底填充更新审计（更新时间总是填充；
-    /// 更新人为当前登录用户，无登录上下文时为 null——按列更新绕过 Aop.DataExecuting，审计需在此显式补齐）。
-    /// 条件追加与当前状态一致的比对保证幂等（重复执行返回 false）。
-    /// 注意：传入 expectedVersion 时按列更新同样追加 Version CAS 条件，命中 0 行即并发冲突；
-    /// 版本轮换使旧令牌持有的实体更新失效——防止软删除后墓碑被旧快照的 OptLock 更新复活。
+    /// 软删除 / 恢复的共享核心：按当前状态筛出目标行，逐行经 <c>ExecuteCommandWithOptLockAsync</c>
+    /// 按列更新 <see cref="AggregateBase.DeletedAt"/>、更新审计与版本列。
+    /// <para>三条写入路径（更新 / 软删除 / 恢复）统一使用同一套框架级乐观锁：
+    /// 命令携带 expectedVersion 时以其作为 CAS 条件，陈旧令牌命中 0 行即抛并发冲突；
+    /// 未携带时取库中当前版本，仍由框架校验并自动轮换版本令牌。
+    /// 批量路径在无外层事务时自持事务，保证多行写入的原子性。</para>
     /// </summary>
-    /// <param name="deleted">行的当前状态：true 表示已删除（执行恢复，置 0），false 表示未删除（执行软删除，置 1）。</param>
+    /// <param name="deleted">目标行的当前状态：true 表示墓碑（执行恢复，置 null），false 表示未删除（执行软删除，写入时间戳）。</param>
     /// <param name="predicate">筛选条件。</param>
     /// <param name="cancellationToken">取消令牌。</param>
-    /// <param name="expectedVersion">客户端提交的乐观锁版本令牌；非 null 时追加 Version CAS 条件。</param>
-    /// <returns>受影响行数 &gt; 0 返回 true；传入 expectedVersion 且命中 0 行时抛并发冲突，否则幂等返回 false。</returns>
-    protected virtual async Task<bool> ExecDeleteOrRestore(bool deleted, Expression<Func<TEntity, bool>> predicate, CancellationToken cancellationToken = default, Guid? expectedVersion = null)
-    {
-        var now = DateTime.UtcNow;
-        var targetDeleted = !deleted;
-        var userId = CurrentUser.UserId;
-        var newVersion = Guid.NewGuid();
-        // 软删除 / 恢复本质是按列更新，直接复用更新构建器（聚合根不提供物理删除语义）
-        var update = BuildUpdate()
-            .SetColumns(it => new TEntity
-            {
-                IsDeleted = targetDeleted,
-                Version = newVersion,
-                UpdatedAt = now,
-                UpdatedBy = userId
-            })
-            .Where(predicate)
-            .Where(it => it.IsDeleted == deleted);
-
-        // 写入侧显式补租户条件：批量软删 / 恢复不得越界修改其他租户的行；
-        // 平台上下文（null）保持全量，与全局查询过滤器口径一致。
-        if (CurrentTenantId is { } tenantId)
-        {
-            update = update.Where(it => it.TenantId == tenantId);
-        }
-
-        // 命令携带的乐观锁版本令牌：按列更新也追加 Version CAS 条件，
-        // 命中 0 行说明版本陈旧 / 目标不可见，按并发冲突拒绝（fail-closed，不静默吞掉）。
-        if (expectedVersion is { } version)
-        {
-            update = update.Where(it => it.Version == version);
-        }
-
-        // 字段级变更日志：按与 UPDATE 相同的可见范围先取受影响 Id
-        // （恢复场景的目标为墓碑，须关闭全局软删除 / 租户过滤器后显式补回租户条件）
-        var targetIds = ChangeLogEnabled
-            ? await QueryTargetIdsAsync(deleted, predicate, expectedVersion, cancellationToken)
-            : [];
-
-        var rows = await update.ExecuteCommandAsync(cancellationToken);
-        if (rows == 0 && expectedVersion is not null)
-        {
-            throw new BusinessException(
-                ErrorCodes.CommonConcurrencyConflict,
-                "数据已被他人修改（版本号不一致或目标不可见），请刷新后重试。");
-        }
-
-        if (rows > 0 && targetIds.Count > 0)
-        {
-            var logs = targetIds
-                .Select(id => EntityChangeLogger.BuildLifecycleChange(
-                    typeof(TEntity), id, targetDeleted, now, userId))
-                .ToList();
-            await Client.Insertable(logs).ExecuteCommandAsync(cancellationToken);
-        }
-
-        return rows > 0;
-    }
-
-    /// <summary>按软删除 / 恢复的实际可见范围查询受影响实体 Id（与 UPDATE 条件对齐）。</summary>
-    /// <param name="deleted">行的当前软删除状态。</param>
-    /// <param name="predicate">业务筛选条件。</param>
-    /// <param name="expectedVersion">乐观锁版本令牌（非 null 时同样追加到查询）。</param>
-    /// <param name="cancellationToken">取消令牌。</param>
-    /// <returns>目标 Id 列表。</returns>
-    private async Task<List<Guid>> QueryTargetIdsAsync(
+    /// <param name="expectedVersion">客户端提交的乐观锁版本令牌；非 null 时作为 CAS 条件。</param>
+    /// <returns>命中并更新返回 true；无匹配且未携带版本令牌时幂等返回 false。</returns>
+    /// <exception cref="BusinessException">版本令牌陈旧或目标不可见（命中 0 行）时抛出并发冲突。</exception>
+    protected virtual async Task<bool> ExecDeleteOrRestoreAsync(
         bool deleted,
         Expression<Func<TEntity, bool>> predicate,
-        Guid? expectedVersion,
+        CancellationToken cancellationToken = default,
+        Guid? expectedVersion = null)
+    {
+        var targets = await LoadTargetsAsync(deleted, predicate, cancellationToken);
+        if (targets.Count == 0)
+        {
+            if (expectedVersion is not null)
+            {
+                throw ConcurrencyConflict();
+            }
+
+            return false;
+        }
+
+        var now = DateTime.UtcNow;
+        var userId = CurrentUser.UserId;
+
+        async Task ApplyAsync()
+        {
+            var logs = new List<SysEntityChangeLog>(targets.Count);
+            foreach (var target in targets)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var oldDeletedAt = target.DeletedAt;
+                var newDeletedAt = deleted ? (DateTime?)null : now;
+
+                // 版本令牌：命令携带时以客户端值参与 CAS（陈旧令牌必然命中 0 行），
+                // 否则用刚读出的库中版本；ExecuteCommandWithOptLock 成功后自动轮换为新 Guid。
+                target.Version = expectedVersion ?? target.Version;
+                target.DeletedAt = newDeletedAt;
+                target.UpdatedAt = now;
+                target.UpdatedBy = userId;
+
+                // 只更新墓碑、更新审计与版本列，不触碰任何业务字段；
+                // Version 必须出现在 UpdateColumns 中，框架才会在 SET 子句里轮换版本令牌。
+                var rows = await BuildUpdate(target)
+                    .UpdateColumns(it => new { it.DeletedAt, it.UpdatedAt, it.UpdatedBy, it.Version })
+                    .ExecuteCommandWithOptLockAsync();
+                if (rows == 0)
+                {
+                    throw ConcurrencyConflict();
+                }
+
+                if (ChangeLogEnabled)
+                {
+                    logs.Add(EntityChangeLogger.BuildLifecycleChange(
+                        typeof(TEntity), target.Id, oldDeletedAt, newDeletedAt, now, userId));
+                }
+            }
+
+            if (logs.Count > 0)
+            {
+                await Client.Insertable(logs).ExecuteCommandAsync(cancellationToken);
+            }
+        }
+
+        if (Client.Ado.Transaction is not null)
+        {
+            // 已处于业务事务：随外层事务统一提交或回滚
+            await ApplyAsync();
+        }
+        else
+        {
+            var result = await Client.Ado.UseTranAsync(ApplyAsync);
+            if (!result.IsSuccess)
+            {
+                throw result.ErrorException ?? ConcurrencyConflict();
+            }
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// 按软删除 / 恢复的实际可见范围读取目标实体（与写入条件对齐）。
+    /// <para>恢复场景目标是墓碑，须先清除全局软删除 / 租户过滤器，再显式补回租户条件，
+    /// 避免跨租户恢复；平台上下文（null）保持全量，与全局查询过滤器口径一致。</para>
+    /// </summary>
+    /// <param name="deleted">目标行的当前软删除状态。</param>
+    /// <param name="predicate">业务筛选条件。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>目标实体列表。</returns>
+    private async Task<List<TEntity>> LoadTargetsAsync(
+        bool deleted,
+        Expression<Func<TEntity, bool>> predicate,
         CancellationToken cancellationToken)
     {
         var query = BuildQuery()
             .ClearFilter<TEntity>()
             .Where(predicate)
-            .Where(it => it.IsDeleted == deleted);
+            .Where(StateFilter(deleted));
 
+        // 写入侧显式补租户条件：批量软删 / 恢复不得越界修改其他租户的行；
+        // 平台上下文（null）保持全量，与全局查询过滤器口径一致。
         if (CurrentTenantId is { } tenantId)
         {
             query = query.Where(it => it.TenantId == tenantId);
         }
 
-        if (expectedVersion is { } version)
-        {
-            query = query.Where(it => it.Version == version);
-        }
+        return await query.ToListAsync(cancellationToken);
+    }
 
-        return await query.Select(it => it.Id).ToListAsync(cancellationToken);
+    /// <summary>
+    /// 按软删除状态生成过滤表达式。
+    /// <para>分支在 C# 侧求值后再返回表达式树：若把三元写进 lambda 内部，SqlSugar 会翻译成
+    /// 不受支持的 <c>SqlFunc.IIF</c> 并抛 <c>SqlSugarException</c>。</para>
+    /// </summary>
+    /// <param name="deleted">true 取墓碑（DeletedAt 非 null），false 取未删除（DeletedAt 为 null）。</param>
+    /// <returns>状态过滤表达式。</returns>
+    private static Expression<Func<TEntity, bool>> StateFilter(bool deleted)
+    {
+        return deleted
+            ? (Expression<Func<TEntity, bool>>)(it => it.DeletedAt != null)
+            : it => it.DeletedAt == null;
+    }
+
+    /// <summary>构造统一的乐观并发冲突业务异常（错误码 CommonConcurrencyConflict）。</summary>
+    /// <returns>业务异常实例。</returns>
+    private static BusinessException ConcurrencyConflict()
+    {
+        return new BusinessException(
+            ErrorCodes.CommonConcurrencyConflict,
+            "数据已被他人修改（版本号不一致或目标不可见），请刷新后重试。");
     }
 }

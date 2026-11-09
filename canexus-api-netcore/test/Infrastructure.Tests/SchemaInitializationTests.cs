@@ -1,3 +1,4 @@
+
 using System.Text.RegularExpressions;
 using Domain.Entities;
 using Infrastructure.DataAccess;
@@ -12,8 +13,8 @@ using SqlSugar;
 namespace Infrastructure.Tests;
 
 /// <summary>
-/// T-13 三层判定集成测试：在独立临时库验证「结构就绪跳过 DDL / 落后按脚本补齐 /
-/// 代码更旧拒绝启动 / 脚本正文变更被发现 / 生产缺表拒绝自动改表」。
+/// 三层初始化集成测试：在独立临时库验证「表齐全时不建表 / 缺表时 CodeFirst 建表并执行幂等迁移 /
+/// 迁移开关关闭时跳过迁移 / 生产缺表拒绝自动改表 / 库不存在时的建库判定」。
 /// <para>每个用例独立建库并在结束时 DROP，不污染共享测试库。</para>
 /// </summary>
 [TestFixture]
@@ -24,9 +25,8 @@ public class SchemaInitializationTests
     private string _adminConnection = null!;
     private SqlSugarScope _client = null!;
     private SchemaMigrator _migrator = null!;
-    private string[] _modelTableNames = [];
 
-    /// <summary>建独立临时库、按生产口径建全量模型表并登记基线。</summary>
+    /// <summary>建独立临时库并按生产口径 CodeFirst 建全量模型表。</summary>
     [SetUp]
     public async Task SetUpAsync()
     {
@@ -35,27 +35,15 @@ public class SchemaInitializationTests
         _connection = Regex.Replace(source, "(?i)database=[^;]+", $"database={_database}");
         _adminConnection = Regex.Replace(source, "(?i)database=[^;]+", "database=super_admin_test");
 
-        using (var adminClient = new SqlSugarScope(CreateConnectionConfig(_adminConnection)))
-        {
-            await adminClient.Ado.ExecuteCommandAsync($"CREATE DATABASE IF NOT EXISTS `{_database}`");
-        }
-
+        await CreateDatabaseAsync(_database);
         _client = new SqlSugarScope(CreateConnectionConfig(_connection));
         var entityTypes = typeof(AggregateBase).Assembly.GetTypes()
             .Where(IsConcreteEntityType)
             .Distinct()
             .ToArray();
         _client.CodeFirst.InitTables(entityTypes);
-        _modelTableNames =
-        [
-            .. entityTypes
-                .Select(type => _client.EntityMaintenance.GetEntityInfo(type).DbTableName)
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .OrderBy(name => name, StringComparer.Ordinal)
-        ];
 
         _migrator = new SchemaMigrator(_client, NullLogger<SchemaMigrator>.Instance);
-        await _migrator.EnsureBaselineAsync(_modelTableNames);
     }
 
     /// <summary>删除临时库。</summary>
@@ -63,147 +51,102 @@ public class SchemaInitializationTests
     public async Task TearDownAsync()
     {
         _client.Dispose();
-        using var adminClient = new SqlSugarScope(CreateConnectionConfig(_adminConnection));
-        await adminClient.Ado.ExecuteCommandAsync($"DROP DATABASE IF EXISTS `{_database}`");
+        await DropDatabaseAsync(_database);
     }
 
-    /// <summary>结构就绪（版本一致 + 表齐全）时启动不执行任何 DDL：手工新增的列不会被 InitTables 删掉。</summary>
+    /// <summary>表齐全时启动不执行建表 DDL：手工新增的列不会被 InitTables 删掉，幂等迁移仍会执行。</summary>
     [Test]
-    public async Task Ready_SkipsAllDdl_AndPreservesExtraColumn()
+    public async Task Ready_SkipsTableCreation_PreservesExtraColumn_AndRunsMigrations()
     {
-        await _migrator.ApplyPendingAsync(StubMigrations());
-        await _client.Ado.ExecuteCommandAsync(
-            "ALTER TABLE sys_user ADD COLUMN ProbeExtra VARCHAR(20) NULL");
+        await _client.Ado.ExecuteCommandAsync("ALTER TABLE sys_user ADD COLUMN ProbeExtra VARCHAR(20) NULL");
 
         var state = new DatabaseInitializationState();
-        await CreateInitializer(state, "Testing").InitializeAsync();
+        await CreateInitializer(state, "Testing", [new StubMigration("v001", ["CREATE TABLE IF NOT EXISTS sys_init_probe (Id INT PRIMARY KEY)"])]).InitializeAsync();
 
-        var hasColumn = await ColumnExistsAsync("sys_user", "ProbeExtra");
-        var status = await _migrator.GetStatusAsync(_modelTableNames, SchemaMigrationCatalog.Order(StubMigrations()));
         Assert.Multiple(() =>
         {
-            Assert.That(hasColumn, Is.True, "结构就绪时不得执行 InitTables（V-05 实测 InitTables 会删列）");
+            Assert.That(ColumnExistsAsync("sys_user", "ProbeExtra").GetAwaiter().GetResult(), Is.True,
+                "表齐全时不得执行 InitTables（实测 InitTables 会删列）");
+            Assert.That(TableExistsAsync("sys_init_probe").GetAwaiter().GetResult(), Is.True, "幂等迁移脚本应被执行");
             Assert.That(state.Snapshot().Database, Is.EqualTo("Ready"));
             Assert.That(state.Snapshot().Schema, Is.EqualTo("Ready"));
-            Assert.That(status.Readiness, Is.EqualTo(SchemaReadiness.Ready));
         });
     }
 
-    /// <summary>库中版本高于代码期望时拒绝启动（部署了更旧的代码）。</summary>
+    /// <summary>全新空库：缺表时按 CodeFirst 一次性建表并修正引擎，随后执行迁移脚本。</summary>
     [Test]
-    public async Task CodeBehind_RejectsStartup()
+    public async Task Fresh_CreatesModelTables_AndAppliesMigrations()
     {
-        await _migrator.ApplyPendingAsync(StubMigrations());
-        await _client.Insertable(SchemaMigrationRecord.CreateIncremental(
-            "v999", "未来版本", SchemaMigrationCatalog.ComputeHash("future"), [])).ExecuteCommandAsync();
+        var freshDatabase = $"super_admin_schema_fresh_{Guid.NewGuid():N}";
+        var freshConnection = Regex.Replace(
+            TestDatabaseSupport.TestConnectionString, "(?i)database=[^;]+", $"database={freshDatabase}");
+        await CreateDatabaseAsync(freshDatabase);
 
-        var exception = Assert.ThrowsAsync<InvalidOperationException>(
-            () => CreateInitializer(new DatabaseInitializationState(), "Testing").InitializeAsync());
-        Assert.That(exception!.Message, Does.Contain("代码更旧").Or.Contain("高于代码期望版本"));
+        try
+        {
+            using var freshClient = new SqlSugarScope(CreateConnectionConfig(freshConnection));
+            var initializer = new DbInitializer(
+                freshClient,
+                new DatabaseOption { ConnectionString = freshConnection },
+                NullLogger<DbInitializer>.Instance,
+                new SchemaMigrator(freshClient, NullLogger<SchemaMigrator>.Instance),
+                [new StubMigration("v001", ["CREATE TABLE IF NOT EXISTS sys_fresh_probe (Id INT PRIMARY KEY)"])],
+                new DatabaseInitializationState(),
+                new NoLock(),
+                new StubEnvironment("Testing"));
+
+            await initializer.InitializeAsync();
+
+            var userExists = await ScalarExistsAsync(
+                freshClient, "SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'sys_user'",
+                freshDatabase);
+            var probeExists = await ScalarExistsAsync(
+                freshClient, "SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'sys_fresh_probe'",
+                freshDatabase);
+            Assert.Multiple(() =>
+            {
+                Assert.That(userExists, Is.True, "缺表时应由 CodeFirst 建立模型表");
+                Assert.That(probeExists, Is.True, "迁移脚本应在建表后执行");
+            });
+        }
+        finally
+        {
+            await DropDatabaseAsync(freshDatabase);
+        }
     }
 
-    /// <summary>版本落后但表齐全：按序执行迁移脚本并推进到期望版本。</summary>
+    /// <summary>迁移开关关闭时跳过全部迁移脚本，结构由外部自行管理。</summary>
     [Test]
-    public async Task Pending_AppliesScripts_AndAdvancesVersion()
+    public async Task MigrationsDisabled_SkipsMigrations()
     {
-        ISchemaMigration[] migrations =
-        [
-            new StubMigration("v001", ["CREATE TABLE IF NOT EXISTS sys_init_probe (Id INT PRIMARY KEY)"]),
-            new StubMigration("v002", [])
-        ];
-
         var state = new DatabaseInitializationState();
-        await CreateInitializer(state, "Testing", migrations).InitializeAsync();
+        await CreateInitializer(
+            state,
+            "Testing",
+            [new StubMigration("v001", ["CREATE TABLE IF NOT EXISTS sys_disabled_probe (Id INT PRIMARY KEY)"])],
+            migrationsEnabled: false).InitializeAsync();
 
-        var records = await _client.Queryable<SchemaMigrationRecord>()
-            .Select(record => record.MigrationId).ToListAsync();
-        var status = await _migrator.GetStatusAsync(
-            _modelTableNames, SchemaMigrationCatalog.Order(migrations));
-        var probeTableExists = await TableExistsAsync("sys_init_probe");
         Assert.Multiple(() =>
         {
-            Assert.That(probeTableExists, Is.True, "v001 脚本正文应被真正执行");
-            Assert.That(records, Does.Contain("v001"));
-            Assert.That(records, Does.Contain("v002"));
-            Assert.That(status.Readiness, Is.EqualTo(SchemaReadiness.Ready));
-            Assert.That(state.Snapshot().AppliedVersion, Is.EqualTo(2));
-            Assert.That(state.Snapshot().ExpectedVersion, Is.EqualTo(2));
+            Assert.That(TableExistsAsync("sys_disabled_probe").GetAwaiter().GetResult(), Is.False,
+                "MigrationsEnabled=false 时不应执行任何迁移脚本");
+            Assert.That(state.Snapshot().Schema, Is.EqualTo("Ready"));
         });
     }
 
-    /// <summary>已应用迁移的脚本正文被改写时，启动校验拒绝继续（禁止改写已应用脚本）。</summary>
+    /// <summary>Production 且结构未初始化（缺表）时明确拒绝，且不会自动建表。</summary>
     [Test]
-    public async Task ScriptBodyChange_IsDetected()
+    public async Task Production_MissingTables_RejectsWithoutDdl()
     {
-        ISchemaMigration[] applied =
-        [
-            new StubMigration("v001", ["CREATE TABLE IF NOT EXISTS sys_init_probe (Id INT PRIMARY KEY)"])
-        ];
-        await _migrator.ApplyPendingAsync(applied);
-
-        // 代码侧脚本正文已变（库中仍记录旧正文指纹）
-        ISchemaMigration[] changed =
-        [
-            new StubMigration("v001", ["CREATE TABLE IF NOT EXISTS sys_init_probe (Id BIGINT PRIMARY KEY)"]),
-            new StubMigration("v002", [])
-        ];
-
-        var exception = Assert.ThrowsAsync<InvalidOperationException>(
-            () => CreateInitializer(new DatabaseInitializationState(), "Testing", changed).InitializeAsync());
-        Assert.That(exception!.Message, Does.Contain("脚本正文已变更"));
-    }
-
-    /// <summary>Production 且结构未初始化时明确拒绝，且不会自动建表。</summary>
-    [Test]
-    public async Task Production_Uninitialized_RejectsWithoutDdl()
-    {
-        await _migrator.ApplyPendingAsync(StubMigrations());
         await _client.Ado.ExecuteCommandAsync("DROP TABLE sys_post");
 
         var exception = Assert.ThrowsAsync<InvalidOperationException>(
             () => CreateInitializer(new DatabaseInitializationState(), "Production").InitializeAsync());
-        var postTableExists = await TableExistsAsync("sys_post");
         Assert.Multiple(() =>
         {
             Assert.That(exception!.Message, Does.Contain("Production 禁止由应用自动改表"));
-            Assert.That(postTableExists, Is.False, "拒绝启动不应附带任何建表 DDL");
+            Assert.That(TableExistsAsync("sys_post").GetAwaiter().GetResult(), Is.False, "拒绝启动不应附带任何建表 DDL");
         });
-    }
-
-    /// <summary>迁移脚本由正文计算指纹：已应用记录的 ScriptHash 等于正文哈希（而非 ID + 说明）。</summary>
-    [Test]
-    public async Task AppliedScriptHash_ReflectsScriptBody()
-    {
-        ISchemaMigration[] migrations =
-        [
-            new StubMigration("v001", ["CREATE TABLE IF NOT EXISTS sys_init_probe (Id INT PRIMARY KEY)"]),
-            new StubMigration("v002", [])
-        ];
-        await _migrator.ApplyPendingAsync(migrations);
-
-        var record = await _client.Queryable<SchemaMigrationRecord>()
-            .FirstAsync(item => item.MigrationId == "v001");
-        Assert.That(record.ScriptHash,
-            Is.EqualTo(SchemaMigrationCatalog.ScriptHash(migrations[0])));
-    }
-
-    /// <summary>多实例并发启动（分布式锁不可用、靠唯一索引兜底）全部成功且不重复应用迁移。</summary>
-    [Test]
-    public async Task ConcurrentStartup_AllSucceed_WithoutDuplicateRecords()
-    {
-        ISchemaMigration[] migrations =
-        [
-            new StubMigration("v001", ["SELECT 1"]),
-            new StubMigration("v002", [])
-        ];
-
-        var first = CreateInitializer(new DatabaseInitializationState(), "Testing", migrations);
-        var second = CreateInitializer(new DatabaseInitializationState(), "Testing", migrations);
-        await Task.WhenAll(first.InitializeAsync(), second.InitializeAsync());
-
-        var records = await _client.Queryable<SchemaMigrationRecord>()
-            .Where(item => item.MigrationId == "v001").ToListAsync();
-        Assert.That(records, Has.Count.EqualTo(1), "并发启动不得重复写入同一迁移记录");
     }
 
     /// <summary>库不存在且禁止自动建库时，抛明确的配置异常而非 MySQL 连接异常。</summary>
@@ -222,7 +165,7 @@ public class SchemaInitializationTests
         var initializer = new DbInitializer(
             client, options, NullLogger<DbInitializer>.Instance,
             new SchemaMigrator(client, NullLogger<SchemaMigrator>.Instance),
-            StubMigrations(), new DatabaseInitializationState(), new NoLock(), new StubEnvironment("Testing"));
+            [], new DatabaseInitializationState(), new NoLock(), new StubEnvironment("Testing"));
 
         var exception = Assert.ThrowsAsync<InvalidOperationException>(() => initializer.InitializeAsync());
         Assert.Multiple(() =>
@@ -249,49 +192,97 @@ public class SchemaInitializationTests
         }
         finally
         {
-            using var adminClient = new SqlSugarScope(CreateConnectionConfig(_adminConnection));
-            await adminClient.Ado.ExecuteCommandAsync($"DROP DATABASE IF EXISTS `{missingName}`");
+            await DropDatabaseAsync(missingName);
         }
     }
 
     /// <summary>装配与生产同构的初始化器（分布式锁桩降级为无锁）。</summary>
+    /// <param name="state">初始化结论状态。</param>
+    /// <param name="environmentName">宿主环境名。</param>
+    /// <param name="migrations">迁移清单。</param>
+    /// <param name="migrationsEnabled">是否启用迁移机制。</param>
+    /// <returns>初始化器。</returns>
     private DbInitializer CreateInitializer(
         DatabaseInitializationState state,
         string environmentName,
-        IEnumerable<ISchemaMigration>? migrations = null)
+        IEnumerable<ISchemaMigration>? migrations = null,
+        bool migrationsEnabled = true)
     {
-        var options = new DatabaseOption { ConnectionString = _connection };
+        var options = new DatabaseOption
+        {
+            ConnectionString = _connection,
+            MigrationsEnabled = migrationsEnabled
+        };
         return new DbInitializer(
             _client, options, NullLogger<DbInitializer>.Instance, _migrator,
-            migrations ?? StubMigrations(), state, new NoLock(), new StubEnvironment(environmentName));
+            migrations ?? [], state, new NoLock(), new StubEnvironment(environmentName));
     }
 
-    /// <summary>默认迁移桩（v001 / v002，无脚本）。</summary>
-    private static ISchemaMigration[] StubMigrations() =>
-    [
-        new StubMigration("v001", []),
-        new StubMigration("v002", [])
-    ];
-
     /// <summary>以 information_schema 判定表存在。</summary>
+    /// <param name="table">表名。</param>
+    /// <returns>存在返回 true。</returns>
     private async Task<bool> TableExistsAsync(string table)
     {
-        var count = await _client.Ado.GetScalarAsync(
+        return await ScalarExistsAsync(
+            _client,
             "SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA = @db AND TABLE_NAME = @table",
-            new { db = _database, table });
-        return Convert.ToInt64(count) > 0;
+            _database,
+            ("table", table));
     }
 
     /// <summary>以 information_schema 判定列存在。</summary>
+    /// <param name="table">表名。</param>
+    /// <param name="column">列名。</param>
+    /// <returns>存在返回 true。</returns>
     private async Task<bool> ColumnExistsAsync(string table, string column)
     {
-        var count = await _client.Ado.GetScalarAsync(
+        return await ScalarExistsAsync(
+            _client,
             "SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = @db AND TABLE_NAME = @table AND COLUMN_NAME = @column",
-            new { db = _database, table, column });
+            _database,
+            ("table", table),
+            ("column", column));
+    }
+
+    /// <summary>按 information_schema 计数判定对象存在（参数化，避免拼接表名）。</summary>
+    /// <param name="client">SqlSugar 客户端。</param>
+    /// <param name="sql">计数 SQL。</param>
+    /// <param name="database">库名。</param>
+    /// <param name="parameters">附加参数。</param>
+    /// <returns>计数大于 0 返回 true。</returns>
+    private static async Task<bool> ScalarExistsAsync(
+        ISqlSugarClient client,
+        string sql,
+        string database,
+        params (string Name, string Value)[] parameters)
+    {
+        var args = new List<SugarParameter> { new("@db", database) };
+        args.AddRange(parameters.Select(item => new SugarParameter("@" + item.Name, item.Value)));
+        var count = await client.Ado.GetScalarAsync(sql, args.ToArray());
         return Convert.ToInt64(count) > 0;
     }
 
+    /// <summary>用管理连接创建临时库。</summary>
+    /// <param name="name">库名。</param>
+    /// <returns>表示异步操作的任务。</returns>
+    private async Task CreateDatabaseAsync(string name)
+    {
+        using var adminClient = new SqlSugarScope(CreateConnectionConfig(_adminConnection));
+        await adminClient.Ado.ExecuteCommandAsync($"CREATE DATABASE IF NOT EXISTS `{name}`");
+    }
+
+    /// <summary>用管理连接删除临时库。</summary>
+    /// <param name="name">库名。</param>
+    /// <returns>表示异步操作的任务。</returns>
+    private async Task DropDatabaseAsync(string name)
+    {
+        using var adminClient = new SqlSugarScope(CreateConnectionConfig(_adminConnection));
+        await adminClient.Ado.ExecuteCommandAsync($"DROP DATABASE IF EXISTS `{name}`");
+    }
+
     /// <summary>与生产 SqlSugarClientFactory 一致的连接配置。</summary>
+    /// <param name="connectionString">连接串。</param>
+    /// <returns>连接配置。</returns>
     private static ConnectionConfig CreateConnectionConfig(string connectionString)
     {
         return new ConnectionConfig
@@ -314,6 +305,8 @@ public class SchemaInitializationTests
     }
 
     /// <summary>与生产 DbInitializer 一致的实体扫描口径（含 OutboxMessage）。</summary>
+    /// <param name="type">类型。</param>
+    /// <returns>是具体实体类型时返回 true。</returns>
     private static bool IsConcreteEntityType(Type type)
     {
         if (!type.IsClass || type.IsAbstract || type.IsGenericTypeDefinition)
@@ -337,7 +330,7 @@ public class SchemaInitializationTests
         return false;
     }
 
-    /// <summary>测试用迁移桩。</summary>
+    /// <summary>测试用迁移桩（幂等脚本）。</summary>
     private sealed class StubMigration(string id, IReadOnlyList<string> scripts) : ISchemaMigration
     {
         /// <inheritdoc />
@@ -354,7 +347,7 @@ public class SchemaInitializationTests
             => Task.CompletedTask;
     }
 
-    /// <summary>分布式锁桩：模拟锁不可用，验证唯一索引兜底仍保证幂等。</summary>
+    /// <summary>分布式锁桩：模拟锁不可用，验证无锁路径仍可完成初始化。</summary>
     private sealed class NoLock : IDistributedLock
     {
         /// <inheritdoc />

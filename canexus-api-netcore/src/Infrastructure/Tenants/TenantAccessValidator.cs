@@ -35,7 +35,7 @@ public sealed class TenantAccessValidator(
                 // 不改变全局过滤器注册机制，也不影响其他实体的租户隔离。
                 var tenant = await client.Queryable<SysTenant>()
                     .ClearFilter<SysTenant>()
-                    .Where(it => it.Id == tenantId && !it.IsDeleted)
+                    .Where(it => it.Id == tenantId && it.DeletedAt == null)
                     .FirstAsync(token);
                 return new TenantCacheState(
                     tenant is not null,

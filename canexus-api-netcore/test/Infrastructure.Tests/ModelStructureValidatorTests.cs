@@ -10,7 +10,7 @@ namespace Infrastructure.Tests;
 
 /// <summary>
 /// T5 #13 回归：模型快照与 information_schema 比对须能发现缺表、缺列、非空约束漂移与主键缺失；
-/// 并用真实临时库验证「绕过迁移通道删列」会被识别（脚本指纹校验看不到这一类改动）。
+/// 并用真实临时库验证「绕过 CodeFirst / 迁移通道删列」会被识别。
 /// </summary>
 [TestFixture]
 public class ModelStructureValidatorTests

@@ -5,7 +5,7 @@ namespace Domain.Entities;
 /// <summary>
 /// 聚合根基类：在 <see cref="DomainBase"/> 之上统一承载单主键、乐观并发版本、软删除与全量审计字段（创建审计与租户归属继承自 DomainBase）。
 /// <para>实体本身不保留验证逻辑，请求侧字段约束统一由 Application 层 FluentValidation Validators 承接；
-/// setter 仅做纯数据归一化（可空字符串 trim）。审计字段（创建/更新人与时间、软删除标记）由数据访问层自动填充，
+/// setter 仅做纯数据归一化（可空字符串 trim）。审计字段（创建/更新人与时间、软删除时间戳）由数据访问层自动填充，
 /// 业务代码无需显式赋值；<see cref="Version"/> 为乐观并发版本令牌，聚合仓储更新时经
 /// SqlSugar ExecuteCommandWithOptLock 自动校验（UPDATE ... WHERE Version = 传入值，受影响 0 行即并发冲突），
 /// 冲突时抛出业务异常。</para>
@@ -34,9 +34,11 @@ public abstract class AggregateBase : DomainBase, IEquatable<AggregateBase>
     [SugarColumn(ColumnDescription = "描述 / 备注。", IsNullable = true, Length = 500)]
     public virtual string? Description { get; set; }
 
-    /// <summary>软删除标记：true 表示已删除，默认查询自动过滤。</summary>
-    [SugarColumn(ColumnDescription = "软删除标记：true 表示已删除，默认查询自动过滤。")]
-    public virtual bool IsDeleted { get; set; }
+    /// <summary>软删除时间戳（UTC）：null 表示未删除，非 null 表示删除发生时间，默认查询自动过滤。
+    /// <para>可空时间戳同时承载「是否删除」与「何时删除」语义，避免布尔墓碑丢失时间信息；
+    /// 恢复即重新置为 null。由数据访问层在软删除 / 恢复时填充。</para></summary>
+    [SugarColumn(ColumnDescription = "软删除时间戳（UTC）：null 表示未删除，非 null 表示删除时间，默认查询自动过滤。", IsNullable = true)]
+    public virtual DateTime? DeletedAt { get; set; }
 
     /// <summary>相等运算符。</summary>
     public static bool operator ==(AggregateBase? left, AggregateBase? right) => left?.Equals(other: right) ?? right is null;

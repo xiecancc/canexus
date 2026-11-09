@@ -10,10 +10,12 @@ using Domain.Shared.Localization;
 using Domain.Shared.Results;
 using Infrastructure;
 using Infrastructure.DataAccess;
+using Infrastructure.Scheduling;
 using Infrastructure.Shared.DataAccess;
 using Infrastructure.Shared.Options;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Options;
 using Serilog;
 
 namespace API;
@@ -210,6 +212,12 @@ public class Program
                 var dbInitializer = scope.ServiceProvider.GetRequiredService<DbInitializer>();
                 await dbInitializer.InitializeAsync();
 
+                // 开发期数据库可直接删除重建：QuartzSchemaInitializer 作为 IHostedService 要等 app.Run 才启动，
+                // 而下方 jobScheduleManager.InitializeAsync 会先解析调度器并校验 QRTZ_ 表。
+                // 故在结构就绪后、任务装载前显式调用同一幂等入口，保证全新库一次启动成功。
+                var databaseOptions = scope.ServiceProvider.GetRequiredService<IOptions<DatabaseOption>>();
+                await QuartzSchemaInitializer.EnsureSchemaAsync(databaseOptions.Value.ConnectionString);
+
                 var seedDataInitializer = scope.ServiceProvider.GetRequiredService<SeedDataInitializer>();
                 await seedDataInitializer.InitializeAsync();
 
@@ -219,8 +227,8 @@ public class Program
 
                 var summary = initializationState.Snapshot();
                 app.Logger.LogInformation(
-                    "数据库初始化完成：库={Database} 结构={Schema} 种子={Seed} 结构版本={AppliedVersion}/{ExpectedVersion}",
-                    summary.Database, summary.Schema, summary.Seed, summary.AppliedVersion, summary.ExpectedVersion);
+                    "数据库初始化完成：库={Database} 结构={Schema} 种子={Seed}",
+                    summary.Database, summary.Schema, summary.Seed);
 
                 // 装载运行中（Status=1）的定时任务进 Quartz 调度器（需在种子数据之后执行）
                 var jobScheduleManager = scope.ServiceProvider.GetRequiredService<IJobScheduleManager>();

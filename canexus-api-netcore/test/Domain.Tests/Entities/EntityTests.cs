@@ -130,7 +130,7 @@ public class AggregateBaseTests
         Assert.Multiple(() =>
         {
             Assert.That(entity.Version, Is.Not.EqualTo(Guid.Empty));
-            Assert.That(entity.IsDeleted, Is.False);
+            Assert.That(entity.DeletedAt, Is.Null);
             Assert.That(entity.TenantId, Is.Null);
             Assert.That(entity.CreatedBy, Is.EqualTo(Guid.Empty));
             Assert.That(entity.UpdatedAt, Is.Null);

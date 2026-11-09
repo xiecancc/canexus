@@ -177,24 +177,24 @@ public class EntityChangeLogApiTests
                 Is.True, "明文口令不得落到变更日志");
         });
 
-        // 软删除：IsDeleted False → True
+        // 软删除：DeletedAt null → UTC 时间戳
         await SendAsync(HttpMethod.Delete,
             $"/api/system/user/{userId}/{await ApiTestSupport.GetVersionAsync<SysUser>(_db, userId)}", null);
         var afterDelete = await _db.Queryable<SysEntityChangeLog>()
-            .Where(l => l.EntityName == nameof(SysUser) && l.EntityId == userId && l.FieldName == nameof(SysUser.IsDeleted))
+            .Where(l => l.EntityName == nameof(SysUser) && l.EntityId == userId && l.FieldName == nameof(SysUser.DeletedAt))
             .ToListAsync();
-        Assert.That(afterDelete.Any(l => l.OldValue == "False" && l.NewValue == "True"),
-            Is.True, "软删除应产生 IsDeleted 字段级变更日志");
+        Assert.That(afterDelete.Any(l => l.OldValue is null && l.NewValue is not null),
+            Is.True, "软删除应产生 DeletedAt 字段级变更日志（null → 时间戳）");
 
         // 恢复：以墓碑当前 Version 发起（墓碑被软删除过滤器隐藏，需 ClearFilter 读取）
         var tombstone = await _db.Queryable<SysUser>().ClearFilter<SysUser>()
             .Where(u => u.Id == userId).FirstAsync();
         await SendForJsonAsync(HttpMethod.Patch, $"/api/system/user/{userId}/{tombstone.Version}/restore", null!);
         var afterRestore = await _db.Queryable<SysEntityChangeLog>()
-            .Where(l => l.EntityName == nameof(SysUser) && l.EntityId == userId && l.FieldName == nameof(SysUser.IsDeleted))
+            .Where(l => l.EntityName == nameof(SysUser) && l.EntityId == userId && l.FieldName == nameof(SysUser.DeletedAt))
             .ToListAsync();
-        Assert.That(afterRestore.Any(l => l.OldValue == "True" && l.NewValue == "False"),
-            Is.True, "恢复应产生 IsDeleted 字段级变更日志");
+        Assert.That(afterRestore.Any(l => l.OldValue is not null && l.NewValue is null),
+            Is.True, "恢复应产生 DeletedAt 字段级变更日志（时间戳 → null）");
 
         // 清理：再次软删除，避免遗留启用账号影响其它用例
         await SendAsync(HttpMethod.Delete,

@@ -336,12 +336,11 @@ public static class DependencyExtensions
         services.AddScoped<IOutboxMessageRepository, OutboxMessageRepository>();
         services.AddScoped<ITenantAccessValidator, TenantAccessValidator>();
         services.AddSingleton<SchemaMigrator>();
-        // 增量迁移清单（P1-A3）：新增迁移按 ISchemaMigration 实现并在此追加
-        // 增量迁移清单（P1-A3）：新增迁移按 ISchemaMigration 实现并在此逐个注册
-        // （DbInitializer 以 IEnumerable<ISchemaMigration> 注入——逐个注册才能被 DI 集合解析发现；
-        // 注册 ISchemaMigration[] 单例会因 IEnumerable 特殊解析规则得到空集合）
-        services.AddSingleton<ISchemaMigration, Infrastructure.DataAccess.Migrations.AddPostTablesMigration>();
-        services.AddSingleton<ISchemaMigration, Infrastructure.DataAccess.Migrations.AddOperLogAuditColumnsMigration>();
+        // 迁移清单：框架仅保留干净的执行通道，不保留任何历史迁移脚本。
+        // 后续新增结构变更时，实现 ISchemaMigration（幂等脚本，MigrationId 按 vNNN 递增），
+        // 并在此逐个 AddSingleton<ISchemaMigration, XxxMigration>() 注册即可：
+        // DbInitializer 以 IEnumerable<ISchemaMigration> 注入，逐个注册才能被 DI 集合解析发现
+        // （直接注册 ISchemaMigration[] 单例会因 IEnumerable 特殊解析规则得到空集合）。
         // 请求上下文（P0 默认审计）：供 AuditLogBehavior 读取链路 TraceId、并与 OperLogActionFilter 协同去重
         services.AddSingleton<IOperationContext, Infrastructure.Logging.HttpContextOperationContext>();
         // 数据库初始化三层结论（库 / 结构 / 种子）：启动期写、运行期只读，供 /health/ready 输出脱敏状态

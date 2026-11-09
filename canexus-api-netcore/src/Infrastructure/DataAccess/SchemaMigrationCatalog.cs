@@ -1,27 +1,17 @@
-using System.Security.Cryptography;
-using System.Text;
 
 namespace Infrastructure.DataAccess;
 
 /// <summary>
-/// 结构版本与脚本指纹目录（T-13）：版本取自迁移 ID 的语义序号（baseline-v1 = 0，v001 = 1 …），
-/// 指纹取迁移脚本正文的 SHA-256，而非 ID 与说明文字。
+/// 迁移清单目录：解析 vNNN 语义序号并按版本排序，同时拒绝重复 / 非法 ID。
+/// <para>本目录只负责「执行顺序」，不读写任何数据库状态。</para>
 /// </summary>
 public static class SchemaMigrationCatalog
 {
-    /// <summary>基线版本号。</summary>
-    public const int BaselineVersion = 0;
-
-    /// <summary>解析迁移 ID 对应的结构版本。</summary>
-    /// <param name="migrationId">迁移 ID。</param>
-    /// <returns>版本号；无法解析时返回 null（按「未知更高版本」处理，避免把未来版本误判为落后）。</returns>
+    /// <summary>解析迁移 ID 对应的序号。</summary>
+    /// <param name="migrationId">迁移 ID（vNNN）。</param>
+    /// <returns>序号；无法解析时返回 null（视为非法 ID，由 <see cref="Order"/> 拒绝）。</returns>
     public static int? VersionOf(string migrationId)
     {
-        if (string.Equals(migrationId, SchemaMigrator.BaselineMigrationId, StringComparison.Ordinal))
-        {
-            return BaselineVersion;
-        }
-
         if (migrationId.Length >= 2
             && (migrationId[0] == 'v' || migrationId[0] == 'V')
             && int.TryParse(migrationId.AsSpan(1), out var version)
@@ -33,10 +23,10 @@ public static class SchemaMigrationCatalog
         return null;
     }
 
-    /// <summary>按版本顺序返回迁移清单，并检测重复 ID。</summary>
+    /// <summary>按序号返回迁移清单；重复 ID 或不符合 vNNN 命名的 ID 立即终止启动（避免歧义）。</summary>
     /// <param name="migrations">注册的全部迁移。</param>
-    /// <returns>按版本排序的迁移清单。</returns>
-    /// <exception cref="InvalidOperationException">存在重复 ID 或不可解析版本时抛出。</exception>
+    /// <returns>按序号排序的迁移清单。</returns>
+    /// <exception cref="InvalidOperationException">存在重复 ID 或非法 ID 时抛出。</exception>
     public static IReadOnlyList<ISchemaMigration> Order(IEnumerable<ISchemaMigration> migrations)
     {
         var list = migrations.ToArray();
@@ -56,50 +46,12 @@ public static class SchemaMigrationCatalog
             .ToArray();
         if (invalid.Length > 0)
         {
-            throw new InvalidOperationException(
-                $"迁移 ID 必须为 baseline-v1 或 vNNN 语义序号：{string.Join(", ", invalid)}");
+            throw new InvalidOperationException($"迁移 ID 必须为 vNNN 语义序号：{string.Join(", ", invalid)}");
         }
 
         return list
             .OrderBy(migration => VersionOf(migration.MigrationId), Comparer<int?>.Default)
             .ThenBy(migration => migration.MigrationId, StringComparer.Ordinal)
             .ToArray();
-    }
-
-    /// <summary>代码期望的结构版本（清单中最大版本；空清单为基线）。</summary>
-    /// <param name="orderedMigrations">已排序的迁移清单。</param>
-    /// <returns>期望版本号。</returns>
-    public static int ExpectedVersion(IReadOnlyList<ISchemaMigration> orderedMigrations)
-    {
-        return orderedMigrations.Count == 0
-            ? BaselineVersion
-            : orderedMigrations.Max(migration => VersionOf(migration.MigrationId) ?? BaselineVersion);
-    }
-
-    /// <summary>脚本正文指纹（SHA-256 十六进制）：无脚本时回退到 ID + 说明，兼容纯登记型迁移。</summary>
-    /// <param name="migration">迁移。</param>
-    /// <returns>指纹。</returns>
-    public static string ScriptHash(ISchemaMigration migration)
-    {
-        var content = migration.Scripts.Count > 0
-            ? string.Join("\n", migration.Scripts)
-            : $"{migration.MigrationId}|{migration.Description}";
-        return ComputeHash(content);
-    }
-
-    /// <summary>升级前的旧指纹口径（ID + 说明），用于识别存量库记录并做一次性自愈。</summary>
-    /// <param name="migration">迁移。</param>
-    /// <returns>旧口径指纹。</returns>
-    public static string LegacyHash(ISchemaMigration migration)
-    {
-        return ComputeHash($"{migration.MigrationId}|{migration.Description}");
-    }
-
-    /// <summary>计算 SHA-256 十六进制字符串。</summary>
-    /// <param name="content">正文。</param>
-    /// <returns>指纹。</returns>
-    public static string ComputeHash(string content)
-    {
-        return Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(content)));
     }
 }

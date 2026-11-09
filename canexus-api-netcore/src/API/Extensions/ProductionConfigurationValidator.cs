@@ -67,8 +67,8 @@ public static class ProductionConfigurationValidator
             issues.Add("Bootstrap:RequirePasswordChangeOnSeed 在 Production 必须为 true（种子 admin 首登须改密）");
         }
 
-        // 生产不得由应用自动改表：结构变更须经迁移通道的幂等脚本 + 版本状态机，
-        // 已就绪的启动完全不执行 DDL（见 DbInitializer 三层判定）
+        // 生产不得由应用自动改表：结构变更须经迁移通道的幂等脚本，
+        // 表齐全的启动不执行任何建表 DDL（见 DbInitializer 三层判定）
         if (configuration.GetValue("Database:AutoCreateTable", true))
         {
             issues.Add("Database:AutoCreateTable 在 Production 必须显式配置为 false（禁止应用自动建表 / 重建表结构）");

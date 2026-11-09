@@ -114,7 +114,7 @@ public class SchemaBehaviourProbeTests
 
     /// <summary>
     /// V-05：CodeFirst.InitTables 对已存在表会重建结构——删除多余列、把列类型改回模型定义、补齐模型新增列。
-    /// <para>实测结论：生产不可由应用自动 InitTables；结构变更必须走幂等迁移脚本 + 版本状态机。</para>
+    /// <para>实测结论：生产不可由应用自动 InitTables；结构变更必须走幂等迁移脚本。</para>
     /// </summary>
     [Test]
     public async Task V05_InitTables_DropsColumnsAndRewritesTypes()

@@ -11,7 +11,7 @@ namespace Infrastructure.DataAccess;
 /// <para>比对项：模型表是否存在、模型列是否齐全、非空约束是否一致、主键索引是否存在。
 /// 纯比对逻辑 <see cref="Compare"/> 不依赖数据库，可单元测试；<see cref="ValidateAsync"/>
 /// 由 <see cref="DbInitializer"/> 在 <c>Database:ValidateModelStructure=true</c> 时调用，
-/// 任一差异即在启动期抛异常阻止启动（与已应用迁移脚本指纹校验形成「脚本正文 + 落地结构」双保险）。</para>
+/// 任一差异即在启动期抛异常阻止启动，用于发现绕过 CodeFirst / 迁移通道直接改表的结构漂移。</para>
 /// </summary>
 /// <remarks>构造函数。</remarks>
 /// <param name="client">SqlSugar 客户端。</param>

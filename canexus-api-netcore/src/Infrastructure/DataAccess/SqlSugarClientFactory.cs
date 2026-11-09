@@ -153,7 +153,8 @@ internal static class SqlSugarClientFactory
                             insertAggregate.Id = Guid.NewGuid();
                         }
 
-                        insertAggregate.IsDeleted = false;
+                        // 软删除时间戳：新插入聚合一律为「未删除」（null）
+                        insertAggregate.DeletedAt = null;
                     }
 
                     break;
@@ -188,8 +189,8 @@ internal static class SqlSugarClientFactory
         //    除按 X-Tenant-Id 过滤出的业务数据外，仍可见 TenantId IS NULL 的平台级数据
         //    （sys_tenant 定义表 / 平台管理员 / 平台角色菜单等）；租户用户仅可见本租户数据，
         //    平台级行对其不可见。区分依据为 currentUser.TenantId 而非请求头，避免租户用户越权。
-        // 2. 软删除（仅聚合根，IsDeleted 定义于 AggregateBase；关联表为物理删除无墓碑）：
-        //    开关关闭或未删除数据可见，表达式在每次查询时求值，支持运行时切换
+        // 2. 软删除（仅聚合根，DeletedAt 定义于 AggregateBase；关联表为物理删除无墓碑）：
+        //    DeletedAt IS NULL 为未删除，开关关闭时墓碑也可见；表达式在每次查询时求值，支持运行时切换
         foreach (var entityType in GetAggregateEntityTypes(options.EntityAssemblies))
         {
             AddAggregateFilterMethod.MakeGenericMethod(entityType)
@@ -263,7 +264,7 @@ internal static class SqlSugarClientFactory
         where TEntity : AggregateBase
     {
         client.QueryFilter.AddTableFilter<TEntity>(it =>
-            (dataFilter.SoftDeleteEnabled == false || it.IsDeleted == false)
+            (dataFilter.SoftDeleteEnabled == false || it.DeletedAt == null)
             && (dataFilter.TenantFilterEnabled == false
                 || tenantContext.TenantId == null
                 || it.TenantId == tenantContext.TenantId

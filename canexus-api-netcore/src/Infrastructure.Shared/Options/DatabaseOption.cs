@@ -30,14 +30,14 @@ public sealed class DatabaseOption : OptionBase
     /// </summary>
     public bool AllowSchemaInitialization { get; set; }
 
-    /// <summary>是否启用数据库迁移机制（P1-A3：基线登记 + 增量迁移 + 启动校验），默认 true。</summary>
+    /// <summary>是否启用迁移执行通道（按序执行全部幂等 ISchemaMigration 脚本），默认 true；关闭时结构完全由外部管理。</summary>
     public bool MigrationsEnabled { get; set; } = true;
 
     /// <summary>
     /// 是否在结构就绪校验阶段比对「CodeFirst 模型快照」与 information_schema 实际列/索引，默认 false。
-    /// <para>T5 #13：快照由 <c>client.EntityMaintenance.GetEntityInfo</c> 生成（不手写列名清单），
-    /// 比对列存在性与非空约束，并核对主键索引。默认关闭以免存量库的历史结构漂移阻断启动；
-    /// 运维完成一次结构对齐后可显式开启，此后任何绕过迁移通道改表 / 篡改迁移脚本都会在启动期被拦截。</para>
+    /// <para>快照由 <c>client.EntityMaintenance.GetEntityInfo</c> 生成（不手写列名清单），
+    /// 比对列存在性与非空约束，并核对主键索引。默认关闭；显式开启后，
+    /// 任何绕过 CodeFirst / 迁移通道直接改表的结构漂移都会在启动期被拦截。</para>
     /// </summary>
     public bool ValidateModelStructure { get; set; }
 

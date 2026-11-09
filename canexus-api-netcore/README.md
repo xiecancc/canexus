@@ -3,8 +3,9 @@
 基于 .NET 10 的中后台管理系统后端，采用经典分层架构（API / Application / Domain / Infrastructure），
 内置 RBAC 权限、多租户、乐观并发、定时任务调度与完整审计能力。
 
-数据库初始化按「库 / 结构 / 种子」三层分别判定：库不存在可按配置经管理连接创建，结构由
-`sys_schema_migration` 版本状态机驱动，**生产环境不自动改表**；三层判定结论写入启动日志与 `/health/ready`。
+数据库初始化按「库 / 结构 / 种子」三层分别判定：库不存在可按配置经管理连接创建，结构缺表时由
+CodeFirst 依实体模型一次性建表、随后按序执行幂等迁移脚本（不保留任何迁移历史，开发期数据库可直接删除重建），
+**生产环境不自动改表**；三层判定结论写入启动日志与 `/health/ready`。
 
 ## 目录
 
@@ -31,7 +32,8 @@
 - **多租户**：开关式共享库行级隔离；租户解析、归属校验、停用与到期拦截；超管可跨租户。
 - **审计**：操作日志、登录日志、字段级实体变更日志（敏感值脱敏），异常路径同样留痕。
 - **领域事件**：事务 Outbox 持久化 + 后台 worker 重试，权限 / 字典 / 配置缓存失效由监听器驱动。
-- **可靠性**：乐观并发（版本令牌）覆盖更新 / 软删除 / 恢复三条写入路径、软删除与物理删除双通道显式分离、幂等迁移脚本、分布式锁、统一异常与响应结构。
+- **可靠性**：乐观并发（版本令牌）覆盖更新 / 软删除 / 恢复三条写入路径（统一走 `ExecuteCommandWithOptLock`）、
+  可空时间戳 `DeletedAt` 软删除与物理删除双通道显式分离、无历史依赖的幂等迁移框架、分布式锁、统一异常与响应结构。
 - **可运维**：结构化日志（Serilog）、健康检查（存活 / 就绪）、限流、OpenTelemetry Trace 与 Metrics（可选）。
 
 ## 技术栈
@@ -114,14 +116,14 @@ canexus-api-netcore/
 │   │   └── Security/               # 富文本清洗等安全组件
 │   ├── Application.Contracts/      # 契约层：请求 record、DTO、统一响应
 │   ├── Domain/                     # 领域层：实体、领域事件、仓储接口、领域端口
-│   │   ├── Entities/               # 基类体系 + Sys* 业务实体 + 迁移 / Outbox 实体
+│   │   ├── Entities/               # 基类体系 + Sys* 业务实体 + Outbox 实体
 │   │   ├── Events/                 # 按领域划分的事件类
 │   │   ├── Repositories/           # 领域 / 聚合 / 树形仓储接口
 │   │   ├── Services/               # 令牌、密码、验证码、调度、工作单元等端口
 │   │   └── ValueObjects/           # 值对象
 │   ├── Domain.Shared/              # 共享内核：错误码、分页、权限定义、枚举、异常、本地化
 │   ├── Infrastructure/             # 基础设施实现
-│   │   ├── DataAccess/             # 三层初始化、迁移脚本、SqlSugar 工厂、种子数据
+│   │   ├── DataAccess/             # 三层初始化、迁移执行通道、SqlSugar 工厂、种子数据
 │   │   ├── Repositories/           # 仓储实现与工作单元
 │   │   ├── Auth/ Users/ Tenants/   # 令牌、当前用户、租户上下文
 │   │   ├── Caching/ Locking/ Redis/# 缓存监控、分布式锁、Redis 连接
@@ -248,8 +250,8 @@ curl -s http://localhost:5000/api/auth/user-info \
 | `Database:AutoCreateTable` | `true` | 首次初始化是否建表；Production 必须为 `false` |
 | `Database:AutoSyncStructure` | `true` | 是否同步表结构；Production 必须为 `false` |
 | `Database:AllowSchemaInitialization` | `false` | 全新生产库首次建库建表的一次性授权 |
-| `Database:MigrationsEnabled` | `true` | 是否启用版本化迁移机制 |
-| `Database:ValidateModelStructure` | `false` | 启动时比对实体模型与库表列 / 主键，发现绕过迁移的改表 |
+| `Database:MigrationsEnabled` | `true` | 是否启用迁移执行通道（按序执行全部幂等 `ISchemaMigration` 脚本） |
+| `Database:ValidateModelStructure` | `false` | 启动时比对实体模型与库表列 / 主键，发现绕过 CodeFirst / 迁移通道的改表 |
 
 **认证与安全**
 
@@ -365,21 +367,25 @@ curl -s http://localhost:5000/api/auth/user-info \
 
 ### 乐观并发
 
-聚合根（继承 `AggregateBase`）以 `Version`（GUID）作为版本令牌，**更新、软删除、恢复三条写入路径统一纳入乐观并发**，
-避免并发覆盖与「墓碑被旧快照复活」：
+聚合根（继承 `AggregateBase`）以 `Version`（GUID）作为版本令牌，**更新、软删除、恢复三条写入路径
+统一经 SqlSugar 的 `ExecuteCommandWithOptLock` 落地**，避免并发覆盖与「墓碑被旧快照复活」。
+软删除改用可空时间戳 `DeletedAt`（UTC）：null 为未删除，非 null 为删除时间，恢复即重新置为 null；
+全局查询过滤器按 `DeletedAt IS NULL` 过滤。
 
 | 路径 | 入口 | 并发控制方式 |
 | --- | --- | --- |
-| 更新 | `UpdateAsync` | `ExecuteCommandWithOptLock` 生成 `UPDATE ... WHERE Id = @id AND Version = 传入值`，命中后框架自动轮换版本令牌 |
-| 软删除 | `SoftDeleteAsync`（按主键 / 主键集合 / 条件） | 单条按列 UPDATE，附加 `Version` CAS 条件（命令携带时）、轮换版本令牌并兜底填充更新审计 |
-| 恢复 | `RestoreAsync`（按主键 / 主键集合 / 条件） | 同上，解除墓碑；版本轮换使旧令牌持有的更新失效 |
+| 更新 | `UpdateAsync` | 实体全字段更新，`UPDATE ... WHERE Id = @id AND Version = 传入值`，命中后框架自动轮换版本令牌 |
+| 软删除 | `SoftDeleteAsync`（按主键 / 主键集合 / 条件） | 按列只更新 `DeletedAt` / 更新审计 / `Version`，同样走 `ExecuteCommandWithOptLock`，自动轮换版本令牌 |
+| 恢复 | `RestoreAsync`（按主键 / 主键集合 / 条件） | 同上，`DeletedAt` 置回 null；版本轮换使旧令牌持有的更新失效 |
 | 物理删除 | `HardDeleteAsync` | 单条 DELETE，不参与乐观锁，不可恢复（仅限关联表 / 合规擦除 / 测试夹具） |
 
 使用方式：
 
 - 修改与删除请求的路由必须携带最新 `version`（GUID 版本令牌），例如 `PUT /api/system/user/{id}/{version}`；
 - 版本不一致或目标不可见时统一抛业务码 `40005`（CommonConcurrencyConflict），客户端应刷新后重试；
-- 未携带版本令牌的批量 / 后台路径保持幂等静默忽略语义，不抛并发冲突；
+- 携带版本令牌时以其作为 CAS 条件（陈旧令牌必然冲突）；未携带的批量 / 后台路径取库中当前版本，
+  仍由框架校验并轮换，但保持幂等静默忽略语义（无匹配返回 false）；
+- 批量软删除 / 恢复在无外层事务时自持事务，保证多行写入原子性；
 - 仓储层调用示例见「开发规范 → 仓储删除语义」。
 
 ### 多租户
@@ -419,13 +425,31 @@ curl -s http://localhost:5000/api/auth/user-info \
 | 层 | 判定方式 | 行为 |
 | --- | --- | --- |
 | 库 | 用剥离库名的管理连接查 `information_schema.SCHEMATA` | 不存在且允许时建库，否则明确拒绝启动 |
-| 结构 | `sys_schema_migration` 已应用版本 vs 代码期望版本 | 一致时**不执行任何 DDL**；落后按幂等脚本补齐；代码更旧拒绝启动 |
+| 结构 | 按 `information_schema.TABLES` 找出缺失的模型表 | 缺表时 CodeFirst 一次性建表并修正为 InnoDB；表齐全时**不执行任何建表 DDL**。随后按序执行全部幂等迁移脚本 |
 | 种子 | 按稳定键幂等补齐 | 只补缺失项，不覆盖已修改数据 |
 
-- 迁移脚本指纹取正文 SHA-256，已应用脚本被改动会在启动校验中暴露；
-- 生产环境禁止应用自动改表（`Database:AutoCreateTable` / `Database:AutoSyncStructure` 必须为 false），结构变更走迁移脚本；
+框架处于开发初期，**所有数据库都是临时的，可直接删除重建**：
+
+```sql
+DROP DATABASE IF EXISTS super_admin_test;   -- 开发 / 测试库同理
+```
+
+重建后下一次启动会依次完成建库（如允许）、CodeFirst 建表、InnoDB 引擎修正、
+`QuartzSchemaInitializer` 幂等建立 `QRTZ_` 集群表、种子补齐。因此本框架**不保留任何迁移历史**：
+没有 `sys_schema_migration` 表、没有基线登记、没有已应用记录 / 脚本指纹 / 版本状态机，
+`/health/ready` 也只输出三层状态。
+
+后续如需 CodeFirst 无法表达的结构变更（索引、约束、数据订正），扩展方式：
+
+1. 新建 `ISchemaMigration` 实现，`MigrationId` 按 `vNNN` 递增，`Scripts` 必须是幂等 SQL
+   （`CREATE TABLE IF NOT EXISTS`、`INSERT ... ON DUPLICATE KEY UPDATE` 等）；
+2. 在 `DependencyExtensions` 中逐个注册 `AddSingleton<ISchemaMigration, XxxMigration>()`；
+3. `SchemaMigrationCatalog` 负责排序并拒绝重复 / 非法 ID，`SchemaMigrator` 在事务内按序执行
+   （原生 SQL 经 `ITransactionSqlRunner` 挂接事务；MySQL DDL 有隐式提交，故脚本必须可重复执行）。
+
+- 生产环境禁止应用自动改表（`Database:AutoCreateTable` / `Database:AutoSyncStructure` 必须为 false）；
 - 全新生产库需显式设置 `Database:AllowSchemaInitialization=true` 完成一次性初始化，随后移除该项；
-- 可选开启 `Database:ValidateModelStructure`，在启动时比对实体模型与实际表结构，发现绕过迁移的改表。
+- 可选开启 `Database:ValidateModelStructure`，比对实体模型与实际表结构，发现绕过 CodeFirst / 迁移通道的改表。
 
 ## 测试
 
@@ -532,8 +556,9 @@ HTTP 访问。正式生产请在 Kubernetes / 反向代理后以 Production 环�
 物理删除与软删除是两条**显式分离**的通道，不再按实体基类隐式改写（避免同一方法名在不同静态类型上语义漂移）：
 
 - `HardDeleteAsync`：由 `IDomainRepository<T>` 提供，单条 DELETE 物理移除，不写字段级变更日志、不轮换版本令牌，不可恢复；
-- `SoftDeleteAsync`：由 `IAggregateRepository<T>` 提供（按主键 / 主键集合 / 条件重载），标记删除位 IsDeleted 墓碑
-  （单条 SQL 按列更新），轮换版本令牌并兜底填充更新审计，可经 `RestoreAsync` 恢复；
+- `SoftDeleteAsync`：由 `IAggregateRepository<T>` 提供（按主键 / 主键集合 / 条件重载），写入 `DeletedAt`
+  时间戳墓碑（经 `ExecuteCommandWithOptLock` 按列更新），自动轮换版本令牌并兜底填充更新审计，
+  可经 `RestoreAsync` 把 `DeletedAt` 置回 null 恢复；
 - 关联表 / 日志表等无墓碑语义的实体用物理删除；聚合根默认用软删除，确需彻底清除（合规擦除、测试夹具）时显式调用物理删除；
 - 仓储子类按业务需要选择调用，不得用同名方法改写语义：两种语义各有一个明确入口。
 
@@ -560,7 +585,7 @@ await userRoleRepository.HardDeleteAsync(ur => ur.UserId == command.Id, ct);
 2. 写命令必须同时提供验证器，否则 `WriteCommandValidatorStartupValidator` 会在启动时失败；
 3. 新增错误码同步补充 zh-CN / en-US 两份本地化资源；
 4. 需要前端路由的功能，同步补充菜单种子与按钮权限；
-5. 数据库结构调整必须新增幂等迁移脚本，禁止依赖生产环境自动改表；
+5. 开发期数据库可直接删除重建；CodeFirst 无法表达的结构变更追加幂等 `ISchemaMigration` 脚本，禁止依赖生产环境自动改表；
 6. 补充对应层级的测试。
 
 ### 任务完成后的固定动作
@@ -624,10 +649,16 @@ dotnet user-secrets set "Jwt:Secret" "不少于 32 字节的随机字符串" --p
 （登出、改密、管理员强退、角色 / 权限变更），需重新登录。多副本部署若未开启 `Cache:RedisEnabled`，
 吊销状态无法跨实例同步，会出现「某些请求仍可用」的现象。
 
-### 启动报「数据库结构版本高于代码期望版本」
+### 开发期数据库结构改乱了 / 想重建
 
-数据库已应用了当前代码不认识的迁移脚本，说明部署的是旧版本代码。请部署与数据库版本匹配的代码，
-或回滚数据库到对应版本，不要强行启动。
+框架不保留迁移历史，直接删除重建即可（**仅限开发 / 测试库**）：
+
+```sql
+DROP DATABASE IF EXISTS super_admin_test;
+```
+
+下一次启动会按「库 → 结构（CodeFirst + 幂等迁移 + QRTZ_ 表）→ 种子」自动重建。
+生产库不可这样操作，仍须由运维按 `Database:AllowSchemaInitialization` 授权一次性初始化。
 
 ### 集成测试提示 `SUPER_ADMIN_TEST_CONN` 未设置
 
@@ -664,6 +695,44 @@ Development 可不启用（缓存退化为进程内 L1、限流失效为单实�
 不要修改 `.editorconfig` 降级。
 
 ## 变更记录
+
+### 2026-11-09（二）：DeletedAt 软删除时间戳 + 干净迁移框架
+
+**功能**
+
+- 软删除由布尔标记 IsDeleted 演进为可空时间戳 `DeletedAt`（UTC）：null 表示未删除，
+  非 null 同时承载「已删除」与「删除时间」；恢复即置回 null。全局查询过滤器、
+  插入审计切面、字段级变更日志（记录时间戳 old / new）、令牌可用性校验、租户校验全部同步。
+- **乐观并发全覆盖**：更新 / 软删除 / 恢复三条写入路径统一走 SqlSugar `ExecuteCommandWithOptLock`；
+  软删除 / 恢复按列只更新 `DeletedAt`、更新审计与 `Version`，携带 `version` 时以其作 CAS 条件，
+  陈旧令牌命中 0 行即抛 `40005`，成功后框架自动轮换版本令牌，杜绝旧快照复活墓碑。
+  批量路径在无外层事务时自持事务保证原子性。
+
+**迁移框架整理（不保留任何迁移历史代码）**
+
+- 删除迁移记录实体 SchemaMigrationRecord 与 sys_schema_migration 表、基线登记、已应用记录、
+  脚本指纹（SHA-256 / 旧口径自愈）、版本状态机 SchemaStatus / SchemaReadiness、
+  ValidateAppliedScriptsAsync / GetStatusAsync / ValidateModelAgainstMigrationsAsync，
+  以及两份历史迁移脚本（v001 岗位建表、v002 操作日志审计列）；
+  `/health/ready` 与启动日志不再输出 `appliedVersion` / `expectedVersion`。
+- 仅保留干净的执行通道：`ISchemaMigration`（幂等 `Scripts` + `ApplyAsync` 扩展点）、
+  `SchemaMigrationCatalog`（vNNN 排序 / 冲突拒绝）、`SchemaMigrator`（事务内按序执行）、
+  `DbInitializer`（缺表 CodeFirst + 执行迁移）、`ITransactionSqlRunner`、`DatabaseSchemaProbe`、
+  `ModelStructureValidator`。后续新增迁移只需实现接口并在 `DependencyExtensions` 注册。
+- 开发期数据库直接删除重建；为让全新库一次启动成功，宿主在结构就绪后、装载定时任务前
+  显式调用 `QuartzSchemaInitializer.EnsureSchemaAsync` 幂等建立 `QRTZ_` 集群表
+  （原 IHostedService 启动晚于调度器解析，会在空库上校验失败）。
+
+**使用方式**
+
+- 见「接口约定 → 乐观并发」（路由携带 `version`、错误码与重试策略）、
+  「开发规范 → 仓储删除语义」（仓储层调用示例）与「数据库初始化」（重建流程、后续迁移扩展方式）。
+
+**验证**
+
+- 直接 DROP 并重建 `super_admin_test` 后，单宿主启动即完成建表 / QRTZ_ 表 / 种子；
+  `dotnet test api.slnx`：Domain 80 / Application 104 / Infrastructure 116 / API 185，共 485 项全部通过；
+  `dotnet format api.slnx --verify-no-changes` 与 `scripts/check-readme-types.py` 均通过。
 
 ### 2026-11-09
 

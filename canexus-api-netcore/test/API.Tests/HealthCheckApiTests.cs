@@ -93,7 +93,7 @@ public class HealthCheckApiTests
         }
     }
 
-    /// <summary>/health/ready 输出数据库初始化三层结论（仅阶段状态与版本号）。</summary>
+    /// <summary>/health/ready 输出数据库初始化三层结论（仅阶段状态）。</summary>
     [Test]
     public async Task HealthReady_ReportsInitializationStages()
     {
@@ -109,9 +109,10 @@ public class HealthCheckApiTests
             Assert.That(initialization.GetProperty("database").GetString(), Is.EqualTo("Ready"));
             Assert.That(initialization.GetProperty("schema").GetString(), Is.EqualTo("Ready"));
             Assert.That(initialization.GetProperty("seed").GetString(), Is.EqualTo("Ready"));
-            Assert.That(initialization.GetProperty("appliedVersion").GetInt32(),
-                Is.EqualTo(initialization.GetProperty("expectedVersion").GetInt32()),
-                "结构版本应与代码期望一致（启动完成即就绪）");
+            Assert.That(initialization.TryGetProperty("appliedVersion", out _), Is.False,
+                "健康报告不应暴露迁移历史版本字段");
+            Assert.That(initialization.TryGetProperty("expectedVersion", out _), Is.False,
+                "健康报告不应暴露迁移历史版本字段");
         });
     }
 

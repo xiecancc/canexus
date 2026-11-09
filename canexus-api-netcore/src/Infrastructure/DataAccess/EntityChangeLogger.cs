@@ -1,5 +1,6 @@
 
 using System.Collections.Concurrent;
+using System.Globalization;
 using System.Reflection;
 using Domain.Entities;
 using Domain.Shared.Logging;
@@ -7,7 +8,7 @@ using Domain.Shared.Logging;
 namespace Infrastructure.DataAccess;
 /// <summary>
 /// 实体变更记录器：对比聚合更新前后的属性快照，生成字段级（old / new）变更日志集合。
-/// <para>审计与并发控制字段（Id / Version / CreatedAt / CreatedBy / UpdatedAt / UpdatedBy / IsDeleted）
+/// <para>审计与并发控制字段（Id / Version / CreatedAt / CreatedBy / UpdatedAt / UpdatedBy / DeletedAt）
 /// 不参与对比；字段值格式化为字符串（null → null，超长截断至 1000 字符与列宽一致）。</para>
 /// </summary>
 internal static class EntityChangeLogger
@@ -21,7 +22,7 @@ internal static class EntityChangeLogger
         nameof(AggregateBase.CreatedBy),
         nameof(AggregateBase.UpdatedAt),
         nameof(AggregateBase.UpdatedBy),
-        nameof(AggregateBase.IsDeleted)
+        nameof(AggregateBase.DeletedAt)
     ];
 
     /// <summary>实体可对比属性缓存（键为实体类型；属性集运行期不变，静态缓存避免重复反射）。</summary>
@@ -102,27 +103,39 @@ internal static class EntityChangeLogger
         return logs;
     }
 
-    /// <summary>为软删除 / 恢复生成字段级 IsDeleted 变更日志。</summary>
+    /// <summary>为软删除 / 恢复生成字段级 DeletedAt 变更日志（旧值 / 新值为可空时间戳）。</summary>
     /// <param name="entityType">聚合实体类型。</param>
     /// <param name="entityId">实体主键。</param>
-    /// <param name="newDeleted">变更后的软删除标记（true = 软删除，false = 恢复）。</param>
+    /// <param name="oldDeletedAt">变更前的软删除时间戳（null 表示未删除）。</param>
+    /// <param name="newDeletedAt">变更后的软删除时间戳（null 表示已恢复）。</param>
     /// <param name="changedAt">变更时间。</param>
     /// <param name="changedBy">变更人（无登录上下文时为 null）。</param>
     /// <returns>单字段变更日志。</returns>
     public static SysEntityChangeLog BuildLifecycleChange(
-        Type entityType, Guid entityId, bool newDeleted, DateTime changedAt, Guid? changedBy)
+        Type entityType,
+        Guid entityId,
+        DateTime? oldDeletedAt,
+        DateTime? newDeletedAt,
+        DateTime changedAt,
+        Guid? changedBy)
     {
         return new SysEntityChangeLog
         {
             EntityName = entityType.Name,
             EntityId = entityId,
-            FieldName = nameof(AggregateBase.IsDeleted),
-            OldValue = (!newDeleted).ToString(),
-            NewValue = newDeleted.ToString(),
+            FieldName = nameof(AggregateBase.DeletedAt),
+            OldValue = FormatTimestamp(oldDeletedAt),
+            NewValue = FormatTimestamp(newDeletedAt),
             ChangedAt = changedAt,
             ChangedBy = changedBy
         };
     }
+
+    /// <summary>时间戳按 ISO 8601 往返格式记录；null 保持 null（表示该状态下无时间戳）。</summary>
+    /// <param name="value">时间戳。</param>
+    /// <returns>格式化字符串或 null。</returns>
+    private static string? FormatTimestamp(DateTime? value)
+        => value?.ToString("O", CultureInfo.InvariantCulture);
 
     /// <summary>取实体可对比属性（带类型缓存）。</summary>
     /// <param name="entityType">实体类型。</param>

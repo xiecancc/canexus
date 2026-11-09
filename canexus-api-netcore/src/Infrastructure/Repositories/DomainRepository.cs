@@ -131,7 +131,7 @@ public class DomainRepository<TEntity>(ISqlSugarClient client, ITenantContext te
     public virtual async Task<bool> InsertAsync(TEntity entity, CancellationToken cancellationToken = default)
     {
         // 创建审计（创建时间 / 创建人）由 Aop.DataExecuting 自动填充；
-        // 聚合根的空主键与软删除标记亦由其初始化，业务代码无需显式赋值；
+        // 聚合根的空主键与软删除时间戳亦由其初始化，业务代码无需显式赋值；
         // ExecuteReturnEntityAsync 对非自增主键返回传入实体本身（审计切面就地填充），
         // 调用方继续持有的 entity 引用在插入后即携带主键与审计字段
         var inserted = await BuildInsert(entity).ExecuteReturnEntityAsync();

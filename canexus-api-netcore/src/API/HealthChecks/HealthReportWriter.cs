@@ -32,7 +32,7 @@ public static class HealthReportWriter
                     durationMs = (int)item.Entry.Duration.TotalMilliseconds
                 });
 
-        // 数据库初始化三层结论：只输出阶段状态与版本号，不输出表名 / 连接串 / 异常文本
+        // 数据库初始化三层结论：只输出阶段状态，不输出表名 / 连接串 / 异常文本
         var snapshot = context.RequestServices?.GetService<DatabaseInitializationState>()?.Snapshot();
         object? initialization = snapshot is null
             ? null
@@ -40,9 +40,7 @@ public static class HealthReportWriter
             {
                 database = snapshot.Database,
                 schema = snapshot.Schema,
-                seed = snapshot.Seed,
-                appliedVersion = snapshot.AppliedVersion,
-                expectedVersion = snapshot.ExpectedVersion
+                seed = snapshot.Seed
             };
 
         var payload = new

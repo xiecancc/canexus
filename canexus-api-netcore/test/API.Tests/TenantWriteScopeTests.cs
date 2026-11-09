@@ -95,8 +95,8 @@ public class TenantWriteScopeTests
 
             Assert.Multiple(() =>
             {
-                Assert.That(rowA?.IsDeleted, Is.True, "A 租户用户应被批量软删");
-                Assert.That(rowB?.IsDeleted, Is.False, "写侧必须显式补租户条件，B 租户用户不得被越界软删");
+                Assert.That(rowA?.DeletedAt, Is.Not.Null, "A 租户用户应被批量软删");
+                Assert.That(rowB?.DeletedAt, Is.Null, "写侧必须显式补租户条件，B 租户用户不得被越界软删");
             });
         }
         finally

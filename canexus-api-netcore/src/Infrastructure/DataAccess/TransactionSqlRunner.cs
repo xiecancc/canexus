@@ -4,8 +4,8 @@ using System.Data.Common;
 namespace Infrastructure.DataAccess;
 
 /// <summary>
-/// 事务内 SQL 执行器（P1-A3）：在迁移当前事务连接上执行原生 SQL，命令显式挂接事务，
-/// 保证与迁移记录写入同事务（失败整体回滚）。
+/// 事务内 SQL 执行器：在迁移当前事务连接上执行原生 SQL，命令显式挂接事务，
+/// 保证同一迁移内的全部 SQL 同事务（失败整体回滚）。
 /// <para>背景：SqlSugar 的 ORM 路径（Insertable/Updateable/Queryable）会挂接 Ado 事务，
 /// 但裸 <c>Ado.ExecuteCommand</c> 不挂接（本版本实测自动提交），迁移 SQL 须经本执行器运行。</para>
 /// </summary>

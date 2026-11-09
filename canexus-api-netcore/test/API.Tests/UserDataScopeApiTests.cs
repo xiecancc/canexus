@@ -166,7 +166,7 @@ public class UserDataScopeApiTests
             .Where(u => u.Id == target.Id)
             .FirstAsync();
         Assert.That(tombstone, Is.Not.Null, "越界恢复不应把墓碑变为可见");
-        Assert.That(tombstone!.IsDeleted, Is.True, "越界恢复不应解除软删除");
+        Assert.That(tombstone!.DeletedAt, Is.Not.Null, "越界恢复不应解除软删除");
     }
 
     /// <summary>受限角色对范围内（本部门）用户的更新 / 改状态 / 重置密码 / 分配角色 / 删除均成功。</summary>
@@ -320,7 +320,7 @@ public class UserDataScopeApiTests
     private Task SoftDeleteUserAsync(Guid userId)
     {
         _db.Updateable<SysUser>()
-            .SetColumns(it => it.IsDeleted == true)
+            .SetColumns(it => it.DeletedAt == DateTime.UtcNow)
             .Where(it => it.Id == userId)
             .ExecuteCommand();
         return Task.CompletedTask;

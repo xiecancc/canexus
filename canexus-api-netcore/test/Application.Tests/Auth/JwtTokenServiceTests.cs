@@ -66,7 +66,7 @@ internal sealed class InMemoryRefreshTokenRepository : ISysRefreshTokenRepositor
 
     /// <inheritdoc />
     public Task<SysRefreshToken?> GetDeletedAsync(Guid id, CancellationToken cancellationToken = default)
-        => Task.FromResult(_store.FirstOrDefault(it => it.Id == id && it.IsDeleted));
+        => Task.FromResult(_store.FirstOrDefault(it => it.Id == id && it.DeletedAt != null));
 
     /// <inheritdoc />
     public Task<SysRefreshToken?> GetAsync(
@@ -186,9 +186,9 @@ internal sealed class InMemoryRefreshTokenRepository : ISysRefreshTokenRepositor
         var restored = 0;
         foreach (var entity in _store.Where(new Func<SysRefreshToken, bool>(predicate.Compile())))
         {
-            if (entity.IsDeleted)
+            if (entity.DeletedAt != null)
             {
-                entity.IsDeleted = false;
+                entity.DeletedAt = null;
                 restored++;
             }
         }
