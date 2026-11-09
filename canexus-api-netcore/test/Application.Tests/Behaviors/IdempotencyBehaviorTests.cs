@@ -45,8 +45,8 @@ public class IdempotencyBehaviorTests
         var calls = 0;
         Task<string> Next() => Task.FromResult(++calls == 1 ? "first-result" : "second-result");
 
-        var first = await behavior.Handle(new TestCommand("A"), () => Next(), CancellationToken.None);
-        var second = await behavior.Handle(new TestCommand("A"), () => Next(), CancellationToken.None);
+        var first = await behavior.Handle(new TestCommand("A"), _ => Next(), CancellationToken.None);
+        var second = await behavior.Handle(new TestCommand("A"), _ => Next(), CancellationToken.None);
 
         Assert.Multiple(() =>
         {
@@ -64,10 +64,10 @@ public class IdempotencyBehaviorTests
         Task<string> Next() => Task.FromResult("result");
 
         Assert.DoesNotThrowAsync(async () =>
-            await behavior.Handle(new TestCommand("A"), () => Next(), CancellationToken.None));
+            await behavior.Handle(new TestCommand("A"), _ => Next(), CancellationToken.None));
 
         var exception = Assert.ThrowsAsync<BusinessException>(async () =>
-            await behavior.Handle(new TestCommand("B"), () => Next(), CancellationToken.None));
+            await behavior.Handle(new TestCommand("B"), _ => Next(), CancellationToken.None));
         Assert.That(exception!.Message, Does.Contain("幂等键已用于不同的请求参数"));
     }
 
@@ -79,8 +79,8 @@ public class IdempotencyBehaviorTests
         var calls = 0;
         Task<string> Next() => Task.FromResult("call-" + ++calls);
 
-        var first = await behavior.Handle(new TestCommand("A"), () => Next(), CancellationToken.None);
-        var second = await behavior.Handle(new TestCommand("A"), () => Next(), CancellationToken.None);
+        var first = await behavior.Handle(new TestCommand("A"), _ => Next(), CancellationToken.None);
+        var second = await behavior.Handle(new TestCommand("A"), _ => Next(), CancellationToken.None);
 
         Assert.Multiple(() =>
         {
@@ -107,8 +107,8 @@ public class IdempotencyBehaviorTests
             return Task.FromResult(false);
         }
 
-        var first = await behavior.Handle(new TestCommand("A"), () => Next(), CancellationToken.None);
-        var second = await behavior.Handle(new TestCommand("A"), () => Next(), CancellationToken.None);
+        var first = await behavior.Handle(new TestCommand("A"), _ => Next(), CancellationToken.None);
+        var second = await behavior.Handle(new TestCommand("A"), _ => Next(), CancellationToken.None);
 
         Assert.Multiple(() =>
         {

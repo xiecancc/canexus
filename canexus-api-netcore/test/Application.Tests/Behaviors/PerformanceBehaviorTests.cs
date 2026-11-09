@@ -56,7 +56,7 @@ public class PerformanceBehaviorTests
 
         var logger = new RecordingLogger<PerformanceBehavior<SlowObservabilityRequest, bool>>();
         var behavior = new PerformanceBehavior<SlowObservabilityRequest, bool>(logger);
-        var next = new RequestHandlerDelegate<bool>(async () =>
+        var next = new RequestHandlerDelegate<bool>(async _ =>
         {
             await Task.Delay(600);
             return true;
@@ -76,7 +76,7 @@ public class PerformanceBehaviorTests
     {
         var logger = new RecordingLogger<PerformanceBehavior<SlowObservabilityRequest, bool>>();
         var behavior = new PerformanceBehavior<SlowObservabilityRequest, bool>(logger);
-        var next = new RequestHandlerDelegate<bool>(() => Task.FromResult(true));
+        var next = new RequestHandlerDelegate<bool>(_ => Task.FromResult(true));
 
         await behavior.Handle(new SlowObservabilityRequest(), next, CancellationToken.None);
 

@@ -60,7 +60,7 @@ public class TransactionBehaviorTests
     {
         var unitOfWork = new RecordingUnitOfWork();
         var behavior = new TransactionBehavior<TestTransactionCommand, bool>(unitOfWork, new PendingOutboxDelivery(), new NoOpOutboxDeliveryService(), NullLogger<TransactionBehavior<TestTransactionCommand, bool>>.Instance);
-        var next = new RequestHandlerDelegate<bool>(() => Task.FromResult(true));
+        var next = new RequestHandlerDelegate<bool>(_ => Task.FromResult(true));
 
         var response = await behavior.Handle(new TestTransactionCommand(), next, CancellationToken.None);
 
@@ -74,7 +74,7 @@ public class TransactionBehaviorTests
     {
         var unitOfWork = new RecordingUnitOfWork();
         var behavior = new TransactionBehavior<TestTransactionQuery, string>(unitOfWork, new PendingOutboxDelivery(), new NoOpOutboxDeliveryService(), NullLogger<TransactionBehavior<TestTransactionQuery, string>>.Instance);
-        var next = new RequestHandlerDelegate<string>(() => Task.FromResult("ok"));
+        var next = new RequestHandlerDelegate<string>(_ => Task.FromResult("ok"));
 
         var response = await behavior.Handle(new TestTransactionQuery(), next, CancellationToken.None);
 
@@ -88,7 +88,7 @@ public class TransactionBehaviorTests
     {
         var unitOfWork = new RecordingUnitOfWork();
         var behavior = new TransactionBehavior<TestTransactionCommand, bool>(unitOfWork, new PendingOutboxDelivery(), new NoOpOutboxDeliveryService(), NullLogger<TransactionBehavior<TestTransactionCommand, bool>>.Instance);
-        var next = new RequestHandlerDelegate<bool>(() => throw new InvalidOperationException("业务异常"));
+        var next = new RequestHandlerDelegate<bool>(_ => throw new InvalidOperationException("业务异常"));
 
         Assert.ThrowsAsync<InvalidOperationException>(
             async () => await behavior.Handle(new TestTransactionCommand(), next, CancellationToken.None));

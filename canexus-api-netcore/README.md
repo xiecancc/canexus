@@ -44,19 +44,39 @@ CodeFirst 依实体模型一次性建表、随后按序执行幂等迁移脚本�
 | ORM | SqlSugarCore（CodeFirst / 仓储 / 全局过滤器） | 5.1.4.221 |
 | 数据库 | MySQL 8.x（驱动 MySqlConnector） | 2.6.2 |
 | 认证 | JwtBearer / System.IdentityModel.Tokens.Jwt | 10.0.14 / 8.23.0 |
-| 密码哈希 | BCrypt.Net-Next | 4.2.0 |
+| 密码哈希 | BCrypt.Net-Next | 4.2.1 |
 | 对象映射 | AutoMapper（锁定 14.x：15.0.0 起改为商业 / RPL 双许可） | 14.0.0 |
-| 请求分发 | MediatR（命令 / 查询 + Pipeline Behaviors，单库读写，非读写分离 CQRS） | 12.4.1 |
+| 请求分发 | MediatR（锁定 12.x：13.0.0 起改为商业许可；命令 / 查询 + Pipeline Behaviors，单库读写） | 12.5.0 |
 | 输入验证 | FluentValidation（含 DI 扩展） | 12.2.0 |
-| 任务调度 | Quartz（+ DI / Hosting / JSON 序列化） | 3.22.9 |
+| 任务调度 | Quartz（+ DI / Hosting / JSON 序列化，保留仍在维护的 3.x 线） | 3.22.9 |
 | 缓存 | HybridCache（L1 内存 + L2 Redis）+ StackExchange.Redis | 10.11.0 / 3.4.31 |
 | 日志 | Serilog.AspNetCore（控制台 + 滚动文件） | 10.0.0 |
 | API 文档 | Microsoft.AspNetCore.OpenApi + Swashbuckle UI | 10.0.14 / 10.3.1 |
-| API 版本化 | Asp.Versioning.Mvc | 8.1.0 |
+| API 版本化 | Asp.Versioning.Mvc（保留 8.x：10.x 引入新诊断与配置约束） | 8.1.1 |
 | Excel 导入导出 | MiniExcel | 1.46.0 |
 | 富文本清洗 | HtmlSanitizer | 11.0.16 |
 | 可观测性 | OpenTelemetry（OTLP 导出） | 1.20.x |
-| 测试 | NUnit + coverlet.collector | 4.3.2 / 6.0.4 |
+| 测试 | NUnit + coverlet.collector（保留 4.x / 6.x：5.x 需重写大量断言） | 4.3.2 / 6.0.4 |
+
+### 依赖合规与版本策略
+
+全部直接依赖均为 MIT / Apache-2.0 等宽松许可，允许商业化使用，无 GPL / AGPL / SSPL 或需授权密钥的依赖。
+版本升级以「最新稳定版 + 宽松许可」为准；若上游新版改为商业许可或带来破坏性迁移，则锁定最后一个宽松许可、
+可稳定运行的版本，并在下表说明。审计时逐包核对 NuGet 注册信息的 license 表达式与 npm registry 的 license
+字段，并确认 dist-tag 指向稳定版而非 rc / beta / preview。
+
+| 依赖 | 当前（保留） | 最新稳定版 | 保留原因 |
+| --- | --- | --- | --- |
+| AutoMapper | 14.0.0（MIT） | 16.3.0 | 15.0.0 起改为 Lucky Penny 商业 / RPL 双许可，需许可证密钥；14.x 官方不回补 GHSA-rvv3-g6hj-g44x（High，DoS），若须修复应迁移到 MIT 替代库或购买商业许可 |
+| MediatR | 12.5.0（Apache-2.0） | 14.3.0 | 13.0.0 起改为商业许可；12.5.0 是最后一个 Apache-2.0 版 |
+| Quartz | 3.22.9（Apache-2.0） | 4.7.2 | 4.0 仅支持 net10.0，容器构建调度器、公开 API 大面积移除，且强制 QRTZ 表结构迁移；3.x 仍在维护 |
+| Asp.Versioning.Mvc | 8.1.1（MIT） | 10.2.1 | 10.x 引入 AV0016 等新诊断与配置约束，需调整版本化配置 |
+| NUnit / Test.Sdk / coverlet / adapter | 4.3.2 / 17.14.0 / 6.0.4 / 5.0.0 | 5.0.0 / 18.11.0 / 10.1.0 / 6.3.1 | 5.x 改变异步断言返回值与委托签名，需重写大量测试用例；当前组合稳定 |
+| Vue | 3.5.45（MIT） | 3.5.45 | 原 package.json 与 workspace overrides 锁定 rc 预览版，已移除覆盖并固定稳定版 |
+| TypeScript | 6.0.3（Apache-2.0） | 7.0.2 | Volar / vue-tsc 要求 typescript < 7，7.x 移除内部 tsc 导出导致类型检查无法启动；6.0.3 为兼容线最后稳定版 |
+
+已知传递依赖风险：System.Security.Cryptography.Pkcs 8.0.1（经 JWT 相关包间接引入）存在 High 级公告
+GHSA-846f-f764-76mx，需等待上游更新或显式提升传递依赖版本。
 
 ## 功能模块与接口
 
@@ -703,6 +723,32 @@ Development 可不启用（缓存退化为进程内 L1、限流失效为单实�
 不要修改 `.editorconfig` 降级。
 
 ## 变更记录
+
+### 2026-11-09（五）：依赖合规审计与升级
+
+**检查结论**
+
+- 逐一核对 11 个 csproj 的 36 个 NuGet 包与 2 个 package.json 的 30 个 npm 包：
+  全部直接依赖均为 MIT / Apache-2.0 宽松许可，可商业化，无 GPL / AGPL / 商业授权依赖。
+- 发现两类不符合「最新稳定版」的情况：前端 vue 被 workspace overrides 锁定在 rc 预览版、
+  typescript 指向 tsgo 桥接预览包，另有若干小版本落后；还有 5 组包虽非最新，但升级会破坏宽松许可
+  或需要大规模迁移，详见「技术栈 → 依赖合规与版本策略」。
+
+**升级内容**
+
+- 后端：BCrypt.Net-Next 4.2.0 → 4.2.1、MediatR 12.4.1 → 12.5.0（最后一个 Apache-2.0 版）、
+  Asp.Versioning.Mvc 8.1.0 → 8.1.1；其余已是最新稳定版。
+- 前端：vue 由 rc（3.6.0-rc.14）固定为 3.5.45 稳定版，typescript 由 tsgo 桥接预览包改为 6.0.3 正式稳定版；
+  axios / element-plus / playwright / jsdom / oxfmt / oxlint / sass-embedded / vite / vitest / vue-tsc 等升至最新小版本；
+  根工程化 pnpm 12.14.0 → 12.18.0。移除前端 workspace 中把 Vue 生态与 TypeScript 锁死在预览版的 overrides，
+  保留供应链策略配置并重新生成锁文件。
+- 代码适配：MediatR 12.5.0 的请求处理委托签名新增取消令牌参数，13 处测试构造改为带参 lambda（语义不变）。
+
+**验证**
+
+- `dotnet build api.slnx` 0 警告 0 错误；`dotnet test api.slnx` 485/485 全通过（80/104/116/185）；
+  前端 vue-tsc 类型检查通过、Vitest 146/146 全通过、无 peer 依赖冲突；
+  README 类型校验与 `dotnet format api.slnx --verify-no-changes` 通过。
 
 ### 2026-11-09（四）：GitHub 不可达时仅推送 gitee
 

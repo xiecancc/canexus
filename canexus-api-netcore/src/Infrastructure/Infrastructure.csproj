@@ -16,7 +16,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="BCrypt.Net-Next" Version="4.2.0" />
+    <PackageReference Include="BCrypt.Net-Next" Version="4.2.1" />
     <PackageReference Include="Microsoft.Extensions.Caching.Hybrid" Version="10.11.0" />
     <PackageReference Include="Microsoft.Extensions.Caching.StackExchangeRedis" Version="10.0.14" />
     <PackageReference Include="MySqlConnector" Version="2.6.2" />
