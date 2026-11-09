@@ -18,8 +18,10 @@ namespace Infrastructure.Repositories;
 /// 按列更新路径绕过了该切面，故软删除 / 恢复在仓储内显式补齐更新审计与版本轮换（盲区兜底）；
 /// 实体更新经 SqlSugar ExecuteCommandWithOptLock 做框架级乐观并发控制（UPDATE ... WHERE Version = 传入值，
 /// 受影响 0 行即冲突），版本冲突时抛出业务异常（错误码 CommonConcurrencyConflict）。</para>
-/// <para>CRUD 构建器复用领域仓储的查询 / 插入 / 更新 / 物理删除构建器；聚合根的删除 / 恢复一律为软删除，
-/// 经 <c>BuildUpdate</c> 产出的更新对象按列更新实现，业务聚合仓储不应调用基类的物理删除构建器。</para>
+/// <para>CRUD 构建器复用领域仓储的查询 / 插入 / 更新 / 物理删除构建器；本类的 <c>SoftDeleteAsync</c> 族为软删除，
+/// 经 <c>BuildUpdate</c> 产出的更新对象按列更新实现。基类继承的 <see cref="DomainRepository{TEntity}.HardDeleteAsync"/>
+/// 仍是物理删除，两条通道显式分离、互不改写：派生仓储默认调用软删除，
+/// 确需彻底清除数据时显式调用物理删除并自行承担不可恢复与审计缺失的风险。</para>
 /// </summary>
 /// <typeparam name="TEntity">聚合根实体类型。</typeparam>
 /// <remarks>构造函数。</remarks>
@@ -166,23 +168,15 @@ public class AggregateRepository<TEntity>(ISqlSugarClient client, IUserContext c
     }
 
     /// <inheritdoc />
-    public virtual async Task<bool> DeleteAsync(Guid id, CancellationToken cancellationToken = default, Guid? expectedVersion = null)
-        => await DeleteAsync(it => it.Id == id, cancellationToken, expectedVersion);
+    public virtual async Task<bool> SoftDeleteAsync(Guid id, CancellationToken cancellationToken = default, Guid? expectedVersion = null)
+        => await SoftDeleteAsync(it => it.Id == id, cancellationToken, expectedVersion);
 
     /// <inheritdoc />
-    public virtual async Task<bool> DeleteAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken = default, Guid? expectedVersion = null)
-        => await DeleteAsync(it => ids.Contains(it.Id), cancellationToken, expectedVersion);
+    public virtual async Task<bool> SoftDeleteAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken = default, Guid? expectedVersion = null)
+        => await SoftDeleteAsync(it => ids.Contains(it.Id), cancellationToken, expectedVersion);
 
     /// <inheritdoc />
-    public override async Task<bool> DeleteAsync(Expression<Func<TEntity, bool>> predicate, CancellationToken cancellationToken = default)
-        => await ExecDeleteOrRestore(false, predicate, cancellationToken, null);
-
-    /// <summary>按条件软删除并附加乐观锁版本令牌（带 Version 的删除命令链路走此重载）。</summary>
-    /// <param name="predicate">筛选条件。</param>
-    /// <param name="cancellationToken">取消令牌。</param>
-    /// <param name="expectedVersion">客户端提交的乐观锁版本令牌。</param>
-    /// <returns>受影响行数 &gt; 0 返回 true；命中 0 行抛并发冲突。</returns>
-    public async Task<bool> DeleteAsync(Expression<Func<TEntity, bool>> predicate, CancellationToken cancellationToken, Guid? expectedVersion)
+    public virtual async Task<bool> SoftDeleteAsync(Expression<Func<TEntity, bool>> predicate, CancellationToken cancellationToken = default, Guid? expectedVersion = null)
         => await ExecDeleteOrRestore(false, predicate, cancellationToken, expectedVersion);
 
     /// <inheritdoc />

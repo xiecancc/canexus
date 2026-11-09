@@ -54,7 +54,8 @@ public sealed class SeedDataInitializer(
     private static readonly Guid DictMenuId = SeedId(105);
 
     /// <summary>字典数据隐藏页菜单固定 Id（挂在字典管理 105 下，visible=0 不进入侧边栏）。</summary>
-    private static readonly Guid DictDataMenuId = SeedId(109);
+    /// <remarks>不得与 <see cref="SeedMenusAsync"/> 中岗位管理菜单（SeedId(109)）共用主键，否则种子幂等插入会触发主键冲突。</remarks>
+    private static readonly Guid DictDataMenuId = SeedId(110);
 
     /// <summary>种子初始化锁键（多实例并发启动时串行化；判重逻辑本身幂等，锁为正确性增强）。</summary>
     private const string SeedLockKey = "seed:initialize";

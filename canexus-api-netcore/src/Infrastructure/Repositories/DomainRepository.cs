@@ -9,7 +9,7 @@ using SqlSugar;
 namespace Infrastructure.Repositories;
 /// <summary>
 /// 基于 SqlSugar 的领域仓储实现（对应 <see cref="DomainBase"/>）：
-/// 实体表 / 关联表公共的查询统计、插入与物理删除。
+/// 实体表 / 关联表公共的查询统计、插入与物理删除（<see cref="HardDeleteAsync"/>）。
 /// <para>查询自动附加租户隔离过滤（全部实体），聚合根体系另有软删除过滤；
 /// 列表查询支持多条件 AND 组合与多重排序（orders 为 null 时默认按创建时间倒序）；
 /// 分页支持同样的动态条件与排序，排序键非唯一时调用方应在 orders 中显式追加唯一列保证分页稳定；
@@ -139,9 +139,11 @@ public class DomainRepository<TEntity>(ISqlSugarClient client, ITenantContext te
     }
 
     /// <inheritdoc />
-    public virtual async Task<bool> DeleteAsync(Expression<Func<TEntity, bool>> predicate, CancellationToken cancellationToken = default)
+    public virtual async Task<bool> HardDeleteAsync(Expression<Func<TEntity, bool>> predicate, CancellationToken cancellationToken = default)
     {
-        // 批量物理删除：单条 DELETE ... WHERE；聚合根软删除场景请勿使用本方法。
+        // 批量物理删除：单条 DELETE ... WHERE，行被真正移除（无墓碑、无恢复，也不写字段级变更日志）。
+        // 聚合根默认删除语义是软删除，请调用 AggregateRepository.SoftDeleteAsync；
+        // 本方法仅在确需彻底清除（如合规擦除、测试夹具）时显式使用。
         // QueryFilter 只保证查询侧隔离（是否作用于 Deleteable 取决于 ORM 版本），写入侧显式补租户条件：
         // 平台上下文（null）保持全量，租户上下文只允许删本租户行。
         var delete = BuildDelete(predicate);

@@ -65,6 +65,7 @@ NON_TYPE_TOKENS = {
     # 成员 / 方法名
     "Version", "ExecuteCommandWithOptLock", "RestoreAsync", "RunInTransactionAsync",
     "ThrowIfCancellationRequested", "Send", "ActionArguments", "ContentType", "PasswordHash",
+    "HardDeleteAsync", "SoftDeleteAsync", "UpdateAsync", "IsDeleted",
     # 构建属性（.csproj）
     "TreatWarningsAsErrors", "EnforceCodeStyleInBuild",
     # 环境名 / 数据库列名

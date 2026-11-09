@@ -68,6 +68,20 @@ public class DataAccessIntegrationTests
         // CodeFirst 建库建表（复用已存在的库表）
         var initializer = _provider.GetRequiredService<DbInitializer>();
         await initializer.InitializeAsync();
+
+        // 事务语义要求 InnoDB：本夹具以 MigrationsEnabled=false 走「跳过版本判定」分支，
+        // 不会执行生产初始化路径的引擎修正；而部分 MySQL 实例默认引擎为 MyISAM（不支持事务），
+        // 会让 UnitOfWork 回滚用例误判。按 information_schema 逐表幂等修正，保证全新库亦可通过。
+        foreach (var tableName in new[] { "it_soft_delete_entity", "it_multi_tenant_entity", "it_plain_entity" })
+        {
+            var engine = await _client.Ado.GetScalarAsync(
+                "SELECT ENGINE FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = @tableName",
+                new SugarParameter("@tableName", tableName));
+            if (!string.Equals(engine?.ToString(), "InnoDB", StringComparison.OrdinalIgnoreCase))
+            {
+                await _client.Ado.ExecuteCommandAsync($"ALTER TABLE `{tableName}` ENGINE = InnoDB");
+            }
+        }
     }
 
     /// <summary>一次性清理：释放客户端与服务提供程序。</summary>
@@ -204,7 +218,7 @@ public class DataAccessIntegrationTests
         var entity = new SoftDeleteTestEntity { Name = "将被删除" };
         _ = await _softDeleteRepository.InsertAsync(entity);
 
-        await _softDeleteRepository.DeleteAsync(entity.Id);
+        await _softDeleteRepository.SoftDeleteAsync(entity.Id);
 
         var fetched = await _softDeleteRepository.GetAsync([it => it.Id == entity.Id]);
         var count = await _softDeleteRepository.CountAsync();
@@ -226,7 +240,7 @@ public class DataAccessIntegrationTests
         // 关闭软删除过滤开关后，已删除数据恢复可见
         var entity = new SoftDeleteTestEntity { Name = "过滤开关" };
         _ = await _softDeleteRepository.InsertAsync(entity);
-        await _softDeleteRepository.DeleteAsync(entity.Id);
+        await _softDeleteRepository.SoftDeleteAsync(entity.Id);
 
         _dataFilter.SoftDeleteEnabled = false;
         var count = await _softDeleteRepository.CountAsync();
@@ -234,14 +248,14 @@ public class DataAccessIntegrationTests
         Assert.That(count, Is.EqualTo(1), "关闭过滤开关后已删除数据应可见");
     }
 
-    /// <summary>验证按条件删除聚合时被重写为软删除并兜底填充审计与版本。</summary>
+    /// <summary>验证按条件软删除聚合时兜底填充审计与版本。</summary>
     [Test]
     public async Task DeleteByPredicate_Aggregate_SoftDelete()
     {
-        // 条件删除对聚合重写为软删除：默认查询不再可见，物理行保留且标记 IsDeleted = 1
+        // 条件软删除：默认查询不再可见，物理行保留且标记 IsDeleted = 1
         var entity = new PlainTestEntity { Name = "条件软删除" };
         _ = await _plainRepository.InsertAsync(entity);
-        var deleted = await _plainRepository.DeleteAsync(it => it.Id == entity.Id);
+        var deleted = await _plainRepository.SoftDeleteAsync(it => it.Id == entity.Id);
 
         var count = await _plainRepository.CountAsync();
         var physicalCount = Convert.ToInt32(
@@ -273,7 +287,7 @@ public class DataAccessIntegrationTests
         _ = await _softDeleteRepository.InsertAsync(entity);
         var stale = entity.Snapshot<SoftDeleteTestEntity>();
 
-        await _softDeleteRepository.DeleteAsync(entity.Id);
+        await _softDeleteRepository.SoftDeleteAsync(entity.Id);
 
         stale.Name = "旧令牌更新";
         var ex = Assert.ThrowsAsync<BusinessException>(() => _softDeleteRepository.UpdateAsync(stale));
@@ -292,7 +306,7 @@ public class DataAccessIntegrationTests
         // 恢复软删除墓碑：恢复后默认查询重新可见
         var entity = new SoftDeleteTestEntity { Name = "将被恢复" };
         _ = await _softDeleteRepository.InsertAsync(entity);
-        await _softDeleteRepository.DeleteAsync(entity.Id);
+        await _softDeleteRepository.SoftDeleteAsync(entity.Id);
         Assert.That(await _softDeleteRepository.CountAsync(), Is.EqualTo(0), "删除后默认不可见");
 
         var restored = await _softDeleteRepository.RestoreAsync(entity.Id);
@@ -361,7 +375,7 @@ public class DataAccessIntegrationTests
         var e2 = new SoftDeleteTestEntity { Name = "批量2" };
         _ = await _softDeleteRepository.InsertAsync(e2);
 
-        var deleted = await _softDeleteRepository.DeleteAsync([e1.Id, e2.Id]);
+        var deleted = await _softDeleteRepository.SoftDeleteAsync([e1.Id, e2.Id]);
         var countAfterDelete = await _softDeleteRepository.CountAsync();
         Assert.Multiple(() =>
         {
@@ -370,7 +384,7 @@ public class DataAccessIntegrationTests
         });
 
         // 重复删除同一批：墓碑行不再计入，幂等返回 0
-        var deletedAgain = await _softDeleteRepository.DeleteAsync([e1.Id, e2.Id]);
+        var deletedAgain = await _softDeleteRepository.SoftDeleteAsync([e1.Id, e2.Id]);
         Assert.That(deletedAgain, Is.False, "已删除行不应重复计入（幂等返回 false）");
 
         // 按主键集合恢复：仅恢复第一行

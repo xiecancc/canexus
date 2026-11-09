@@ -20,6 +20,7 @@
 - [部署](#部署)
 - [开发规范](#开发规范)
 - [常见问题](#常见问题)
+- [变更记录](#变更记录)
 - [相关文档](#相关文档)
 
 ## 核心能力
@@ -30,7 +31,7 @@
 - **多租户**：开关式共享库行级隔离；租户解析、归属校验、停用与到期拦截；超管可跨租户。
 - **审计**：操作日志、登录日志、字段级实体变更日志（敏感值脱敏），异常路径同样留痕。
 - **领域事件**：事务 Outbox 持久化 + 后台 worker 重试，权限 / 字典 / 配置缓存失效由监听器驱动。
-- **可靠性**：乐观并发（版本令牌）、软删除与恢复、幂等迁移脚本、分布式锁、统一异常与响应结构。
+- **可靠性**：乐观并发（版本令牌）覆盖更新 / 软删除 / 恢复三条写入路径、软删除与物理删除双通道显式分离、幂等迁移脚本、分布式锁、统一异常与响应结构。
 - **可运维**：结构化日志（Serilog）、健康检查（存活 / 就绪）、限流、OpenTelemetry Trace 与 Metrics（可选）。
 
 ## 技术栈
@@ -364,8 +365,22 @@ curl -s http://localhost:5000/api/auth/user-info \
 
 ### 乐观并发
 
-修改与删除请求的路由必须携带最新 `version`（GUID 版本令牌），例如
-`PUT /api/system/user/{id}/{version}`。版本不一致返回业务码 `40005`，客户端应刷新后重试。
+聚合根（继承 `AggregateBase`）以 `Version`（GUID）作为版本令牌，**更新、软删除、恢复三条写入路径统一纳入乐观并发**，
+避免并发覆盖与「墓碑被旧快照复活」：
+
+| 路径 | 入口 | 并发控制方式 |
+| --- | --- | --- |
+| 更新 | `UpdateAsync` | `ExecuteCommandWithOptLock` 生成 `UPDATE ... WHERE Id = @id AND Version = 传入值`，命中后框架自动轮换版本令牌 |
+| 软删除 | `SoftDeleteAsync`（按主键 / 主键集合 / 条件） | 单条按列 UPDATE，附加 `Version` CAS 条件（命令携带时）、轮换版本令牌并兜底填充更新审计 |
+| 恢复 | `RestoreAsync`（按主键 / 主键集合 / 条件） | 同上，解除墓碑；版本轮换使旧令牌持有的更新失效 |
+| 物理删除 | `HardDeleteAsync` | 单条 DELETE，不参与乐观锁，不可恢复（仅限关联表 / 合规擦除 / 测试夹具） |
+
+使用方式：
+
+- 修改与删除请求的路由必须携带最新 `version`（GUID 版本令牌），例如 `PUT /api/system/user/{id}/{version}`；
+- 版本不一致或目标不可见时统一抛业务码 `40005`（CommonConcurrencyConflict），客户端应刷新后重试；
+- 未携带版本令牌的批量 / 后台路径保持幂等静默忽略语义，不抛并发冲突；
+- 仓储层调用示例见「开发规范 → 仓储删除语义」。
 
 ### 多租户
 
@@ -423,7 +438,7 @@ dotnet test test/API.Tests
 dotnet test test/Domain.Tests
 
 # README 类型引用校验（CI 首道门禁）
-python3 scripts/check-readme-types.py
+python3 scripts/check-readme-types.py   # Windows 本机若 python3 为商店占位程序，改用 python
 ```
 
 集成测试**强制**从环境变量 `SUPER_ADMIN_TEST_CONN` 读取测试库连接串，代码中不含任何密码回退值：
@@ -512,6 +527,33 @@ HTTP 访问。正式生产请在 Kubernetes / 反向代理后以 Production 环�
 - 仓库级 Git 钩子：提交前对 `.cs` 执行 `dotnet format`，推送前执行前端类型检查、单元测试与后端编译；
 - 不要通过降级规则或 `#pragma` 绕过警告；确需例外时在代码中注明原因并经评审。
 
+### 仓储删除语义
+
+物理删除与软删除是两条**显式分离**的通道，不再按实体基类隐式改写（避免同一方法名在不同静态类型上语义漂移）：
+
+- `HardDeleteAsync`：由 `IDomainRepository<T>` 提供，单条 DELETE 物理移除，不写字段级变更日志、不轮换版本令牌，不可恢复；
+- `SoftDeleteAsync`：由 `IAggregateRepository<T>` 提供（按主键 / 主键集合 / 条件重载），标记删除位 IsDeleted 墓碑
+  （单条 SQL 按列更新），轮换版本令牌并兜底填充更新审计，可经 `RestoreAsync` 恢复；
+- 关联表 / 日志表等无墓碑语义的实体用物理删除；聚合根默认用软删除，确需彻底清除（合规擦除、测试夹具）时显式调用物理删除；
+- 仓储子类按业务需要选择调用，不得用同名方法改写语义：两种语义各有一个明确入口。
+
+使用方式（仓储层直接调用）：
+
+```csharp
+// 聚合根：软删除（命令携带 version 时附加 Version CAS 条件）
+await userRepository.SoftDeleteAsync(command.Id, ct, command.Version);
+
+// 聚合根：恢复（同样可携带版本令牌）
+await userRepository.RestoreAsync(command.Id, ct, command.Version);
+
+// 关联表 / 日志表：物理删除（单条 DELETE，不可恢复）
+await userRoleRepository.HardDeleteAsync(ur => ur.UserId == command.Id, ct);
+```
+
+- 聚合根删除命令处理器统一调用 `SoftDeleteAsync`；原有同名删除方法已从仓储接口拆分，编译期即可防止误用；
+- 关联表替换（角色-菜单、用户-角色）统一调用 `HardDeleteAsync`；
+- 需要彻底清除聚合根数据时，显式调用 `HardDeleteAsync` 并自行承担不可恢复与审计缺失风险。
+
 ### 新增功能检查清单
 
 1. 权限点先在 `PermissionDefinitions` 声明，控制器引用常量（启动期会校验注册表一致性）；
@@ -523,9 +565,22 @@ HTTP 访问。正式生产请在 Kubernetes / 反向代理后以 Production 环�
 
 ### 任务完成后的固定动作
 
-- **同步 README**：任何影响安装、配置、接口、目录结构、依赖版本或运维方式的改动，都必须同步更新本文件；
-- **执行全量测试**：`dotnet test api.slnx`，确认全部通过（集成测试需先设置 `SUPER_ADMIN_TEST_CONN`）；
-- **纳入暂存区**：测试通过后，将本次相关修改 `git add` 到暂存区，保持工作区与暂存区一致。
+每次开发或修复完成后，按固定顺序执行，保持双端仓库同步：
+
+1. **立即运行全量测试**：`dotnet test api.slnx`，确认全部用例通过
+   （集成测试需先设置 `SUPER_ADMIN_TEST_CONN`，且测试库必须是 `super_admin_test`）；
+2. **同步 README**：补充功能说明、使用方式与本次变更记录；任何影响安装、配置、接口、目录结构、
+   依赖版本或运维方式的改动同样必须更新本文件；提交前执行 `python3 scripts/check-readme-types.py`
+   与 `dotnet format api.slnx --verify-no-changes`；
+3. **提交并双端推送**：测试全部无误后 `git add` 本次相关修改并 `git commit`，随后直接推送到
+   `gitee` 与 `origin`（GitHub）两个远程仓库：
+
+   ```bash
+   git push gitee master
+   git push origin master
+   ```
+
+   保持双端同步，不以任一远端为唯一来源。
 
 ## 常见问题
 
@@ -607,6 +662,38 @@ Development 可不启用（缓存退化为进程内 L1、限流失效为单实�
 
 构建期强制 `.editorconfig`。直接运行 `dotnet format api.slnx` 自动修复；无法自动修复的规则按提示调整代码，
 不要修改 `.editorconfig` 降级。
+
+## 变更记录
+
+### 2026-11-09
+
+**功能：乐观并发全覆盖与删除通道显式分离**
+
+- 聚合根仓储把「更新 / 软删除 / 恢复」三条写入路径统一纳入乐观并发：更新走
+  `ExecuteCommandWithOptLock`，软删除 / 恢复按列更新时附加 `Version` CAS 条件并轮换版本令牌，
+  冲突统一抛业务码 `40005`；版本轮换防止已删除的墓碑被旧快照的更新复活。
+- 删除语义由「同名方法按实体基类隐式改写」拆成两条显式通道：`IDomainRepository<T>` 的
+  `HardDeleteAsync`（物理删除）与 `IAggregateRepository<T>` 的 `SoftDeleteAsync`（软删除 / 可恢复），
+  并新增按条件软删除重载；删除命令处理器与关联表替换逻辑同步改用对应入口。
+- 保留并强化版本令牌：`AggregateBase` 的 `Version` 声明 IsEnableUpdateVersionValidation，
+  插入时自动生成，冲突时抛 `BusinessException`（错误码 `40005`）。
+
+**使用方式**
+
+- 见「接口约定 → 乐观并发」（路由携带 `version`、错误码与重试策略）与
+  「开发规范 → 仓储删除语义」（仓储层调用示例）。
+
+**工程修复（本次一并纳入）**
+
+- 种子数据：字典数据隐藏页菜单与岗位管理菜单原共用主键 109，全新库初始化时触发 MySQL 1062 主键冲突；
+  字典数据隐藏页菜单改用独立主键 110，保证种子幂等。
+- 集成测试夹具：MigrationsEnabled=false 路径不执行生产侧引擎修正，本机 MySQL 默认引擎为 MyISAM 时
+  三张测试表不支持事务，导致工作单元回滚用例误判；夹具按 information_schema 逐表幂等修正为 InnoDB。
+
+**验证**
+
+- `dotnet test api.slnx`：Domain 80 / Application 104 / Infrastructure 120 / API 185，共 489 项全部通过；
+- `dotnet format api.slnx --verify-no-changes`、`python3 scripts/check-readme-types.py` 均通过。
 
 ## 相关文档
 

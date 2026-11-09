@@ -52,7 +52,7 @@ internal static class RoleMenuSupport
     public static async Task ReplaceRoleMenusAsync(IDomainRepository<SysRoleMenu> roleMenuRepository, Guid roleId, List<Guid> menuIds, CancellationToken cancellationToken)
     {
         // 按条件物理删除旧授权（单条 SQL），再插入新授权集合
-        await roleMenuRepository.DeleteAsync(rm => rm.RoleId == roleId, cancellationToken);
+        await roleMenuRepository.HardDeleteAsync(rm => rm.RoleId == roleId, cancellationToken);
 
         foreach (var menuId in menuIds.Distinct())
         {
@@ -111,8 +111,8 @@ public sealed class RoleDeleteCommandHandler(
         // 变更前捕获角色状态快照（软删除可能回填墓碑字段）
         var snapshot = role.Snapshot<SysRole>();
 
-        await roleRepository.DeleteAsync(command.Id, cancellationToken, command.Version);
-        await roleMenuRepository.DeleteAsync(rm => rm.RoleId == command.Id, cancellationToken);
+        await roleRepository.SoftDeleteAsync(command.Id, cancellationToken, command.Version);
+        await roleMenuRepository.HardDeleteAsync(rm => rm.RoleId == command.Id, cancellationToken);
 
         // 关键节点发布角色删除领域事件（携带删除前的角色状态）
         await domainEventPublisher.PublishAsync(new RoleDeletedEvent(snapshot), cancellationToken);

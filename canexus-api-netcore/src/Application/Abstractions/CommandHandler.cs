@@ -192,7 +192,7 @@ public abstract class AggregateDeleteCommandHandler<TCommand, TEntity>(
         // 变更前捕获聚合快照（软删除可能回填墓碑字段，事件携带删除前状态）
         var snapshot = entity.Snapshot<TEntity>();
 
-        await Repository.DeleteAsync(command.Id, cancellationToken, command.Version);
+        await Repository.SoftDeleteAsync(command.Id, cancellationToken, command.Version);
 
         // 关键节点发布删除领域事件（响应动作由监听器处理）
         await EventPublisher.PublishAsync(CreateEvent(snapshot), cancellationToken);

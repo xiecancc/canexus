@@ -164,11 +164,11 @@ internal sealed class InMemoryRefreshTokenRepository : ISysRefreshTokenRepositor
     }
 
     /// <inheritdoc />
-    public Task<bool> DeleteAsync(Guid id, CancellationToken cancellationToken = default, Guid? expectedVersion = null)
+    public Task<bool> SoftDeleteAsync(Guid id, CancellationToken cancellationToken = default, Guid? expectedVersion = null)
         => Task.FromResult(_store.RemoveAll(e => e.Id == id) > 0);
 
     /// <inheritdoc />
-    public Task<bool> DeleteAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken = default, Guid? expectedVersion = null)
+    public Task<bool> SoftDeleteAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken = default, Guid? expectedVersion = null)
         => Task.FromResult(_store.RemoveAll(e => ids.Contains(e.Id)) > 0);
 
     /// <inheritdoc />
@@ -218,7 +218,11 @@ internal sealed class InMemoryRefreshTokenRepository : ISysRefreshTokenRepositor
     }
 
     /// <inheritdoc />
-    public Task<bool> DeleteAsync(Expression<Func<SysRefreshToken, bool>> predicate, CancellationToken cancellationToken = default)
+    public Task<bool> SoftDeleteAsync(Expression<Func<SysRefreshToken, bool>> predicate, CancellationToken cancellationToken = default, Guid? expectedVersion = null)
+        => Task.FromResult(_store.RemoveAll(new Predicate<SysRefreshToken>(predicate.Compile())) > 0);
+
+    /// <inheritdoc />
+    public Task<bool> HardDeleteAsync(Expression<Func<SysRefreshToken, bool>> predicate, CancellationToken cancellationToken = default)
         => Task.FromResult(_store.RemoveAll(new Predicate<SysRefreshToken>(predicate.Compile())) > 0);
 
     /// <inheritdoc />

@@ -118,11 +118,14 @@ public interface IDomainRepository<TEntity>
     /// <returns>插入成功（受影响行数 &gt; 0）返回 true。</returns>
     public Task<bool> InsertAsync(IEnumerable<TEntity> entities, CancellationToken cancellationToken = default);
 
-    /// <summary>按条件删除（单条 SQL）。
-    /// 语义说明：本方法对关联表等普通实体为物理删除；聚合根仓储（<see cref="IAggregateRepository{TEntity}"/>）
-    /// 的实现类在类层面将其重写为软删除（虚分派对两种引用类型一致生效；聚合侧为按列更新，不填更新审计、不轮换版本令牌）。</summary>
+    /// <summary>按条件物理删除（单条 DELETE，行从表中移除，不可恢复）。
+    /// <para>语义说明：本方法在任何实体类型上都是物理删除，与软删除（<see cref="IAggregateRepository{TEntity}"/> 的
+    /// <c>SoftDeleteAsync</c> 族，即墓碑标记）是两条显式分离的通道，不再按引用类型的静态类型隐式改写语义。
+    /// 关联表 / 日志表等无墓碑语义的实体应使用本方法；聚合根默认应使用软删除，
+    /// 仅在确需彻底清除数据（如合规擦除、测试夹具清理）时才调用本方法，并自行承担不可恢复与审计缺失的风险
+    /// （物理删除不写字段级变更日志、不轮换版本令牌、不填充更新审计）。</para></summary>
     /// <param name="predicate">删除条件。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>受影响行数 &gt; 0 返回 true。</returns>
-    public Task<bool> DeleteAsync(Expression<Func<TEntity, bool>> predicate, CancellationToken cancellationToken = default);
+    public Task<bool> HardDeleteAsync(Expression<Func<TEntity, bool>> predicate, CancellationToken cancellationToken = default);
 }

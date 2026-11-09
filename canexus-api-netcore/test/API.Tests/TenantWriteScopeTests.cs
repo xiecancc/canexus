@@ -86,7 +86,7 @@ public class TenantWriteScopeTests
             tenantContext.TenantId = tenantA;
             using var scope = _factory.Services.CreateScope();
             var repository = scope.ServiceProvider.GetRequiredService<IAggregateRepository<SysUser>>();
-            await repository.DeleteAsync([userA.Id, userB.Id]);
+            await repository.SoftDeleteAsync([userA.Id, userB.Id]);
 
             var rowA = await _db.Queryable<SysUser>().ClearFilter<SysUser>()
                 .Where(u => u.Id == userA.Id).FirstAsync();

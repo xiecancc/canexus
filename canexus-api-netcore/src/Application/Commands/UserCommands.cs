@@ -75,7 +75,7 @@ internal static class UserRoleSupport
     /// <summary>全量替换用户-角色关联（批量删除 + 批量插入，须在事务内执行——由事务管道 TransactionBehavior 保证）。</summary>
     public static async Task ReplaceUserRolesAsync(IDomainRepository<SysUserRole> userRoleRepository, Guid userId, List<Guid> roleIds, CancellationToken cancellationToken)
     {
-        await userRoleRepository.DeleteAsync(ur => ur.UserId == userId, cancellationToken);
+        await userRoleRepository.HardDeleteAsync(ur => ur.UserId == userId, cancellationToken);
         await userRoleRepository.InsertAsync(
             roleIds.Distinct().Select(roleId => new SysUserRole { UserId = userId, RoleId = roleId }),
             cancellationToken);
@@ -162,8 +162,8 @@ public sealed class UserDeleteCommandHandler(
         var snapshot = user.Snapshot<SysUser>();
 
         // 软删除用户与其角色关联（保持可追溯）；关联表按条件物理删除（单条 SQL）
-        await userRepository.DeleteAsync(command.Id, cancellationToken, command.Version);
-        await userRoleRepository.DeleteAsync(ur => ur.UserId == command.Id, cancellationToken);
+        await userRepository.SoftDeleteAsync(command.Id, cancellationToken, command.Version);
+        await userRoleRepository.HardDeleteAsync(ur => ur.UserId == command.Id, cancellationToken);
 
         // 关键节点发布用户删除领域事件（携带删除前的用户状态）
         await domainEventPublisher.PublishAsync(new UserDeletedEvent(snapshot), cancellationToken);
