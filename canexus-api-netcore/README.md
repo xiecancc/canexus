@@ -622,11 +622,14 @@ GitHub 推送失败时仅推送 gitee 即可。
    依赖版本、运维方式或开发规范的改动同样必须更新本文件；提交前执行 `python3 scripts/check-readme-types.py`
    与 `dotnet format api.slnx --verify-no-changes`（本机 `python3` 为商店占位程序，改用 `python`）；
 3. **提交并推送**：测试全部无误后 `git add` 本次相关修改并 `git commit`，随后推送 `gitee`；
-   GitHub 可达时再推 `origin`（GitHub）：
+   GitHub 可达时再推 `github`（GitHub）。两个远端按平台命名，不使用默认名 `origin`：
+   `gitee` → https://gitee.com/xiecancc/canexus.git，
+   `github` → https://github.com/xiecancc/canexus.git；
+   可用 `git remote -v` 查看，`master` 默认跟踪 `gitee/master`：
 
    ```bash
    git push gitee master
-   git push origin master
+   git push github master
    ```
 
    **GitHub 推送失败（代理 502 / 网络超时 / 隧道不通等）时，仅推送 gitee 即可**：不反复重试、
@@ -723,6 +726,16 @@ Development 可不启用（缓存退化为进程内 L1、限流失效为单实�
 不要修改 `.editorconfig` 降级。
 
 ## 变更记录
+
+### 2026-11-09（六）：远端 `origin` 重命名为 `github`
+
+- 为与 `gitee` 保持一致的平台化命名，执行 `git remote rename origin github`：
+  远端分别为 `gitee` 与 `github`，`master` 仍默认跟踪 `gitee/master`，
+  原 `refs/remotes/origin/*` 自动迁移为 `refs/remotes/github/*`。
+- 推送命令由 `git push origin master` 改为 `git push github master`；本文件门禁、项目级与用户级
+  记忆体同步更新。`origin` 不再保留为别名，避免同名混淆；若第三方工具强依赖 `origin`，
+  可另行执行 `git remote add origin https://github.com/xiecancc/canexus.git`。
+- 仅本地 `.git/config` 变更（不随 clone 传播），代码、依赖与 CI 配置无改动。
 
 ### 2026-11-09（五）：依赖合规审计与升级
 
