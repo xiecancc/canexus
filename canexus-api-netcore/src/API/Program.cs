@@ -117,6 +117,9 @@ public class Program
             // 健康检查：liveness / readiness 检查项（MySQL / 分布式缓存 / Quartz），经 MapHealthChecks 暴露
             builder.Services.AddApiHealthChecks();
 
+            // 可观测性：OpenTelemetry Trace + Metrics（默认关闭，Otel:Enabled 开启；OTLP 导出，Otel:OtlpEndpoint 指定端点）
+            builder.Services.AddOpenTelemetrySupport(builder.Configuration);
+
             // 模型校验失败（含后续 FluentValidation 集成）统一返回 Result 结构，HTTP 400
             builder.Services.Configure<ApiBehaviorOptions>(options =>
             {

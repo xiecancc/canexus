@@ -72,6 +72,6 @@ public class RedisResilienceTests
         PermitLimit = 5,
         Window = TimeSpan.FromSeconds(60),
         ConnectionMultiplexerFactory = () => throw new RedisConnectionException(
-            ConnectionFailureType.UnableToConnect, "模拟 Redis 停机")
+            ConnectionFailureType.UnableToConnect, CommandFlags.None, "模拟 Redis 停机")
     };
 }

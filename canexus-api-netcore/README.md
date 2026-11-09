@@ -1,192 +1,621 @@
 # canexus-api-netcore — 后端服务
 
-基于 .NET 10 的中后台管理系统后端，采用经典分层架构（API / Application / Domain / Infrastructure），内置 RBAC 权限、多租户、乐观并发、定时任务调度与完整审计能力。数据库初始化按「库 / 结构 / 种子」三层分别判定：库不存在可按配置经管理连接建库，结构由 `sys_schema_migration` 版本状态机驱动，生产不自动改表；判定结论写入启动日志与 `/health/ready`。
+基于 .NET 10 的中后台管理系统后端，采用经典分层架构（API / Application / Domain / Infrastructure），
+内置 RBAC 权限、多租户、乐观并发、定时任务调度与完整审计能力。
 
-## 技术路线
+数据库初始化按「库 / 结构 / 种子」三层分别判定：库不存在可按配置经管理连接创建，结构由
+`sys_schema_migration` 版本状态机驱动，**生产环境不自动改表**；三层判定结论写入启动日志与 `/health/ready`。
+
+## 目录
+
+- [核心能力](#核心能力)
+- [技术栈](#技术栈)
+- [功能模块与接口](#功能模块与接口)
+- [目录结构](#目录结构)
+- [快速开始](#快速开始)
+- [配置说明](#配置说明)
+- [接口约定](#接口约定)
+- [数据库初始化](#数据库初始化)
+- [测试](#测试)
+- [部署](#部署)
+- [开发规范](#开发规范)
+- [常见问题](#常见问题)
+- [相关文档](#相关文档)
+
+## 核心能力
+
+- **认证授权**：JWT（访问令牌 + 刷新令牌轮换）、图形验证码、登录失败锁定、令牌吊销与在线会话强退。
+- **RBAC**：用户 / 角色 / 菜单 / 部门 / 岗位五要素，权限点集中注册（`模块:动作:资源`），控制器声明与注册表在启动期双向校验。
+- **数据权限**：按角色配置数据范围（全部 / 本部门 / 本部门及以下 / 仅本人等），查询层统一过滤。
+- **多租户**：开关式共享库行级隔离；租户解析、归属校验、停用与到期拦截；超管可跨租户。
+- **审计**：操作日志、登录日志、字段级实体变更日志（敏感值脱敏），异常路径同样留痕。
+- **领域事件**：事务 Outbox 持久化 + 后台 worker 重试，权限 / 字典 / 配置缓存失效由监听器驱动。
+- **可靠性**：乐观并发（版本令牌）、软删除与恢复、幂等迁移脚本、分布式锁、统一异常与响应结构。
+- **可运维**：结构化日志（Serilog）、健康检查（存活 / 就绪）、限流、OpenTelemetry Trace 与 Metrics（可选）。
+
+## 技术栈
 
 | 分类 | 技术 | 版本 |
 | --- | --- | --- |
 | 运行时 | .NET | 10.0 |
 | ORM | SqlSugarCore（CodeFirst / 仓储 / 全局过滤器） | 5.1.4.221 |
-| 数据库 | MySQL（驱动 MySqlConnector） | MySqlConnector 2.6.2 |
-| 认证 | JWT（JwtBearer + System.IdentityModel.Tokens.Jwt） | 10.0.11 / 8.5.0 |
-| 密码 | BCrypt.Net-Next 哈希 | 4.0.3 |
-| 对象映射 | AutoMapper（锁定 14.x：15.0.0 起转 Lucky Penny 商业/RPL 双许可，14.0.0 为最后的 Apache-2.0 版本） | 14.0.0 |
-| 请求分发 | MediatR（命令 / 查询请求 + Pipeline Behaviors；单库读写，非读写分离 CQRS） | 12.4.1 |
-| 输入验证 | FluentValidation（+ DependencyInjectionExtensions） | 12.1.1 |
-| 任务调度 | Quartz（+ Extensions.DependencyInjection / Hosting，实现在基础设施层） | 3.22.9 |
-| 日志 | Serilog.AspNetCore（控制台 + 文件） | 10.0.0 |
-| API 文档 | Microsoft.AspNetCore.OpenApi（/openapi/v1.json） | 10.0.11 |
-| Excel 导出 | MiniExcel | 1.46.0 |
+| 数据库 | MySQL 8.x（驱动 MySqlConnector） | 2.6.2 |
+| 认证 | JwtBearer / System.IdentityModel.Tokens.Jwt | 10.0.14 / 8.23.0 |
+| 密码哈希 | BCrypt.Net-Next | 4.2.0 |
+| 对象映射 | AutoMapper（锁定 14.x：15.0.0 起改为商业 / RPL 双许可） | 14.0.0 |
+| 请求分发 | MediatR（命令 / 查询 + Pipeline Behaviors，单库读写，非读写分离 CQRS） | 12.4.1 |
+| 输入验证 | FluentValidation（含 DI 扩展） | 12.2.0 |
+| 任务调度 | Quartz（+ DI / Hosting / JSON 序列化） | 3.22.9 |
+| 缓存 | HybridCache（L1 内存 + L2 Redis）+ StackExchange.Redis | 10.11.0 / 3.4.31 |
+| 日志 | Serilog.AspNetCore（控制台 + 滚动文件） | 10.0.0 |
+| API 文档 | Microsoft.AspNetCore.OpenApi + Swashbuckle UI | 10.0.14 / 10.3.1 |
+| API 版本化 | Asp.Versioning.Mvc | 8.1.0 |
+| Excel 导入导出 | MiniExcel | 1.46.0 |
+| 富文本清洗 | HtmlSanitizer | 11.0.16 |
+| 可观测性 | OpenTelemetry（OTLP 导出） | 1.20.x |
+| 测试 | NUnit + coverlet.collector | 4.3.2 / 6.0.4 |
 
-## 功能模块
+## 功能模块与接口
 
-| 模块 | 说明 | 主要接口 |
+所有业务接口以 `/api` 为前缀，控制器统一标注 `[Authorize]` 与权限点；未显式 `[AllowAnonymous]` 的端点默认要求认证。
+
+| 模块 | 路由前缀 | 说明 |
 | --- | --- | --- |
-| 认证授权 | 登录（验证码 + 失败锁定）、刷新令牌、JWT 签发 | `AuthController` |
-| 用户管理 | 用户 CRUD、分配角色、重置密码、启停状态 | `SysUserController` |
-| 角色管理 | 角色 CRUD、菜单授权、数据范围（本部门 / 部门及以下等） | `SysRoleController` |
-| 部门管理 | 树形部门 CRUD、祖级路径维护、环检测 | `SysDeptController` |
-| 菜单管理 | 目录 / 菜单 / 按钮三级树、动态路由 | `SysMenuController` |
-| 字典管理 | 字典类型 + 字典数据 | `SysDictTypeController` / `SysDictDataController` |
-| 参数配置 | 系统参数内置键保护 | `SysConfigController` |
-| 通知公告 | 公告 CRUD、最新公告 | `SysNoticeController` |
-| 租户管理 | 租户 CRUD、占用校验、多租户数据隔离（可开关） | `SysTenantController` |
-| 定时任务 | Quartz 作业 CRUD、启停、立即执行、执行日志 | `SysJobController` / `SysJobLogController` |
-| 系统监控 | 操作日志 / 登录日志查询、清空、Excel 导出 | `SysOperLogController` / `SysLoginLogController` |
+| 认证授权 | `/api/auth` | 验证码、登录、刷新令牌、登出、修改密码、当前用户信息、前端路由树 |
+| 用户管理 | `/api/system/user` | 分页 / 详情、新增、修改、删除、恢复、启停、重置密码、分配角色、导入、导出 |
+| 角色管理 | `/api/system/role` | 分页 / 全量、增删改、恢复、启停、菜单授权、数据范围、导出 |
+| 岗位管理 | `/api/system/post` | 分页、下拉、增删改、恢复 |
+| 部门管理 | `/api/system/dept` | 树查询、增删改、恢复、祖级路径维护与环检测 |
+| 菜单管理 | `/api/system/menu` | 目录 / 菜单 / 按钮树、增删改、恢复、动态路由 |
+| 字典类型 | `/api/system/dict-type` | 分页、增删改、恢复 |
+| 字典数据 | `/api/system/dict-data` | 分页、按类型查询、增删改、恢复 |
+| 参数配置 | `/api/system/config` | 分页、按键取值、增删改、恢复（内置键受保护） |
+| 通知公告 | `/api/system/notice` | 分页、详情、最新公告、增删改、恢复 |
+| 文件管理 | `/api/system/file` | 上传、分页、详情、下载、删除 |
+| 实体变更日志 | `/api/system/entity-change` | 字段级变更记录分页查询 |
+| 租户管理 | `/api/system/tenant` | 分页 / 全量、增删改、恢复、租户占用校验 |
+| 定时任务 | `/api/monitor/job` | 分页、增删改、恢复、启停、立即执行 |
+| 任务日志 | `/api/monitor/job-log` | 执行日志分页 |
+| 在线用户 | `/api/monitor/online` | 分页、按令牌强制下线 |
+| 服务器监控 | `/api/monitor/server` | CPU / 内存 / 磁盘 / 运行时信息 |
+| 缓存监控 | `/api/monitor/cache` | 缓存键统计与命中情况 |
+| 操作日志 | `/api/system/oper-log` | 分页、清空、按条删除、Excel 导出 |
+| 登录日志 | `/api/system/login-log` | 分页、清空、按条删除、Excel 导出 |
 
 ## 目录结构
 
 ```
 canexus-api-netcore/
-├── api.slnx                        # 解决清单文件
+├── api.slnx                        # 解决方案（7 个生产项目 + 4 个测试项目）
+├── scripts/
+│   └── check-readme-types.py       # README 类型引用校验（CI 门禁）
 ├── src/
-│   ├── API/                        # 宿主层：Controller、过滤器/特性、中间件、Program、appsettings
-│   │   ├── Controllers/            # REST 接口（{id:guid} 路由约束）
-│   │   ├── Authorization/          # RequirePermission 权限特性
-│   │   ├── Filters/                # 权限过滤器、操作日志过滤器
-│   │   ├── Logging/                # OperLog 特性与脱敏工具
-│   │   ├── Middlewares/            # 全局异常、租户解析
-│   │   └── appsettings*.json       # 连接串、Jwt、多租户开关、Serilog
-│   ├── Application/                # 应用层：命令 / 查询处理器实现（MediatR）+ 权限校验 + 数据范围
-│   │   ├── Abstractions/           # RequestHandler / CommandHandler / QueryHandler 处理器基类（封装 MediatR 适配）
-│   │   ├── Commands/               # 写操作处理器：{Entity}Commands.cs（同实体处理器合并单文件）
-│   │   ├── Queries/                # 读操作处理器：{Entity}Queries.cs（同实体处理器合并单文件）
-│   │   ├── Validators/             # FluentValidation 验证器：{Entity}Validators.cs（按实体合并单文件）
-│   │   ├── Behaviors/              # Pipeline Behaviors：验证 / 日志 / 性能监控
-│   │   ├── Mappings/               # AutoMapper Profile（实体 → 视图对象）
-│   │   ├── Permissions/            # 权限缓存校验（IPermissionChecker）
-│   │   ├── Scopes/                 # 数据范围过滤（DataScopeFilter）
-│   │   └── Events/                 # 领域事件：Outbox 事务发布器 + 通知信封 + 领域监听器（权限缓存 / 字典缓存 / 配置缓存失效、事件审计日志）
-│   ├── Application.Contracts/      # 契约层：命令 / 查询请求定义 + 请求/响应 DTO、Result 统一响应
-│   │   ├── Abstractions/           # IRequest / ICommand 请求标记与请求基类（项目未定义 IQuery 接口）
-│   │   ├── Commands/               # 写操作请求定义：{Entity}Commands.cs（仅命令 record，不含实现）
-│   │   └── Queries/                # 读操作请求定义：{Entity}Queries.cs（仅查询 record，不含实现）
-│   ├── Domain/                     # 领域层：实体、仓储接口、领域服务端口
-│   │   ├── Entities/               # DomainBase（创建审计 + 租户归属，无主键）/ AggregateBase / AggregateTreeBase 基类 + 21 个 Sys* 实体 + 2 个基础设施实体（SchemaMigrationRecord / OutboxMessage；共 23 个具体实体类型，其中 22 个按 DomainBase 继承体系纳入全局过滤器扫描；关联表继承 DomainBase，业务字段联合主键）
-│   │   ├── Events/                 # 领域事件：DomainEvent 通用事件模型 + 按领域划分的事件文件（用户 / 角色 / 菜单 / 部门 / 字典 / 配置 / 通知 / 租户 / 作业 / 日志）
-│   │   ├── Repositories/           # IDomainRepository（查询 + 插入 + 物理删除）/ IAggregateRepository（聚合专属：乐观并发更新、软删除、恢复）/ IAggregateTreeRepository
-│   │   ├── Services/               # 跨层端口接口：IJobScheduleManager（调度）、ICaptchaService（验证码）、ITokenService、IPasswordHasher、IUnitOfWork、UserContext
-│   │   │   └── Rules/              # 纯逻辑领域校验规则：DictRules / ConfigRules / LogQueryBounds（三类）
-│   ├── Domain.Shared/              # 共享内核：枚举、错误码、BusinessException、分页
-│   ├── Infrastructure/             # 基础设施：SqlSugar 仓储实现、JWT、Quartz 调度、租户、当前用户
-│   │   ├── DataAccess/             # DbInitializer（库 / 结构 / 种子三层判定）、SqlSugarClientFactory、SchemaMigrator 与幂等迁移脚本、种子数据
-│   │   ├── Scheduling/             # Quartz 实现：JobScheduleManager、执行包装任务、示例任务
-│   │   ├── Repositories/           # 三仓储实现（DomainRepository / AggregateRepository / AggregateTreeRepository）+ 日志 / Outbox / 刷新令牌专属仓储、UnitOfWork
-│   │   ├── Auth/                   # JwtTokenService、BCryptPasswordHasher 实现（端口接口定义于 Domain/Services）
-│   │   ├── Users/                  # HttpContextUserContext 实现（当前用户上下文唯一实现）
-│   │   └── Tenants/                # TenantContext 租户上下文实现
-│   └── Infrastructure.Shared/      # 基础设施共享：双层缓存（ICache 端口 + HybridCache 实现 + TTL 档位）、验证码、数据过滤开关、UA 之外的共享实现
+│   ├── API/                        # 宿主层
+│   │   ├── Controllers/            # REST 控制器（20 个，统一 {id:guid}/{version:guid} 路由约束）
+│   │   ├── Authorization/          # 权限特性与强制改密白名单特性
+│   │   ├── Filters/                 # 权限过滤器、操作日志过滤器
+│   │   ├── Middlewares/            # 异常、租户、TraceId、请求体上限、强制改密
+│   │   ├── HealthChecks/           # 存活 / 就绪检查与 JSON 报告
+│   │   ├── RateLimiting/           # 全局限流与认证端点限流策略
+│   │   ├── BackgroundServices/     # Outbox 投递 worker
+│   │   ├── Extensions/             # 认证、安全、缓存、文档、版本化、可观测性等注册扩展
+│   │   └── appsettings*.json       # 配置模板（不含任何密钥）
+│   ├── Application/                # 应用层：命令 / 查询处理器、验证器、映射、横切行为
+│   │   ├── Abstractions/           # 处理器基类（封装 MediatR 适配）
+│   │   ├── Commands/               # 写操作处理器（按实体合并单文件）
+│   │   ├── Queries/                # 读操作处理器
+│   │   ├── Validators/             # FluentValidation 验证器与公共规则
+│   │   ├── Behaviors/              # 验证 / 事务 / 数据范围 / 审计 / 幂等 / 性能
+│   │   ├── Events/                 # 领域事件监听器（缓存失效、事件审计）
+│   │   ├── Mappings/               # AutoMapper Profile（按实体拆分）
+│   │   ├── Permissions/            # 权限校验与缓存
+│   │   ├── Scopes/                 # 数据范围过滤
+│   │   └── Security/               # 富文本清洗等安全组件
+│   ├── Application.Contracts/      # 契约层：请求 record、DTO、统一响应
+│   ├── Domain/                     # 领域层：实体、领域事件、仓储接口、领域端口
+│   │   ├── Entities/               # 基类体系 + Sys* 业务实体 + 迁移 / Outbox 实体
+│   │   ├── Events/                 # 按领域划分的事件类
+│   │   ├── Repositories/           # 领域 / 聚合 / 树形仓储接口
+│   │   ├── Services/               # 令牌、密码、验证码、调度、工作单元等端口
+│   │   └── ValueObjects/           # 值对象
+│   ├── Domain.Shared/              # 共享内核：错误码、分页、权限定义、枚举、异常、本地化
+│   ├── Infrastructure/             # 基础设施实现
+│   │   ├── DataAccess/             # 三层初始化、迁移脚本、SqlSugar 工厂、种子数据
+│   │   ├── Repositories/           # 仓储实现与工作单元
+│   │   ├── Auth/ Users/ Tenants/   # 令牌、当前用户、租户上下文
+│   │   ├── Caching/ Locking/ Redis/# 缓存监控、分布式锁、Redis 连接
+│   │   ├── Scheduling/             # Quartz 调度与作业执行包装
+│   │   ├── Notifications/ Storage/ # 邮件通知、本地文件存储
+│   │   └── Security/               # 内容签名、脱敏等
+│   └── Infrastructure.Shared/      # 基础设施共享：配置选项、双层缓存、数据过滤、日志上下文
 └── test/
-    ├── Domain.Tests/               # 领域层单测（基类相等性等）
-    ├── Infrastructure.Tests/       # 数据访问集成测试（真实 MySQL：过滤器、乐观锁、CodeFirst）
-    ├── Application.Tests/          # 应用服务单测
-    └── API.Tests/                  # 全链路 HTTP 集成测试（WebApplicationFactory）+ 宿主层单测
+    ├── Domain.Tests/               # 领域规则、实体不变量、分页与错误码
+    ├── Infrastructure.Tests/       # 真实 MySQL 集成测试 + 架构约束测试
+    ├── Application.Tests/          # 验证器、映射、权限、事件、处理器单测
+    └── API.Tests/                  # WebApplicationFactory 全链路 HTTP 测试
 ```
 
-## 领域模型约定
+## 快速开始
 
-- **统一标识符**：所有实体主键 / 外键为 GUID（36 位字符串），由数据访问层在插入时自动生成
-- **基类体系**：`DomainBase`（创建审计 CreatedAt / CreatedBy（Guid）+ 租户归属 TenantId；无主键，预留领域事件）→ `AggregateBase`（单主键 Id + 乐观并发 Version（Guid 令牌）+ 软删除 + 更新审计 UpdatedAt / UpdatedBy（Guid））→ `AggregateTreeBase<T>`（树形结构，ParentId / Parent / Children）；关联表直接继承 `DomainBase`
-- **审计字段**：`CreatedAt / CreatedBy / UpdatedAt / UpdatedBy` 由框架自动填充（审计人为用户 Id，无登录上下文时为空 Guid），业务代码无需赋值
-- **乐观并发**：`Version` 为 Guid 版本令牌（`IsEnableUpdateVersionValidation = true`），更新走 SqlSugar `ExecuteCommandWithOptLock` 框架级校验（自动以旧值作更新条件并轮换新 Guid），冲突抛出业务异常（错误码 `40005`）
-- **软删除**：删除默认为墓碑标记，查询自动过滤；`RestoreAsync` 可恢复
-- **仓储三分**：`IDomainRepository`（查询统计 + 投影查询（Select&lt;TDto&gt; 按属性名自动映射返回指定类型）+ 插入 + 按条件删除，实体表 / 关联表公共；可空条件参数配合 WhereIF 按需拼接）/ `IAggregateRepository`（聚合专属：乐观并发更新、软删除与恢复（按主键 / 集合 / 条件全族单条 SQL 按列更新——仓储兜底填充更新人 / 更新时间并轮换版本令牌，防止墓碑被旧令牌复活））/ `IAggregateTreeRepository`（树形查询）。接口只定义契约（无 new 约束），`new()` 仅出现在 SqlSugar 实现类上
-- **关联表实体**：SysUserRole / SysRoleMenu / SysRoleDept / SysUserPost 继承 `DomainBase`（非聚合根）：无独立主键，以业务字段联合主键唯一定位；具备创建审计与租户隔离（全局租户过滤器与聚合根一致），无乐观并发与更新审计语义，删除为物理删除
-- **请求分类（MediatR，非读写分离 CQRS）**：项目只有 `ICommand` 写命令标记，没有 `IQuery` 接口，读写共用同一 `SqlSugarClientFactory` 连接与仓储（无独立读模型 / 只读副本）；请求定义（record 实现 `IRequest<TResponse>` + `ICommand`）位于 Application.Contracts；处理器继承 RequestHandler → CommandHandler / QueryHandler 基类（Application/Abstractions，封装 MediatR 适配，子类实现 HandleAsync）；验证器独立于 Validators 目录，横切关注点（审计 / 验证 / 数据范围 / 日志 / 性能 / 事务）由 Pipeline Behaviors 统一处理
-- **DTO 继承体系**：`Application.Contracts/Dtos/Common/AggregateDtos.cs` 提供与领域对齐的基类——请求侧 `AggregateInputRequest`（聚合写载荷标记）/ `AggregatePagedRequest`（分页查询根），视图侧 `AggregatePagedResponse`（Id / Version / CreatedAt / Description）/ `AggregateDetailResponse`（补充租户与更新审计）/ `AggregateItemResponse`（列表简项）；各模块按 XxxInputRequest / XxxPagedResponse / XxxDetailResponse 派生，公共字段零重复定义
-- **校验分层**：请求级校验统一收敛于 **Validators 模块**（FluentValidation，`Application/Validators/`）：公共规则以扩展方法沉淀于 `Validators/Common/ValidationRules`（NotBlank / TrimmedMaxLength / Status / InRange / ConfigKey）；模块验证器按「请求级验证器（泛型，约束到 Write 基类 DTO）+ 命令验证器（SetValidator 委托）」组织，模块错误码经 Custom 规则透传；实体 setter 保留单属性不变量（Guard）作为领域最后防线
-- **DTO → 实体映射**：AutoMapper **按实体拆分独立 Profile**（`Mappings/SysUserProfile` / `SysRoleProfile` / `SysMenuProfile` / `SysDeptProfile` / `SysDictProfile` / `SysConfigProfile` / `SysJobProfile` / `SysNoticeProfile` / `SysTenantProfile` / `SysLogProfile`，公共约定（字符串 trim、PagedResult 开放泛型映射）沉淀于 `CommonProfile`）；14 组 Create/Update 请求 → 实体映射 + 全局字符串值转换器自动 trim；实体 setter 同步归一化，双保险
-- **富模型（setter 模式）**：实体属性 setter 内强制单属性不变量——trim 归一化（Domain.Shared/Validation/Guard）、非空、取值范围（状态 0/1、标签样式 1~5、数据范围 1~5、菜单类型等，经模块 Rules Ensure 方法）；跨属性耦合规则（如菜单类型 ↔ path/component/perms）由 `Create(...)` / `Apply(...)` 调用 Rules 校验，非法状态无法构造或逃逸
-- **仓储分层**：`IDomainRepository`（查询 + 插入 + 按条件删除：关联表为物理删除，聚合实现重写为软删除）→ `IAggregateRepository`（软删除 + 乐观并发更新 + 恢复）→ `IAggregateTreeRepository`（树查询；带祖级路径的树形聚合在 MoveAsync 中重算自身路径并联动刷新后代路径）；专属仓储：三张日志表（含 HardDeleteAsync） + `ISysRefreshTokenRepository`（GetActiveByTokenAsync / RevokeAllForUserAsync / RemoveExpiredAsync）
-- **工作单元**：`IUnitOfWork` 仅暴露 `RunInTransactionAsync`（委托成功自动提交、异常自动回滚并原样透出），实现基于 SqlSugar `Ado.UseTranAsync`，无需显式 Begin / Commit / Rollback
-- **端口归位**：领域技术端口（ITokenService / IPasswordHasher / IUnitOfWork / UserContext / ICaptchaService 等）定义于 Domain/Services，实现在 Infrastructure(.Shared)；缓存端口 `ICache` 与 TTL 档位定义于 Infrastructure.Shared/Caching（支持层共享设施），应用层经 DI 消费，不感知缓存技术细节
-- **领域事件**：根基类 `DomainEvent` 仅承载共有元数据（事件名称 EventName = 短类名，即事件类型的唯一标识；发生时间 OccurredAt），**事件类型由事件类本身表达**，无独立类型字符串与弱类型载荷。泛型基类 `DomainEvent<TDomain>`（TDomain : DomainBase）携带事件关联的领域实体（Domain 属性）。**聚合级事件基类族按变更类型分层**：`AggregateCreatedEvent<TAggregate>`（Domain = 创建后状态）/ `AggregateUpdatedEvent<TAggregate>`（Domain = 变更后状态，Before = 变更前快照，发布点经 DomainBase.Snapshot 浅拷贝捕获）/ `AggregateDeletedEvent<TAggregate>`（Domain = 删除前状态）/ `AggregateRestoredEvent<TAggregate>`（恢复，预留）；无实体状态的事件（UserPasswordResetEvent，密码哈希敏感）与聚合根可空的日志事件（LogDeletedEvent）直接继承 DomainEvent。**事件文件按所属领域划分**（UserEvents / RoleEvents / MenuEvents / DeptEvents / DictEvents / ConfigEvents / NoticeEvents / TenantEvents / JobEvents / LogEvents），每领域按创建 / 修改 / 删除拆分具体事件类（如 UserCreatedEvent / UserUpdatedEvent / UserDeletedEvent）。发布端口 `IDomainEventPublisher` 定义于 Domain/Services/Events；全部业务写命令处理器在变更成功后的关键节点发布对应事件。应用层经事务 Outbox 发布（见本条末的可靠性说明），提交后的投递阶段才由 MediatR 非泛型通知信封（DomainEventNotification）在进程内派发给监听器；监听器继承泛型基类 `DomainEventHandler<TEvent>`（屏蔽类型过滤守卫，TEvent 传 DomainEvent 即全量订阅）或直接实现 INotificationHandler 模式匹配（多类型监听器受类单继承限制）——**业务逻辑与响应逻辑解耦**，新增监听需求只需追加监听器实现，由 MediatR 扫描自动注册。内置监听器：权限缓存失效（用户事件→单用户，角色 / 菜单事件→全量）、字典缓存失效（类型迁移经 Before.DictType 比对新旧双失效）、配置缓存失效（键名变更经 Before.ConfigKey 比对新旧双失效）、事件审计（DomainEventAuditHandler，通用兜底记录事件名称与发生时间，不落实体状态以规避敏感数据）。**监听器命名约定**：`<响应关切><名词化响应动作>Handler`（如 PermissionCacheInvalidationHandler / DomainEventAuditHandler），统一继承泛型基类（单类型）或直接实现 INotificationHandler（多类型）。**可靠性（P1-A2 已落地）**：领域事件经事务 Outbox 发布——发布器在业务事务内将事件序列化持久化到 sys_outbox_message 并加入请求作用域待投递队列，事务提交成功后由 TransactionBehavior 同步投递（失败仅记录日志、不阻断业务响应），后台 worker（Outbox:Enabled）按 Outbox:PollIntervalSeconds 轮询兜底崩溃恢复与重试，超过 Outbox:MaxAttempts 置为失败状态保留排查；监听器由 MediatR IsolatedNotificationPublisher 逐一执行，单监听器失败不阻断其余监听器，但会聚合失败向上传播，由投递服务记录失败并进入重试（绝不标记为已处理），因此监听器必须可重入；载荷反序列化仅接受 Domain.Events 命名空间下的具体 DomainEvent 子类，拒绝任意 CLR 类型；Failed 与超期 Pending / Processing 消息在既有清理循环内按 Outbox:FailedRetentionDays / Outbox:StalePendingDays 收敛为死信并清理。Outbox 载荷经 System.Text.Json 序列化，敏感字段（如 SysUser.PasswordHash）已 [JsonIgnore] 排除，事件载荷不落敏感数据。评估后不发布事件的写操作：登录 / 登出 / 刷新令牌（认证基础设施流程）、立即执行一次任务（不改变聚合数据）、操作 / 登录日志写入（OperLog 过滤器承载审计职责）
-- **领域规则归位**：纯逻辑校验规则（`DictRules` / `ConfigRules` / `LogQueryBounds` 三类）位于 Domain/Services/Rules，供处理器与 Domain.Tests 复用；树形装配统一由 `AggregateTreeBase<T>.BuildTree` 承接（同级按 OrderNum 升序再按 Id、孤儿节点挂根级），树查询处理器过滤后建树并经 AutoMapper 递归映射为契约 VO
-- **双层缓存**：基于 HybridCache 的 L1 进程内存（短过期）+ L2 Redis（长过期，`HybridCache:RedisEnabled` 开启后生效）缓存，按 TTL 档位（Hot / Medium / Cold，可配置）自动调整两级过期策略；应用层统一经 `ICache` 端口读写与失效，不感知缓存技术
-- **领域实体有意保留 SqlSugar 特性**：`SugarTable` / `SugarColumn`（表名、主键、列描述、乐观锁 IsEnableUpdateVersionValidation、软删除字段）驱动 `DbInitializer` 的 CodeFirst.InitTables 与 EntityMaintenance.GetEntityInfo 建表与取模型元数据，是有意利用 ORM 原生能力替代手写映射配置，移除反而丧失建表与元数据能力，并非层间不纯净（架构文档展开论证）。
-- **契约层 DTO 有意保留 MiniExcel 列特性**：`UserExportRow` / `UserImportRow` 以 `ExcelColumnName` 标注中文表头，导入 `MiniExcel.Query<UserImportRow>` 与 POCO 导出共用同一行模型定义，是 MiniExcel 的官方用法，契约层只保留行模型、不暴露其公共 API（架构文档展开论证）。
+### 1. 环境要求
 
+| 依赖 | 版本 | 是否必需 |
+| --- | --- | --- |
+| .NET SDK | 10.0.x | 必需 |
+| MySQL | 8.0+ | 必需 |
+| Redis | 7.x | 可选；生产环境必填（`Cache:RedisEnabled` 强制为 true） |
+| Python | 3.8+ | 可选，仅执行 README 类型校验脚本时需要 |
+| Node.js + pnpm | 仓库要求见根 `package.json` | 可选，仅启用 Git 钩子时需要 |
 
-## 安全与可靠性边界（P0 / P1 / P2 / P3 已落地）
-
-- **多租户访问校验（S1 + P1-A1）**：登录与业务接口均校验租户归属与状态——TenantResolutionMiddleware 解析 X-Tenant-Id 头并核对 JWT 租户声明，TenantAuthorizationMiddleware 经 ITenantAccessValidator 校验：跨租户访问 40301、平台/匿名带头 400801、租户停用 400805、租户到期 400806；登录链路（P1-A1）在账号状态校验后执行同一租户校验，并经独立连接记录登录失败日志（不受事务回滚影响）。MultiTenancy:Enabled=false 时校验全部放行
-- **刷新令牌哈希存储（S2）**：刷新令牌经 RefreshTokenHasher 以 SHA-256 哈希持久化（数据库不存明文），明文仅存在于内存与传输过程；存量明文记录自动失效，需重新登录
-- **初始密码强制改密（S4 / T-03）**：新建 / 导入用户的初始密码统一取参数配置 `sys.user.initPassword`（代码常量 `UserConstants.DefaultPassword` 仅用于首次写入该配置，不作为运行时口令来源）；种子 admin 初始口令由 `Bootstrap:AdminInitialPassword` 注入（生产必填，Development 未提供时随机生成并仅经控制台一次性披露），首次登录返回 mustChangePassword=true，MustChangePasswordMiddleware 强制改密（403/40302，改密 / 登出等白名单端点豁免），改密接口 POST /api/auth/change-password
-- **上传上限对齐（S3）**：Kestrel MaxRequestBodySize 全局对齐业务上限（FileStorage:MaxSizeMB + 1MB，覆盖 multipart 边界开销），超限在线级返回 413/401203，不依赖端点级 [RequestSizeLimit] 单独声明
-- **权限注册表（B4）**：控制器权限声明统一引用 Domain.Shared/Permissions/PermissionDefinitions 常量（命名 模块:动作:资源），PermissionsStartupValidator 在启动期校验全部引用均已注册——新增权限未登记将编译 / 启动双失败，杜绝权限串漂移
-- **取消令牌全链路（T-11）**：全部控制器 Action 接收 `CancellationToken`（由框架从 `HttpContext.RequestAborted` 绑定，并经 OpenAPI 转换器剔除，不作为客户端契约参数），原样传入 `ISender.Send`；各 Pipeline Behavior 与工作单元在事务委托入口显式 `ThrowIfCancellationRequested`，客户端断开后校验 / 事务 / 导出不再空跑。已实测 MediatR 12.4.1 的 `RequestHandlerDelegate<TResponse>` 不接受令牌参数，令牌由 `Send` 构建管道时捕获，因此采用显式检查而非 `next(token)`；SqlSugar `Ado.UseTranAsync` 无取消通道，已发出的 ADO 命令以命令超时为物理下限
-- **导出边界（T-11）**：`PagedRequest.CloneForPage<T>` 逐页复制请求（筛选条件完整保留、不改写共享对象），`ExcelExportSupport` 首页前检查取消、逐页传令牌、按剩余额度硬裁剪至 10000 行，截断时文件名标注实际导出行数（`_已截断N行`）
-- **审计与响应可靠性（T-12）**：`OperLogActionFilter` 的 `next()` 异常原样传播到全局异常中间件（日志写入失败仅告警），且序列化 `ActionArguments` 时剔除框架注入的 `CancellationToken`（其 `WaitHandle.Handle` 为 IntPtr，否则会丢失整条审计）；登录日志写入失败不阻断认证；全站错误响应收敛到 `UnifiedResponseWriter` 唯一实现（统一 Result + `X-Trace-Id`）；匿名健康报告只输出总体状态与匿名化检查项状态，不含 description、异常细节与内部依赖名
-- **启动期校验时序**：`ProductionConfigurationValidator` 在 `builder.Build()` 之后基于 `app.Configuration` 执行——`WebApplicationFactory.ConfigureAppConfiguration` 注入的测试密钥在 Build() 时才合并进 `ConfigurationManager`，提前校验会让集成测试宿主误判为空密钥
-
-- **数据库初始化三层判定（T-13）**：库 / 结构 / 种子分别判定并输出结论；库级查 `information_schema.SCHEMATA`，结构层由 `sys_schema_migration` 版本状态机驱动（版本一致跳过全部 DDL、落后按幂等脚本补齐、代码更旧拒绝启动），脚本指纹取脚本正文 SHA-256；生产禁止应用自动改表（`Database:AutoCreateTable` / `Database:AutoSyncStructure` 必须为 false）；`/health/ready` 输出 `initialization.database/schema/seed` 与版本号
-- **文件内容签名与下载加固（T-14）**：上传以 magic number + 扩展名 / MIME 白名单判定，忽略客户端声明的 `ContentType`，落库记录实测 MIME 与实际字节数；下载固定 `application/octet-stream` 并带 `X-Content-Type-Options: nosniff`；路径遍历防护与三道大小限制（Kestrel / 业务 / 流式读取）保持有效
-- **脱敏与字段级变更日志（T-15）**：JSON / SQL / QueryString / 异常消息 / 实体字段共用 `SensitiveDataMasker` 一套口径，字段名归一化后覆盖 `PasswordHash` / `access_token` / `idCardNo` / `mobile` 等变体；新增 / 更新 / 软删除 / 恢复均产生 `sys_entity_change_log` 字段级记录，敏感值写 `******`，且不对变更日志自身递归审计
-- **契约一致性（T-16）**：项目不使用 `IQuery` 接口、不是读写分离 CQRS；领域事件经事务 Outbox 发布（未注册的内存发布器已移除）；全应用复用 `JsonHelper.WebOptions` 一份 JSON 配置（Outbox 新载荷 camelCase，存量 PascalCase 载荷因忽略大小写仍可重放）；`Result` 成功工厂收敛为 `Ok()` / `OkMessage(string)` / `Ok<T>(data)`，消除字符串载荷被误当 message 的歧义；聚合写命令的 `bool` 结果写入 `Result<bool>.Data`（恢复的幂等 `false` 不再丢失）；无返回值命令（登出 / 立即执行 / 清空日志 / 强退）仍输出不含 `data` 的统一响应；错误码 404xx 死分支已移除
-
-
-## 环境要求
-
-- .NET SDK 10.0
-- MySQL 8.x（本地默认 `localhost:3306`，账号 `root/***REMOVED***`，或通过配置修改）
-
-## 构建约束与代码风格
-
-- 各项目 `.csproj`（src 与 test 共 11 个项目）统一声明：**`TreatWarningsAsErrors`（编译警告即错误）** 与 **`EnforceCodeStyleInBuild`（构建期强制 `.editorconfig` 代码风格）**——不使用 `Directory.Build.props`，配置全部落位在项目文件内
-- 代码风格基线由 `.editorconfig` 定义：风格类规则统一 **warning 级**，配合各项目的 `TreatWarningsAsErrors`，编译警告与代码风格违规在构建期均按**错误**处理（不合规代码无法通过构建）；格式统一经 `dotnet format api.slnx` 执行，各配置项的作用以 `.editorconfig` 内注释为准（该文件是规则与说明的唯一载体）
-- **变量声明优先 `var`**：内置类型 / 类型明显 / 其余场景均用 `var`（`csharp_style_var_*` 三项均为 `true`）
-- **类优先主构造函数 + `get` 只读属性**：依赖与构造参数经 C# 12 主构造函数承载，转存为 `{ get; }` 只读自动属性，避免传统构造函数字段回填样板（`csharp_style_prefer_primary_constructors`）
-- 提交 `.cs` 文件时，仓库级 pre-commit 钩子（husky + lint-staged，见 `canexus-admin-vue/README.md`）会自动对其运行 `dotnet format --include`；推送前执行 `dotnet build` 编译检查
-- 新增警告将被构建拒绝：修复警告（或经评审后以 `#pragma` / `.editorconfig` 降级并注明原因），不要绕过
-
-## 本地运行
-
-仓库中的 `appsettings.json` 不含任何密钥（`Database:ConnectionString` 与 `Jwt:Secret` 留空，缺失时启动即报错）。
-敏感配置经 **User Secrets**（Development 环境）或环境变量注入，本地首次运行前执行：
+### 2. 还原依赖
 
 ```bash
-# 1. 写入本地机密（存放于 %APPDATA%\Microsoft\UserSecrets\canexus-super-admin-api，不入 Git）
-dotnet user-secrets set "Database:ConnectionString" "server=localhost;port=3306;database=super_admin;user id=root;password=你的密码;CharSet=utf8mb4;AllowPublicKeyRetrieval=true;SslMode=none" --project src/API
+git clone <仓库地址>
+cd canexus-api-netcore
+dotnet restore api.slnx
+```
+
+### 3. 写入本地机密
+
+仓库中的 `appsettings.json` **不含任何密钥**（`Database:ConnectionString` 与 `Jwt:Secret` 均为空，
+非 Development 环境缺失时启动即失败）。本地开发推荐使用 User Secrets（存放于
+`%APPDATA%\Microsoft\UserSecrets\canexus-super-admin-api`，不入 Git）：
+
+```bash
+dotnet user-secrets set "Database:ConnectionString" \
+  "server=localhost;port=3306;database=super_admin;user id=root;password=你的密码;CharSet=utf8mb4;AllowPublicKeyRetrieval=true;SslMode=none" \
+  --project src/API
+
 dotnet user-secrets set "Jwt:Secret" "按 UTF-8 编码不少于 32 字节的随机密钥" --project src/API
-
-# 2. 集成测试连接串（SUPER_ADMIN_TEST_CONN 用户环境变量，缺失时测试启动即报错）
-#    PowerShell（用户级，一次即可）：
-[Environment]::SetEnvironmentVariable("SUPER_ADMIN_TEST_CONN", "server=localhost;port=3306;database=super_admin_test;user id=root;password=你的密码;CharSet=utf8mb4;AllowPublicKeyRetrieval=true;SslMode=none", "User")
-
-# 3. 启动（按库 / 结构 / 种子三层判定初始化；首次全新库才执行建表与种子写入）
-dotnet run --project src/API
-
-# 服务地址：http://localhost:5000（launchSettings 默认）
-# API 文档：http://localhost:5000/openapi/v1.json（Development 环境）
-# 种子超级管理员：admin，初始口令由 Bootstrap:AdminInitialPassword 注入；
-# 非 Development 未配置即启动失败，Development 未配置时随机生成并仅在控制台一次性披露，首次登录须改密
 ```
 
-常用命令：
+> 数据库需提前存在，或保留 `Database:AutoCreateDatabase=true` 让应用用管理连接建库（Development 默认允许）。
+> 也可以改用环境变量注入，见[配置说明](#配置说明)。
+
+### 4. 启动服务
 
 ```bash
-dotnet build                              # 编译
-dotnet test                               # 全量测试（单元 + 集成）
-dotnet test test/API.Tests                # 仅 API 集成测试
+dotnet run --project src/API
 ```
 
-> 说明：集成测试强制从环境变量 `SUPER_ADMIN_TEST_CONN` 读取测试库连接串（代码中不内置任何密码回退值），测试库由三层初始化状态机按 `information_schema` 判定后建库 / 建表 / 补种子；统一测试宿主工厂 `ApiTestFactory` 固定 `Testing` 环境，并在宿主创建后断言最终生效的连接串非空且库名不是开发库 `super_admin`，覆盖失效即快速失败，不再静默写开发库。
+| 地址 | 说明 |
+| --- | --- |
+| `http://localhost:5000` | 默认监听地址（见 `Properties/launchSettings.json`） |
+| `http://localhost:5000/swagger` | Swagger UI（仅 Development） |
+| `http://localhost:5000/openapi/v1.json` | OpenAPI 3.1 文档（仅 Development） |
+| `http://localhost:5000/health/live` | 存活探针（匿名） |
+| `http://localhost:5000/health/ready` | 就绪探针（含数据库 / 缓存 / 调度器，匿名） |
 
-## 部署说明
+首次启动会按「库 / 结构 / 种子」三层完成初始化并写入内置数据。内置超管账号为 `admin`，初始口令来自：
 
-1. **发布**：`dotnet publish src/API -c Release -o publish`，产物为自包含目录（按目标运行时加 `--runtime` 参数）
-2. **配置**：`appsettings.json` 不含密钥，生产环境必须经环境变量注入（双下划线 `__` 表示层级，优先级高于配置文件）：
-   - `Database__ConnectionString` — 生产数据库连接串（`Database__AutoCreateDatabase` 控制库不存在时是否经管理连接建库；`Database__AutoCreateTable` / `Database__AutoSyncStructure` 在 Production 必须显式为 false；`Database__AllowSchemaInitialization` 仅在全新生产库首次初始化时显式授权一次性建表；`Database__MigrationsEnabled=false` 可关闭迁移机制）
-   - `Jwt__Secret` — 生产签名密钥（按 UTF-8 编码不少于 32 字节，不与任何环境复用；更换后所有已签发令牌失效）
-   - `Bootstrap__AdminInitialPassword` — 内置超管初始口令（6-20 位且含字母与数字，生产必填；`Bootstrap__RequirePasswordChangeOnSeed` 生产必须为 true，即种子 admin 首登须改密）
-   - `Https__RedirectEnabled` / `Https__HstsEnabled` — 生产均为 true；`RateLimit__GlobalPermitLimit` 须大于 0 以启用业务端点全局限流
-   - `MultiTenancy__Enabled` / `Cache__RedisEnabled` — 多租户开关 / L2 缓存开关，生产必须显式声明 true / false，不得依赖隐式默认值
-   - Outbox__Enabled / Outbox__PollIntervalSeconds / Outbox__MaxAttempts — 领域事件 Outbox 投递 worker 启停与重试参数
-   - FileStorage__MaxSizeMB — 上传上限（Kestrel 请求体上限自动对齐为 MaxSizeMB + 1MB）
-   - RateLimit__UseRedis / RateLimit__RedisConfiguration / RateLimit__RedisKeyPrefix — 分布式限流开关与 Redis 连接（多副本部署必须开启）
-   - Cache__RedisEnabled / Cache__RedisConfiguration — 双层缓存 L2 分布式缓存开关与连接
-   - 密钥缺失或生产基线不合规时，启动期 Options 校验与 `ProductionConfigurationValidator` 一次性列出全部不合规项并阻止启动，不会带病运行
-3. **数据库（T-13 三层判定）**：库级用剥离库名的管理连接查 `information_schema.SCHEMATA`（不存在时按 `Database:AutoCreateDatabase` 建库或明确拒绝）；结构层以 `sys_schema_migration` 已应用版本与代码期望版本比对驱动——一致时**不执行任何 DDL**（含 `ALTER TABLE ... ENGINE=InnoDB`），落后按 `MigrationId` 顺序执行幂等脚本，代码版本更旧则拒绝启动；种子层按稳定键补缺。脚本指纹取脚本正文 SHA-256（纯登记型迁移回退 `ID + Description` 以兼容旧库），已应用脚本正文被改动会在启动校验中被发现。V-05 已实测 `CodeFirst.InitTables` 会删列 / 改列类型，因此生产禁止应用自动改表；`ProductionConfigurationValidator` 强制要求 `Database:AutoCreateTable=false` 与 `Database:AutoSyncStructure=false`。`/health/ready` 的 `initialization` 字段输出 database / schema / seed 三层阶段与版本号
-4. **运行**：`dotnet API.dll`，或配置为 systemd / Windows 服务；前端生产环境由 nginx 将 `/api` 反向代理到本服务
-5. **多副本部署**：`RateLimit__UseRedis=true` 让限流计数存 Redis，跨实例共享配额（关闭时回退为单副本进程内语义）；`Cache__RedisEnabled=true` 启用 L2 分布式缓存；`/health` 已豁免全局限流，可直接用于负载均衡探针。若前端经 nginx 反代，需启用 `Forwarded:Enabled` 并配置 `Forwarded:KnownProxies`，否则所有客户端将共享代理 IP 的限流配额
+- 配置项 `Bootstrap:AdminInitialPassword`（非 Development 环境必填）；
+- Development 未配置时随机生成，**仅在控制台输出一次**。
+
+首次登录返回 `mustChangePassword=true`，改密前访问其他业务接口会被拦截（403 / 40302）。
+
+### 5. 调通第一个接口
+
+登录需要图形验证码，建议直接在 Swagger UI 中操作：
+
+1. `GET /api/auth/captcha` → 响应 `data.captchaId` 与 `data.imageBase64`（SVG data URI，有效期 5 分钟、一次性）；
+2. `POST /api/auth/login`，请求体：
+
+```json
+{
+  "userName": "admin",
+  "password": "你的初始口令",
+  "captchaId": "上一步返回的 captchaId",
+  "captchaCode": "图片中的字符"
+}
+```
+
+3. 复制响应中的 `data.accessToken`，在 Swagger 右上角 **Authorize** 中粘贴（无需手写 `Bearer` 前缀）；
+4. 之后即可调用受保护接口，例如 `GET /api/auth/user-info`。
+
+等价的命令行方式：
+
+```bash
+curl -s http://localhost:5000/api/auth/captcha
+
+curl -s -X POST http://localhost:5000/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"userName":"admin","password":"你的初始口令","captchaId":"...","captchaCode":"...."}'
+
+curl -s http://localhost:5000/api/auth/user-info \
+  -H "Authorization: Bearer <accessToken>"
+```
+
+## 配置说明
+
+### 加载顺序
+
+配置按以下顺序覆盖（后者优先）：`appsettings.json` → `appsettings.{Environment}.json` → User Secrets
+（仅 Development）→ 环境变量 → 命令行参数。环境变量用双下划线表示层级，例如
+`Database__ConnectionString`、`Cache__RedisEnabled`。
+
+所有配置节在启动时统一绑定并校验（继承 `OptionBase` 的选项类），任何一项非法都会在启动阶段报错，
+不会带病运行。
+
+### 主要配置项
+
+**数据库与初始化**
+
+| 配置键 | 默认值 | 说明 |
+| --- | --- | --- |
+| `Database:ConnectionString` | 空 | MySQL 连接串，必填 |
+| `Database:AutoCreateDatabase` | `true` | 库不存在时是否用管理连接创建 |
+| `Database:AutoCreateTable` | `true` | 首次初始化是否建表；Production 必须为 `false` |
+| `Database:AutoSyncStructure` | `true` | 是否同步表结构；Production 必须为 `false` |
+| `Database:AllowSchemaInitialization` | `false` | 全新生产库首次建库建表的一次性授权 |
+| `Database:MigrationsEnabled` | `true` | 是否启用版本化迁移机制 |
+| `Database:ValidateModelStructure` | `false` | 启动时比对实体模型与库表列 / 主键，发现绕过迁移的改表 |
+
+**认证与安全**
+
+| 配置键 | 默认值 | 说明 |
+| --- | --- | --- |
+| `Jwt:Secret` | 空 | 签名密钥，UTF-8 不少于 32 字节，必填 |
+| `Jwt:Issuer` / `Jwt:Audience` | `SuperAdmin` | 签发者与受众 |
+| `Jwt:AccessTokenMinutes` | `30` | 访问令牌有效期（分钟） |
+| `Jwt:RefreshTokenDays` | `7` | 刷新令牌有效期（天） |
+| `Security:PasswordPolicy` | 8-20 位，含字母 / 数字 / 大写 | 自助改密与管理员重置共用 |
+| `Security:LoginLock:MaxFailedAttempts` | `5` | 连续失败锁定阈值 |
+| `Security:LoginLock:LockMinutes` | `10` | 锁定时长（每次失败滑动重置） |
+| `Bootstrap:AdminInitialPassword` | 空 | 内置超管初始口令；非 Development 必填 |
+| `Bootstrap:SeedDemoData` | `true` | 是否写入演示数据；Production 恒定不写入 |
+
+**集成与运行时**
+
+| 配置键 | 默认值 | 说明 |
+| --- | --- | --- |
+| `MultiTenancy:Enabled` | `false` | 多租户开关；Production 必须显式声明 |
+| `Cache:RedisEnabled` | `false` | L2 分布式缓存开关；Production 必须为 `true` |
+| `Cache:RedisConfiguration` | `localhost:6379` | Redis 连接串 |
+| `Cache:Hot/Medium/Cold` | 见配置文件 | 三档 TTL（本地 / 分布式秒数） |
+| `Outbox:Enabled` | `true` | 领域事件 Outbox worker 开关 |
+| `Outbox:PollIntervalSeconds` | `5` | 轮询间隔 |
+| `Outbox:MaxAttempts` | `5` | 最大投递次数，超限转失败状态 |
+| `Scheduling:ThreadCount` | `10` | Quartz 工作线程数 |
+| `RateLimit:Enabled` | `true` | 限流总开关 |
+| `RateLimit:GlobalPermitLimit` | `0` | 全局每窗口请求数；`0` 表示不启用，Production 必须大于 0 |
+| `RateLimit:AuthPermitLimit` | `100` | 验证码 / 登录 / 刷新令牌端点配额 |
+| `RateLimit:UseRedis` | `false` | 分布式限流；多副本部署必须开启 |
+| `FileStorage:MaxSizeMB` | `10` | 上传大小上限（Kestrel 请求体上限自动对齐为 +1MB） |
+| `FileStorage:RootPath` | `uploads` | 本地存储根目录 |
+| `Export:MaxRows` | `10000` | 单次导出最大行数，超出截断并在文件名标注 |
+| `Otel:Enabled` | `false` | OpenTelemetry 采集开关 |
+| `Otel:OtlpEndpoint` | 空 | OTLP 导出端点，如 `http://otel-collector:4317` |
+| `Mail:Enabled` | `false` | 邮件通知渠道开关 |
+
+**传输与部署**
+
+| 配置键 | 默认值 | 说明 |
+| --- | --- | --- |
+| `Https:RedirectEnabled` | `false` | HTTP 强制跳转 HTTPS；Production 必须为 `true` |
+| `Https:HstsEnabled` | `false` | 输出 HSTS 头；Production 必须为 `true` |
+| `Https:HstsMaxAgeDays` | `180` | HSTS 有效期 |
+| `Cors:Enabled` | `false` | 跨域开关 |
+| `Cors:AllowedOrigins` | `http://localhost:5173` | 允许的来源（精确匹配） |
+| `Forwarded:Enabled` | `false` | 反向代理转发头解析 |
+| `Forwarded:KnownProxies` | 空 | 可信代理白名单；开启转发头时必填 |
+
+### 生产环境硬性基线
+
+`ProductionConfigurationValidator` 在启动时一次性校验以下项，任一不合规即列出全部问题并阻止启动：
+
+| 配置 | 要求 |
+| --- | --- |
+| `Jwt:Secret` | 非空，不得为示例值或开发回退值（非 Development 校验） |
+| `Bootstrap:AdminInitialPassword` | 非空（非 Development 校验） |
+| `Bootstrap:RequirePasswordChangeOnSeed` | 不得显式设为 `false` |
+| `Database:AutoCreateTable` | `false` |
+| `Database:AutoSyncStructure` | `false` |
+| `Https:RedirectEnabled` | `true` |
+| `Https:HstsEnabled` | `true` |
+| `RateLimit:Enabled` 且 `RateLimit:GlobalPermitLimit` | `true` 且大于 0 |
+| `MultiTenancy:Enabled` | 显式 `true` / `false` |
+| `Forwarded:Enabled=true` 时 `Forwarded:KnownProxies` | 非空 |
+| `Cache:RedisEnabled` | `true`（会话吊销与缓存失效依赖跨实例统一视图） |
+
+## 接口约定
+
+### 统一响应
+
+除文件下载等二进制流接口外，所有 JSON 接口（含异常、401 挑战、限流）返回同一结构：
+
+```json
+{ "code": 200, "message": "操作成功", "data": { } }
+```
+
+无数据载荷时省略 `data`。`code` 为业务码，HTTP 状态码由业务码映射（见下表）。
+
+### 错误码分段
+
+| 区间 | 含义 | HTTP |
+| --- | --- | --- |
+| `400xx` | 通用 / 公共（参数、不存在、重复、并发冲突、限流） | 400 / 429 |
+| `401xx` | 认证（未登录、过期、撤销、账号锁定） | 401 |
+| `403xx` | 授权（无权限、跨租户、须先改密） | 403 |
+| `4002xx`、`4003xx`… | 业务模块段（用户、角色、菜单、部门……） | 400 |
+| `50000` | 系统内部错误 | 500 |
+
+完整定义见 `src/Domain.Shared/Results/ErrorCodes.cs`。新增错误码必须同时补充
+`Localization/ErrorMessages_zh-CN.json` 与 `ErrorMessages_en-US.json`，否则启动期校验失败。
+
+### 认证流程
+
+1. `GET /api/auth/captcha` 获取验证码（一次性、5 分钟有效）；
+2. `POST /api/auth/login` 获取令牌对：`accessToken` / `refreshToken` / `expiresIn` / `mustChangePassword`；
+3. 后续请求携带 `Authorization: Bearer <accessToken>`；
+4. 访问令牌过期用 `POST /api/auth/refresh` 轮换（旧刷新令牌立即失效）；
+5. `POST /api/auth/logout` 吊销刷新令牌（不传时吊销当前用户全部活跃令牌）。
+
+刷新令牌以 SHA-256 哈希落库，数据库不存明文；登出、改密、管理员重置密码或强退后，已签发令牌立即失效
+（401 / 40107）。
+
+### 分页
+
+请求参数 `pageIndex`（从 1 开始，默认 1）与 `pageSize`（默认 10，上限 500，越界自动收敛）。
+响应 `data` 结构：
+
+```json
+{ "items": [], "total": 0, "pageIndex": 1, "pageSize": 10 }
+```
+
+### 乐观并发
+
+修改与删除请求的路由必须携带最新 `version`（GUID 版本令牌），例如
+`PUT /api/system/user/{id}/{version}`。版本不一致返回业务码 `40005`，客户端应刷新后重试。
+
+### 多租户
+
+开启 `MultiTenancy:Enabled` 后，业务请求携带 `X-Tenant-Id`。服务端核对请求头与 JWT 租户声明，
+并按租户状态拦截：
+
+| 场景 | 业务码 |
+| --- | --- |
+| 跨租户访问 | `40301` |
+| 租户不存在 / 平台请求携带租户头 | `400801` |
+| 租户已停用 | `400805` |
+| 租户已到期 | `400806` |
+
+关闭多租户时上述校验全部放行。
+
+### API 版本化
+
+当前版本 `1.0`，默认生效，路径不带版本段。需要显式指定时使用查询参数 `api-version=1.0`
+或请求头 `X-Api-Version: 1.0`；响应头 `api-supported-versions` 声明支持集。
+
+### 本地化
+
+默认 `zh-CN`，支持 `en-US`，按 `Accept-Language` 协商，业务异常消息随文化翻译。
+
+### 权限模型
+
+- 权限点集中声明于 `PermissionDefinitions`，命名约定 `模块:动作:资源`（如 `system:user:list`）；
+- 控制器通过 `RequirePermission` 引用常量，编译期检查；启动期扫描控制器声明与注册表比对，未注册即拒绝启动；
+- 超级管理员持有 `*:*:*`；普通角色按菜单 / 按钮授权，越权返回 403 / 40300；
+- 数据范围（全部 / 自定义部门 / 本部门 / 本部门及以下 / 仅本人）在查询层统一拼接过滤条件。
+
+## 数据库初始化
+
+启动时按三层分别判定，结论写入日志与 `/health/ready` 的 `initialization` 字段（database / schema / seed）：
+
+| 层 | 判定方式 | 行为 |
+| --- | --- | --- |
+| 库 | 用剥离库名的管理连接查 `information_schema.SCHEMATA` | 不存在且允许时建库，否则明确拒绝启动 |
+| 结构 | `sys_schema_migration` 已应用版本 vs 代码期望版本 | 一致时**不执行任何 DDL**；落后按幂等脚本补齐；代码更旧拒绝启动 |
+| 种子 | 按稳定键幂等补齐 | 只补缺失项，不覆盖已修改数据 |
+
+- 迁移脚本指纹取正文 SHA-256，已应用脚本被改动会在启动校验中暴露；
+- 生产环境禁止应用自动改表（`AutoCreateTable` / `AutoSyncStructure` 必须为 false），结构变更走迁移脚本；
+- 全新生产库需显式设置 `Database:AllowSchemaInitialization=true` 完成一次性初始化，随后移除该项；
+- 可选开启 `Database:ValidateModelStructure`，在启动时比对实体模型与实际表结构，发现绕过迁移的改表。
+
+## 测试
+
+```bash
+# 全量测试（单元 + 真实 MySQL 集成）
+dotnet test api.slnx
+
+# 仅某一层
+dotnet test test/API.Tests
+dotnet test test/Domain.Tests
+
+# README 类型引用校验（CI 首道门禁）
+python3 scripts/check-readme-types.py
+```
+
+集成测试**强制**从环境变量 `SUPER_ADMIN_TEST_CONN` 读取测试库连接串，代码中不含任何密码回退值：
+
+```bash
+# Bash
+export SUPER_ADMIN_TEST_CONN="server=localhost;port=3306;database=super_admin_test;user id=root;password=你的密码;CharSet=utf8mb4;AllowPublicKeyRetrieval=true;SslMode=none"
+
+# PowerShell（用户级，一次即可）
+[Environment]::SetEnvironmentVariable("SUPER_ADMIN_TEST_CONN", "server=localhost;port=3306;database=super_admin_test;user id=root;password=你的密码;CharSet=utf8mb4;AllowPublicKeyRetrieval=true;SslMode=none", "User")
+```
+
+测试宿主会断言最终生效的连接串非空且库名不是开发库 `super_admin`，覆盖失效即快速失败，不会静默写开发库。
+
+| 测试项目 | 覆盖内容 |
+| --- | --- |
+| `Domain.Tests` | 实体不变量、领域规则、分页、错误码与本地化资源 |
+| `Infrastructure.Tests` | 真实 MySQL 下的过滤器、乐观锁、迁移、Outbox、调度，以及架构约束 |
+| `Application.Tests` | 验证器、映射、权限校验、事件监听、处理器逻辑 |
+| `API.Tests` | 认证、系统管理、监控等全链路 HTTP 行为与 Redis 降级 |
+
+CI（`.github/workflows/backend-ci.yml`）依次执行：README 类型校验 → 还原 → 编译 → 格式检查 → 全量测试。
+
+## 部署
+
+### 1. 发布
+
+```bash
+dotnet publish src/API -c Release -o publish
+# 指定运行时：dotnet publish src/API -c Release -r linux-x64 --self-contained -o publish
+```
+
+### 2. 环境变量
+
+生产环境必须经环境变量或密钥管理系统注入，至少包含：
+
+```bash
+Database__ConnectionString="server=...;database=...;user id=...;password=...;CharSet=utf8mb4;"
+Jwt__Secret="不少于 32 字节的随机密钥"
+Bootstrap__AdminInitialPassword="首次部署的 admin 口令"
+Database__AutoCreateTable=false
+Database__AutoSyncStructure=false
+Https__RedirectEnabled=true
+Https__HstsEnabled=true
+RateLimit__Enabled=true
+RateLimit__GlobalPermitLimit=600
+MultiTenancy__Enabled=false
+Cache__RedisEnabled=true
+Cache__RedisConfiguration="redis:6379"
+```
+
+### 3. Docker Compose（本地 / 内网验证）
+
+`docker-compose.yml` 会拉起 MySQL、Redis 与 API。先准备 `.env`：
+
+```dotenv
+MYSQL_ROOT_PASSWORD=请替换为强口令
+JWT_SECRET=请替换为不少于32字节的随机密钥
+ADMIN_INITIAL_PASSWORD=请替换为符合口令策略的初始口令
+```
+
+```bash
+docker compose up --build
+# API: http://localhost:8080  （健康检查 /health/ready）
+```
+
+说明：容器默认以 `Staging` 环境运行（`ASPNETCORE_ENVIRONMENT` 可覆盖），只强制密钥类基线，便于内网直接
+HTTP 访问。正式生产请在 Kubernetes / 反向代理后以 `Production` 运行，并补齐上一节的全部基线配置。
+
+### 4. 反向代理与多副本
+
+- 前端由 nginx 将 `/api` 反向代理到本服务；后端在代理之后时必须设置 `Forwarded__Enabled=true` 与
+  `Forwarded__KnownProxies`，否则限流与操作日志只能看到代理 IP；
+- 多副本部署需 `Cache__RedisEnabled=true`（会话吊销、缓存失效广播）与 `RateLimit__UseRedis=true`
+  （跨实例共享限流配额）；
+- `/health/live` 与 `/health/ready` 已豁免认证与全局限流，可直接作为负载均衡 / K8s 探针。
+
+## 开发规范
+
+### 构建门禁
+
+- 全部 11 个项目均声明 `TreatWarningsAsErrors` 与 `EnforceCodeStyleInBuild`：编译警告与代码风格违规
+  在构建期按错误处理；
+- 代码风格基线见 `.editorconfig`（变量优先 `var`、类优先主构造函数 + `get` 只读属性等），
+  统一用 `dotnet format api.slnx` 修复；
+- 仓库级 Git 钩子：提交前对 `.cs` 执行 `dotnet format`，推送前执行前端类型检查、单元测试与后端编译；
+- 不要通过降级规则或 `#pragma` 绕过警告；确需例外时在代码中注明原因并经评审。
+
+### 新增功能检查清单
+
+1. 权限点先在 `PermissionDefinitions` 声明，控制器引用常量（启动期会校验注册表一致性）；
+2. 写命令必须同时提供验证器，否则 `WriteCommandValidatorStartupValidator` 会在启动时失败；
+3. 新增错误码同步补充 zh-CN / en-US 两份本地化资源；
+4. 需要前端路由的功能，同步补充菜单种子与按钮权限；
+5. 数据库结构调整必须新增幂等迁移脚本，禁止依赖生产环境自动改表；
+6. 补充对应层级的测试。
+
+### 任务完成后的固定动作
+
+- **同步 README**：任何影响安装、配置、接口、目录结构、依赖版本或运维方式的改动，都必须同步更新本文件；
+- **执行全量测试**：`dotnet test api.slnx`，确认全部通过（集成测试需先设置 `SUPER_ADMIN_TEST_CONN`）；
+- **纳入暂存区**：测试通过后，将本次相关修改 `git add` 到暂存区，保持工作区与暂存区一致。
+
+## 常见问题
+
+### 启动报错：`Jwt:Secret` 必须显式提供
+
+非 Development 环境不允许使用示例值或开发回退密钥。执行：
+
+```bash
+dotnet user-secrets set "Jwt:Secret" "不少于 32 字节的随机字符串" --project src/API
+```
+
+生产环境用环境变量 `Jwt__Secret` 注入。更换密钥会使全部已签发令牌立即失效。
+
+### 启动报错：`Bootstrap:AdminInitialPassword` 必须显式提供
+
+非 Development 环境必须提供内置超管初始口令；Development 未提供时会随机生成并在控制台输出一次。
+口令需满足 `Security:PasswordPolicy`（默认 8-20 位，含字母与数字）。
+
+### Production 启动失败，列出多项「基线校验失败」
+
+这是刻意设计的 fail-fast：按提示逐项补齐[生产环境硬性基线](#生产环境硬性基线)即可，不会逐项试错。
+最常见的三项是 `Https:RedirectEnabled`、`Https:HstsEnabled` 与 `RateLimit:GlobalPermitLimit`。
+
+### 忘记 admin 密码 / 登录后提示必须先改密
+
+- 首次登录返回 `mustChangePassword=true` 属正常流程，改密前访问业务接口会返回 403 / 40302；
+  调用 `POST /api/auth/change-password` 后重新登录即可；
+- 忘记口令可让其他超管在用户管理中重置，或直接更新数据库中该用户的密码哈希（不推荐，需同时清理
+  刷新令牌与强制改密标记）。
+
+### 接口返回 403，提示无权限
+
+1. 确认账号角色已勾选对应菜单 / 按钮权限；
+2. 确认前端路由与按钮权限串与后端 `PermissionDefinitions` 一致；
+3. 超管持有 `*:*:*`，若超管也 403，检查令牌中的角色声明与 `MultiTenancy` 配置；
+4. 多租户场景下的跨租户访问固定返回 40301。
+
+### 接口返回 401，`code` 为 40102 或 40107
+
+`40102` 表示访问令牌过期，调用 `/api/auth/refresh` 换取新令牌；`40107` 表示令牌已被吊销
+（登出、改密、管理员强退、角色 / 权限变更），需重新登录。多副本部署若未开启 `Cache:RedisEnabled`，
+吊销状态无法跨实例同步，会出现「某些请求仍可用」的现象。
+
+### 启动报「数据库结构版本高于代码期望版本」
+
+数据库已应用了当前代码不认识的迁移脚本，说明部署的是旧版本代码。请部署与数据库版本匹配的代码，
+或回滚数据库到对应版本，不要强行启动。
+
+### 集成测试提示 `SUPER_ADMIN_TEST_CONN` 未设置
+
+按[测试](#测试)一节设置环境变量后重开终端。注意测试库名不能是 `super_admin`，否则宿主会主动失败，
+避免误写开发库。
+
+### 上传文件返回 413
+
+请求体超过 `FileStorage:MaxSizeMB`（默认 10MB）。该上限同时约束 Kestrel 与业务校验层，修改配置后需重启；
+反向代理（nginx `client_max_body_size`）也要同步放宽。
+
+### 前端跨域预检失败
+
+开发环境可设置 `Cors:Enabled=true` 并把前端地址加入 `Cors:AllowedOrigins`；生产推荐同源部署或由
+nginx 统一反代，避免开启宽泛的 CORS。
+
+### 反向代理后所有用户共享同一限流配额
+
+服务端只看到代理 IP。设置 `Forwarded:Enabled=true`，并把代理地址写入 `Forwarded:KnownProxies`，
+即可还原真实客户端 IP。
+
+### 访问 `/swagger` 返回 404
+
+Swagger 与 OpenAPI 文档仅在 Development 环境挂载。生产环境请通过 CI 产物或本地生成的 OpenAPI 文档对接。
+
+### Redis 是必需的吗
+
+Development 可不启用（缓存退化为进程内 L1、限流失效为单实例语义）；Production 强制 `Cache:RedisEnabled=true`，
+因为会话吊销、权限 / 令牌版本失效与分布式限流都依赖跨实例统一视图。
+
+### `dotnet format` 或编译因代码风格失败
+
+构建期强制 `.editorconfig`。直接运行 `dotnet format api.slnx` 自动修复；无法自动修复的规则按提示调整代码，
+不要修改 `.editorconfig` 降级。
+
+## 相关文档
+
+- 仓库总览与前端说明：[根 README](../README.md)、[canexus-admin-vue](../canexus-admin-vue/README.md)
+- 贡献流程与提交规范：[CONTRIBUTING.md](../CONTRIBUTING.md)
+- 错误码与权限定义：`src/Domain.Shared/Results/ErrorCodes.cs`、`src/Domain.Shared/Permissions/PermissionDefinitions.cs`
+- 配置模板：`src/API/appsettings.json`
+- CI 门禁：`.github/workflows/backend-ci.yml`
+
+## 开源许可
+
+见仓库根目录 [LICENSE](../LICENSE)。

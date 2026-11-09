@@ -16,7 +16,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="BCrypt.Net-Next" Version="4.0.3" />
+    <PackageReference Include="BCrypt.Net-Next" Version="4.2.0" />
     <PackageReference Include="Microsoft.Extensions.Caching.Hybrid" Version="10.11.0" />
     <PackageReference Include="Microsoft.Extensions.Caching.StackExchangeRedis" Version="10.0.14" />
     <PackageReference Include="MySqlConnector" Version="2.6.2" />
@@ -25,7 +25,7 @@
     <PackageReference Include="Quartz.Extensions.Hosting" Version="3.22.9" />
     <PackageReference Include="Quartz.Serialization.Json" Version="3.22.9" />
     <PackageReference Include="SqlSugarCore" Version="5.1.4.221" />
-    <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.5.0" />
+    <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.23.0" />
   </ItemGroup>
 
   <ItemGroup>

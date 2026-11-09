@@ -9,6 +9,7 @@ using API;
 using Application.Commands;
 using Application.Contracts.Commands;
 using Application.Contracts.Queries;
+using Application.Events;
 using Domain.Entities;
 using Domain.Services.Auth;
 using Domain.Services.Security;
@@ -30,7 +31,7 @@ public class AuthApiIntegrationTests
     private const string AdminUserName = "admin";
     private const string AdminPassword = "admin123";
     private const string TestUserName = "testuser";
-    private const string TestUserPassword = "test@123";
+    private const string TestUserPassword = "Test@123";
 
     private static WebApplicationFactory<Program> _factory = null!;
     private static HttpClient _httpClient = null!;
@@ -551,7 +552,7 @@ public class AuthApiIntegrationTests
     [Test]
     public async Task ChangePassword_InvalidatesOldAccessToken_NewLoginWorks()
     {
-        const string newPassword = "test@4567";
+        const string newPassword = "Test@4567";
         var (_, tokens) = await LoginAsync(TestUserName, TestUserPassword);
         Assert.That(tokens, Is.Not.Null);
 
@@ -621,6 +622,51 @@ public class AuthApiIntegrationTests
 
             // 测试直接写库恢复状态不会触发领域事件：显式递增令牌版本并清理缓存，
             // 否则后续用例会读到缓存的「已停用」状态而被误判为令牌已撤销（夹具共享同一测试用户）
+            using var scope = _factory.Services.CreateScope();
+            await scope.ServiceProvider.GetRequiredService<ITokenVersionService>().RevokeAllAsync(user!.Id);
+            ClearLoginFailState(TestUserName);
+        }
+    }
+
+    /// <summary>管理员重置用户密码：目标用户此前签发的 accessToken 下一次请求即 401（令牌版本递增），管理员自身会话不受影响。</summary>
+    [Test]
+    public async Task AdminResetPassword_InvalidatesTargetUserAccessToken()
+    {
+        var (_, tokens) = await LoginAsync(TestUserName, TestUserPassword);
+        Assert.That(tokens, Is.Not.Null);
+
+        var user = await _db.Queryable<SysUser>().Where(it => it.UserName == TestUserName).FirstAsync();
+        Assert.That(user, Is.Not.Null);
+
+        try
+        {
+            var reset = await SendJsonAuthorizedAsync(
+                HttpMethod.Put,
+                $"/api/system/user/{user!.Id}/{user.Version}/password",
+                new { password = "Test@7890" },
+                _adminAccessToken);
+            Assert.That(reset.StatusCode, Is.EqualTo(HttpStatusCode.OK), "管理员重置密码应成功");
+
+            var revoked = await SendAuthorizedAsync(HttpMethod.Get, "/api/auth/user-info", tokens!.AccessToken);
+            var revokedBody = await ReadBodyAsync(revoked);
+            var adminStillValid = await SendAuthorizedAsync(HttpMethod.Get, "/api/auth/user-info", _adminAccessToken);
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(revoked.StatusCode, Is.EqualTo(HttpStatusCode.Unauthorized), "管理员重置密码后目标用户旧 accessToken 应立即失效");
+                Assert.That(revokedBody.RootElement.GetProperty("code").GetInt32(), Is.EqualTo(40107), "应返回令牌已撤销错误码");
+                Assert.That(adminStillValid.StatusCode, Is.EqualTo(HttpStatusCode.OK), "重置目标用户密码不应影响管理员自身会话");
+            });
+        }
+        finally
+        {
+            // 恢复测试用户密码与强制改密标记（直写库不触发领域事件：显式清理强制改密标记缓存并递增令牌版本收敛缓存，避免夹具残留影响后续用例）
+            await _db.Updateable<SysUser>()
+                .SetColumns(it => new SysUser { PasswordHash = _passwordHasher.Hash(TestUserPassword), MustChangePassword = false })
+                .Where(it => it.Id == user!.Id)
+                .ExecuteCommandAsync();
+
+            await _cache.RemoveAsync(MustChangePasswordCacheInvalidationHandler.CacheKeyPrefix + user!.Id);
             using var scope = _factory.Services.CreateScope();
             await scope.ServiceProvider.GetRequiredService<ITokenVersionService>().RevokeAllAsync(user!.Id);
             ClearLoginFailState(TestUserName);

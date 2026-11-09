@@ -200,7 +200,7 @@ public class DomainRepository<TEntity>(ISqlSugarClient client, ITenantContext te
     /// <summary>构建批量插入对象（CRUD 构建器 · 增；单条多值 INSERT）。</summary>
     /// <param name="entities">待插入实体集合。</param>
     /// <returns>SqlSugar 插入对象。</returns>
-    protected virtual IInsertable<TEntity> BuildInsert(IEnumerable<TEntity> entities) => client.Insertable(entities);
+    protected virtual IInsertable<TEntity> BuildInsert(IEnumerable<TEntity> entities) => client.Insertable(entities.ToList());
 
     /// <summary>构建按实体更新对象（CRUD 构建器 · 改；聚合根在此基础上追加乐观锁）。</summary>
     /// <param name="entity">待更新实体。</param>

@@ -12,13 +12,21 @@ using Domain.Shared.Results;
 namespace Application.Commands;
 /// <summary>创建通知公告命令处理器（标准创建流程，无前置业务校验——字段规则由验证器承接）。</summary>
 /// <remarks>构造函数。</remarks>
+/// <param name="noticeRepository">公告聚合仓储。</param>
+/// <param name="domainEventPublisher">领域事件发布器。</param>
+/// <param name="mapper">AutoMapper 映射器。</param>
+/// <param name="htmlSanitizer">富文本净化器（公告正文入库前防 XSS）。</param>
 public sealed class NoticeCreateCommandHandler(
     IAggregateRepository<SysNotice> noticeRepository,
     IDomainEventPublisher domainEventPublisher,
-    IMapper mapper) : AggregateCreateCommandHandler<NoticeCreateCommand, NoticeInputRequest, SysNotice>(noticeRepository, domainEventPublisher)
+    IMapper mapper,
+    Security.HtmlRichTextSanitizer htmlSanitizer) : AggregateCreateCommandHandler<NoticeCreateCommand, NoticeInputRequest, SysNotice>(noticeRepository, domainEventPublisher)
 {
     /// <summary>AutoMapper 映射器。</summary>
     private IMapper Mapper { get; } = mapper;
+
+    /// <summary>富文本净化器。</summary>
+    private Security.HtmlRichTextSanitizer HtmlSanitizer { get; } = htmlSanitizer;
 
     /// <inheritdoc />
     protected override Task ValidateAsync(NoticeInputRequest request, CancellationToken cancellationToken)
@@ -29,7 +37,11 @@ public sealed class NoticeCreateCommandHandler(
     /// <inheritdoc />
     protected override SysNotice MapToEntity(NoticeInputRequest request)
     {
-        return Mapper.Map<SysNotice>(request);
+        var entity = Mapper.Map<SysNotice>(request);
+
+        // 公告正文为富文本（前端可提交任意 HTML）：入库前白名单净化，防存储型 XSS
+        entity.Content = HtmlSanitizer.Sanitize(entity.Content);
+        return entity;
     }
 
     /// <inheritdoc />
@@ -73,13 +85,21 @@ public sealed class NoticeRestoreCommandHandler(
 
 /// <summary>更新通知公告命令处理器（标准原位更新流程，无前置业务校验——字段规则由验证器承接）。</summary>
 /// <remarks>构造函数。</remarks>
+/// <param name="noticeRepository">公告聚合仓储。</param>
+/// <param name="domainEventPublisher">领域事件发布器。</param>
+/// <param name="mapper">AutoMapper 映射器。</param>
+/// <param name="htmlSanitizer">富文本净化器（公告正文入库前防 XSS）。</param>
 public sealed class NoticeUpdateCommandHandler(
     IAggregateRepository<SysNotice> noticeRepository,
     IDomainEventPublisher domainEventPublisher,
-    IMapper mapper) : AggregateUpdateCommandHandler<NoticeUpdateCommand, NoticeInputRequest, SysNotice>(noticeRepository, domainEventPublisher)
+    IMapper mapper,
+    Security.HtmlRichTextSanitizer htmlSanitizer) : AggregateUpdateCommandHandler<NoticeUpdateCommand, NoticeInputRequest, SysNotice>(noticeRepository, domainEventPublisher)
 {
     /// <summary>AutoMapper 映射器。</summary>
     private IMapper Mapper { get; } = mapper;
+
+    /// <summary>富文本净化器。</summary>
+    private Security.HtmlRichTextSanitizer HtmlSanitizer { get; } = htmlSanitizer;
 
     /// <inheritdoc />
     protected override int NotFoundErrorCode => ErrorCodes.NoticeNotFound;
@@ -98,6 +118,9 @@ public sealed class NoticeUpdateCommandHandler(
     protected override void MapToEntity(NoticeInputRequest request, SysNotice entity)
     {
         Mapper.Map(request, entity);
+
+        // 公告正文为富文本（前端可提交任意 HTML）：入库前白名单净化，防存储型 XSS
+        entity.Content = HtmlSanitizer.Sanitize(entity.Content);
     }
 
     /// <inheritdoc />

@@ -133,7 +133,7 @@ public class SystemManagementApiTests
         {
             userName,
             nickName = "流程测试用户",
-            password = "init@123",
+            password = "Init@123",
             deptId = SeedId(101),
             email = "flow@example.com",
             phone = "13900001111",
@@ -742,7 +742,7 @@ public class SystemManagementApiTests
     private async Task<Guid> CreateUserAsync(
         string? userName = null,
         string nickName = "B5 测试用户",
-        string? password = "test@123",
+        string? password = "Test@123",
         Guid? deptId = null,
         List<Guid>? roleIds = null)
     {

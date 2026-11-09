@@ -58,6 +58,10 @@ public static class DependencyExtensions
 
         services.AddScoped<IPermissionChecker, PermissionChecker>();
 
+        // 富文本 HTML 净化（防存储型 XSS）：白名单净化器单例复用，公告等富文本字段入库前净化
+        services.AddSingleton<Security.HtmlRichTextSanitizer>(_ =>
+            new Security.HtmlRichTextSanitizer(new Ganss.Xss.HtmlSanitizer()));
+
         // 数据范围过滤：依赖仓储与当前用户上下文，按请求解析并缓存
         services.AddScoped<IDataScopeFilter, DataScopeFilter>();
 

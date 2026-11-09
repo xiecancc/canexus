@@ -40,7 +40,7 @@ public class TreeAssemblyTests
 
             var system = tree[1];
             Assert.That(system.Children.Select(c => c.MenuName).ToList(),
-                Is.EqualTo(new[] { "用户管理", "角色管理" }), "同级按 OrderNum 升序");
+                Is.EqualTo(["用户管理", "角色管理"]), "同级按 OrderNum 升序");
 
             var user = system.Children[0];
             Assert.That(user.Children.Single().Perms, Is.EqualTo("system:user:query"), "按钮应挂到菜单下");
@@ -85,7 +85,7 @@ public class TreeAssemblyTests
             Assert.That(tree, Has.Count.EqualTo(1));
             Assert.That(tree[0].DeptName, Is.EqualTo("总公司"));
             Assert.That(tree[0].Children.Select(c => c.DeptName).ToList(),
-                Is.EqualTo(new[] { "研发部", "市场部" }), "同级按 OrderNum 升序");
+                Is.EqualTo(["研发部", "市场部"]), "同级按 OrderNum 升序");
             Assert.That(tree[0].Children[0].Children, Is.Empty);
         });
     }
@@ -103,6 +103,6 @@ public class TreeAssemblyTests
         var tree = SysDept.BuildTree(depts);
 
         Assert.That(tree.Select(d => d.DeptName).ToList(),
-            Is.EqualTo(new[] { "先建部门", "后建部门" }), "OrderNum 相同时按 Id 升序兜底");
+            Is.EqualTo(["先建部门", "后建部门"]), "OrderNum 相同时按 Id 升序兜底");
     }
 }
