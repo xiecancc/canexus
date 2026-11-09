@@ -209,7 +209,7 @@ dotnet run --project src/API
 }
 ```
 
-3. 复制响应中的 `data.accessToken`，在 Swagger 右上角 **Authorize** 中粘贴（无需手写 `Bearer` 前缀）；
+3. 复制响应中的 `data.accessToken`，在 Swagger 右上角 **Authorize** 中粘贴（无需手写 Bearer 前缀）；
 4. 之后即可调用受保护接口，例如 `GET /api/auth/user-info`。
 
 等价的命令行方式：
@@ -255,7 +255,7 @@ curl -s http://localhost:5000/api/auth/user-info \
 | 配置键 | 默认值 | 说明 |
 | --- | --- | --- |
 | `Jwt:Secret` | 空 | 签名密钥，UTF-8 不少于 32 字节，必填 |
-| `Jwt:Issuer` / `Jwt:Audience` | `SuperAdmin` | 签发者与受众 |
+| `Jwt:Issuer` / `Jwt:Audience` | 默认值 SuperAdmin | 签发者与受众 |
 | `Jwt:AccessTokenMinutes` | `30` | 访问令牌有效期（分钟） |
 | `Jwt:RefreshTokenDays` | `7` | 刷新令牌有效期（天） |
 | `Security:PasswordPolicy` | 8-20 位，含字母 / 数字 / 大写 | 自助改密与管理员重置共用 |
@@ -393,7 +393,7 @@ curl -s http://localhost:5000/api/auth/user-info \
 ### 权限模型
 
 - 权限点集中声明于 `PermissionDefinitions`，命名约定 `模块:动作:资源`（如 `system:user:list`）；
-- 控制器通过 `RequirePermission` 引用常量，编译期检查；启动期扫描控制器声明与注册表比对，未注册即拒绝启动；
+- 控制器通过 `[RequirePermission]` 引用常量，编译期检查；启动期扫描控制器声明与注册表比对，未注册即拒绝启动；
 - 超级管理员持有 `*:*:*`；普通角色按菜单 / 按钮授权，越权返回 403 / 40300；
 - 数据范围（全部 / 自定义部门 / 本部门 / 本部门及以下 / 仅本人）在查询层统一拼接过滤条件。
 
@@ -408,7 +408,7 @@ curl -s http://localhost:5000/api/auth/user-info \
 | 种子 | 按稳定键幂等补齐 | 只补缺失项，不覆盖已修改数据 |
 
 - 迁移脚本指纹取正文 SHA-256，已应用脚本被改动会在启动校验中暴露；
-- 生产环境禁止应用自动改表（`AutoCreateTable` / `AutoSyncStructure` 必须为 false），结构变更走迁移脚本；
+- 生产环境禁止应用自动改表（`Database:AutoCreateTable` / `Database:AutoSyncStructure` 必须为 false），结构变更走迁移脚本；
 - 全新生产库需显式设置 `Database:AllowSchemaInitialization=true` 完成一次性初始化，随后移除该项；
 - 可选开启 `Database:ValidateModelStructure`，在启动时比对实体模型与实际表结构，发现绕过迁移的改表。
 
@@ -490,8 +490,8 @@ docker compose up --build
 # API: http://localhost:8080  （健康检查 /health/ready）
 ```
 
-说明：容器默认以 `Staging` 环境运行（`ASPNETCORE_ENVIRONMENT` 可覆盖），只强制密钥类基线，便于内网直接
-HTTP 访问。正式生产请在 Kubernetes / 反向代理后以 `Production` 运行，并补齐上一节的全部基线配置。
+说明：容器默认以 Staging 环境运行（`ASPNETCORE_ENVIRONMENT` 可覆盖），只强制密钥类基线，便于内网直接
+HTTP 访问。正式生产请在 Kubernetes / 反向代理后以 Production 环境运行，并补齐上一节的全部基线配置。
 
 ### 4. 反向代理与多副本
 
@@ -560,7 +560,7 @@ dotnet user-secrets set "Jwt:Secret" "不少于 32 字节的随机字符串" --p
 
 1. 确认账号角色已勾选对应菜单 / 按钮权限；
 2. 确认前端路由与按钮权限串与后端 `PermissionDefinitions` 一致；
-3. 超管持有 `*:*:*`，若超管也 403，检查令牌中的角色声明与 `MultiTenancy` 配置；
+3. 超管持有 `*:*:*`，若超管也 403，检查令牌中的角色声明与 `MultiTenancy:Enabled` 配置；
 4. 多租户场景下的跨租户访问固定返回 40301。
 
 ### 接口返回 401，`code` 为 40102 或 40107
