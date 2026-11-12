@@ -48,8 +48,14 @@ public sealed class AuthLoginCommandHandler(
     IOptionsMonitor<LoginLockOption> loginLockOptions,
     ILogger<AuthLoginCommandHandler> logger) : RequestHandler<AuthLoginCommand, TokenPairDto>
 {
-    /// <summary>登录失败计数缓存 key 前缀（key 格式：{prefix}{userName}）。</summary>
+    /// <summary>登录失败计数缓存 key 前缀（用户名维度，key 格式：{prefix}{userName}）。</summary>
     public const string LoginFailCacheKeyPrefix = "auth:login-fail:";
+
+    /// <summary>登录失败计数缓存 key 前缀（IP 维度，key 格式：{prefix}{ip}）：防「固定错误密码把任意已知账号打到锁定」的定向锁定攻击（P1-D3）。</summary>
+    public const string LoginFailIpCacheKeyPrefix = "auth:login-fail-ip:";
+
+    /// <summary>哑验证口令（仅用于用户不存在时对固定假哈希做真实 BCrypt 比对，拉平时序侧信道）。</summary>
+    private const string DummyVerifyPassword = "timing-equalization-dummy-password";
 
     /// <summary>允许的最大连续失败次数（达到即锁定）：来自 Security:LoginLock:MaxFailedAttempts。</summary>
     private int MaxLoginFailCount => loginLockOptions.CurrentValue.MaxFailedAttempts;
@@ -62,6 +68,9 @@ public sealed class AuthLoginCommandHandler(
     /// <param name="LastFailTime">最近一次失败时间（用于计算锁定剩余时间）。</param>
     private sealed record LoginFailState(int Count, DateTime LastFailTime);
 
+    /// <summary>哑验证假哈希（进程内惰性生成，见 GetDummyHash）。</summary>
+    private string? dummyHash;
+
     /// <inheritdoc />
     protected override async Task<TokenPairDto> HandleAsync(AuthLoginCommand command, CancellationToken cancellationToken)
     {
@@ -73,13 +82,22 @@ public sealed class AuthLoginCommandHandler(
             throw new BusinessException(ErrorCodes.AuthCaptchaError, "验证码错误或已过期");
         }
 
-        // 2. 锁定检查：同一用户名连续失败达到上限后锁定一段时间
-        await CheckLockStateAsync(request.UserName, cancellationToken);
+        // 2. 锁定检查：同一用户名或同一来源 IP 连续失败达到上限后锁定一段时间（双维度，P1-D3）
+        await CheckLockStateAsync(request.UserName, command.Ip, cancellationToken);
 
         // 3. 校验账号与密码
         var user = (await userRepository.GetListAsync([u => u.UserName == request.UserName], cancellationToken: cancellationToken))
             .FirstOrDefault();
-        if (user is null || !passwordHasher.Verify(request.Password, user.PasswordHash))
+        if (user is null)
+        {
+            // 哑验证拉平时序（P1-D2）：用户不存在时对固定假哈希做一次真实 BCrypt 比对，
+            // 使「用户不存在」与「用户存在但密码错误」两条路径耗时一致，消除按响应时间探测账号存在性的侧信道
+            _ = passwordHasher.Verify(DummyVerifyPassword, GetDummyHash());
+            await RecordLoginFailAsync(request.UserName, command.Ip, command.UserAgent, cancellationToken);
+            throw new BusinessException(ErrorCodes.AuthAccountOrPasswordError, "账号或密码错误");
+        }
+
+        if (!passwordHasher.Verify(request.Password, user.PasswordHash))
         {
             await RecordLoginFailAsync(request.UserName, command.Ip, command.UserAgent, cancellationToken);
             throw new BusinessException(ErrorCodes.AuthAccountOrPasswordError, "账号或密码错误");
@@ -118,8 +136,12 @@ public sealed class AuthLoginCommandHandler(
             }
         }
 
-        // 4. 登录成功：清除失败计数；日志与令牌发放的写一致性由事务管道（TransactionBehavior）保证
+        // 4. 登录成功：清除用户名与 IP 双维度失败计数；日志与令牌发放的写一致性由事务管道（TransactionBehavior）保证
         await cache.RemoveAsync(LoginFailCacheKeyPrefix + request.UserName, cancellationToken);
+        if (!string.IsNullOrWhiteSpace(command.Ip))
+        {
+            await cache.RemoveAsync(LoginFailIpCacheKeyPrefix + command.Ip, cancellationToken);
+        }
         var subject = await tokenSubjectFactory.BuildAsync(user, cancellationToken);
 
         await WriteLoginLogAsync(user.UserName, command.Ip, command.UserAgent, success: true, "登录成功", cancellationToken);
@@ -133,27 +155,65 @@ public sealed class AuthLoginCommandHandler(
         };
     }
 
-    /// <summary>检查账号锁定状态：连续失败达到上限则抛出锁定异常（含剩余分钟数）。</summary>
-    private async Task CheckLockStateAsync(string userName, CancellationToken cancellationToken)
+    /// <summary>检查账号锁定状态：用户名或来源 IP 任一维度连续失败达到上限则抛出锁定异常（含剩余分钟数）。</summary>
+    /// <param name="userName">登录用户名。</param>
+    /// <param name="ip">来源 IP（测试环境 / 无代理场景可能为 null，null 时跳过 IP 维度检查）。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    private async Task CheckLockStateAsync(string userName, string? ip, CancellationToken cancellationToken)
     {
-        var state = await cache.GetAsync<LoginFailState>(LoginFailCacheKeyPrefix + userName, cancellationToken);
-        if (state is not null && state.Count >= MaxLoginFailCount)
+        var userState = await cache.GetAsync<LoginFailState>(LoginFailCacheKeyPrefix + userName, cancellationToken);
+        if (userState is not null && userState.Count >= MaxLoginFailCount)
         {
-            var remaining = LockDuration - (DateTime.UtcNow - state.LastFailTime);
-            var minutes = Math.Max(1, (int)Math.Ceiling(remaining.TotalMinutes));
-            throw new BusinessException(ErrorCodes.AuthAccountLocked, $"密码连续错误次数过多，账号已锁定，请约 {minutes} 分钟后重试");
+            throw LockedError(userState);
+        }
+
+        // IP 维度：同一来源 IP 连续失败达到上限同样锁定，防止固定错误密码把任意已知账号打到锁定（P1-D3）；
+        // 代价是同一出口 IP（NAT）下的合法用户共享失败窗口，误锁风险由锁定窗口时长（默认 10 分钟）与
+        // 认证端点限流共同兜底
+        if (string.IsNullOrWhiteSpace(ip))
+        {
+            return;
+        }
+
+        var ipState = await cache.GetAsync<LoginFailState>(LoginFailIpCacheKeyPrefix + ip, cancellationToken);
+        if (ipState is not null && ipState.Count >= MaxLoginFailCount)
+        {
+            throw LockedError(ipState);
         }
     }
 
-    /// <summary>记录一次登录失败：失败计数 +1（滑动窗口重置）并写入登录日志。</summary>
+    /// <summary>构造账号锁定业务异常（错误码 AuthAccountLocked，含锁定剩余分钟数）。</summary>
+    /// <param name="state">当前失败计数状态。</param>
+    /// <returns>业务异常实例。</returns>
+    private BusinessException LockedError(LoginFailState state)
+    {
+        var remaining = LockDuration - (DateTime.UtcNow - state.LastFailTime);
+        var minutes = Math.Max(1, (int)Math.Ceiling(remaining.TotalMinutes));
+        return new BusinessException(ErrorCodes.AuthAccountLocked, $"密码连续错误次数过多，账号已锁定，请约 {minutes} 分钟后重试");
+    }
+
+    /// <summary>记录一次登录失败：用户名与来源 IP 双维度计数 +1（滑动窗口重置）并写入登录日志。</summary>
     /// <remarks>
-    /// 计数读-改-写经分布式锁保护（按用户名分区）：多实例并发失败时避免计数丢失导致锁定阈值被稀释；
+    /// 计数读-改-写经分布式锁保护（按计数 key 分区）：多实例并发失败时避免计数丢失导致锁定阈值被稀释；
     /// 未获取到锁（等待超时 / Redis 故障）降级为无锁路径，认证端点限流（auth 策略）兜底暴力尝试。
     /// 失败日志经独立连接写入：随后抛出的业务异常会回滚命令事务，审计日志必须存活于回滚之外。
     /// </remarks>
     private async Task RecordLoginFailAsync(string userName, string? ip, string? userAgent, CancellationToken cancellationToken)
     {
-        var key = LoginFailCacheKeyPrefix + userName;
+        await RecordFailStateAsync(LoginFailCacheKeyPrefix + userName, cancellationToken);
+        if (!string.IsNullOrWhiteSpace(ip))
+        {
+            await RecordFailStateAsync(LoginFailIpCacheKeyPrefix + ip, cancellationToken);
+        }
+
+        await WriteLoginLogAsync(userName, ip, userAgent, success: false, "账号或密码错误", cancellationToken, independent: true);
+    }
+
+    /// <summary>按单个计数 key 记录一次失败（读-改-写经分布式锁保护，滑动窗口重置）。</summary>
+    /// <param name="key">失败计数缓存 key（用户名或 IP 维度）。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    private async Task RecordFailStateAsync(string key, CancellationToken cancellationToken)
+    {
         await using var handle = await distributedLock.AcquireAsync(
             key, TimeSpan.FromSeconds(5), TimeSpan.FromMilliseconds(500), cancellationToken);
 
@@ -164,8 +224,18 @@ public sealed class AuthLoginCommandHandler(
 
         // 显式 TTL：L1 1 分钟（本实例快速判定）/ L2 取配置锁定窗口（跨实例一致）
         await cache.SetAsync(key, next, new CacheTtlProfile(TimeSpan.FromMinutes(1), LockDuration), cancellationToken);
+    }
 
-        await WriteLoginLogAsync(userName, ip, userAgent, success: false, "账号或密码错误", cancellationToken, independent: true);
+    /// <summary>取哑验证用的固定假哈希（进程内惰性生成一次，供用户不存在路径拉平 BCrypt 耗时）。</summary>
+    /// <returns>固定假哈希串。</returns>
+    private string GetDummyHash()
+    {
+        if (dummyHash is null)
+        {
+            dummyHash = passwordHasher.Hash(DummyVerifyPassword);
+        }
+
+        return dummyHash;
     }
 
     /// <summary>写入登录日志（User-Agent 原样存储，浏览器 / 操作系统解析留给展示层）。</summary>
