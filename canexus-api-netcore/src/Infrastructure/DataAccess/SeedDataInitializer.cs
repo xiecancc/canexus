@@ -5,6 +5,7 @@ using Domain.Services.Auth;
 using Domain.Services.Rules;
 using Domain.Shared.Constants;
 using Domain.Shared.Enums;
+using Domain.Shared.Permissions;
 using Infrastructure.Shared.Caching;
 using Infrastructure.Shared.Locking;
 using Infrastructure.Shared.Options;
@@ -346,7 +347,7 @@ public sealed class SeedDataInitializer(
         await EnsureMenuAsync(Menu(MenuType.Menu, SeedId(202), "登录日志", "logininfor", "monitor/logininfor/index", "monitor:logininfor:list", "logininfor", order: 2, parentId: SeedId(200)));
         await EnsureButtonsAsync(SeedId(202), "monitor:logininfor", "登录日志", startId: 2021,
             ("查询", "query"), ("删除", "remove"), ("清空", "clean"), ("导出", "export"));
-        await EnsureMenuAsync(Menu(MenuType.Menu, SeedId(203), "缓存监控", "cache", "monitor/cache/index", "monitor/cache:list", "redis", order: 3, parentId: SeedId(200)));
+        await EnsureMenuAsync(Menu(MenuType.Menu, SeedId(203), "缓存监控", "cache", "monitor/cache/index", PermissionDefinitions.MonitorCacheList, "redis", order: 3, parentId: SeedId(200)));
 
         // 系统工具目录
         await EnsureMenuAsync(Menu(MenuType.Directory, SeedId(300), "系统工具", "tool", null, icon: "tool", order: 4));

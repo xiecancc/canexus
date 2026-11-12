@@ -816,6 +816,20 @@ Development 可不启用（缓存退化为进程内 L1、限流失效为单实�
 
 ## 变更记录
 
+### 2026-11-13（一）：深度评审 P0-B1 缓存监控种子权限串修复
+
+1. **问题**：缓存监控菜单种子的 perms 为 `monitor/cache:list`（斜杠），与权限注册表 /
+   控制器要求的 `monitor:cache:list`（冒号）不一致——非超管角色即使被授予「缓存监控」
+   菜单，访问 `/api/monitor/cache` 仍返回 403（种子写入的权限串与鉴权串永不相等）。
+2. **修复**：`SeedDataInitializer` 的缓存监控菜单 perms 改为直接引用
+   `PermissionDefinitions.MonitorCacheList` 常量，消除第二份手写字符串；
+   菜单种子的原位纠偏逻辑会在既有库启动时自动把存量 `monitor/cache:list`
+   纠偏为正确标识，无需手工修数。
+3. **后续**：剩余菜单 / 按钮种子的权限串派生与「种子 perms ⊆ 注册表」启动校验
+   在 P1-H1 批次继续收敛。
+
+**验证**：`dotnet test api.slnx` 全量通过（Domain 92 / Application 148 / Infrastructure 148 / API 205，0 失败）。
+
 ### 2026-11-13：CRUD 样板收敛第二批（Job 命令处理器迁移基类）
 
 1. **Job 模块迁移**：定时任务模块的 5 个标准流程写命令处理器（创建 / 删除 / 恢复 / 更新 /
