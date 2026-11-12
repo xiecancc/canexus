@@ -19,10 +19,19 @@ public sealed class DatabaseOption : OptionBase
     public bool AutoCreateDatabase { get; set; } = true;
 
     /// <summary>是否自动建库建表（表不存在时自动创建），默认 true；Production 基线要求显式配置为 false。</summary>
+    /// <remarks>与 <see cref="AutoSyncStructure"/> 恒以或运算并用、语义等价；新配置只用本开关。</remarks>
     public bool AutoCreateTable { get; set; } = true;
 
     /// <summary>是否自动同步表结构（按实体定义同步列、索引差异），默认 true；Production 基线要求显式配置为 false。</summary>
+    /// <remarks>仅为向后兼容别名：与 <see cref="AutoCreateTable"/> 恒以或运算并用、语义等价，勿依赖其独立语义；新配置只用 AutoCreateTable。</remarks>
     public bool AutoSyncStructure { get; set; } = true;
+
+    /// <summary>
+    /// 是否允许应用执行结构初始化（CodeFirst 一次性建表）：两个历史开关的或运算收敛入口。
+    /// <para>二者恒以或运算并用、语义等价，新配置只用 AutoCreateTable；AutoSyncStructure 仅为向后兼容别名，勿依赖其独立语义。
+    /// 任一为 true 即允许初始化，仅当两者都为 false 时拒绝。</para>
+    /// </summary>
+    public bool ShouldInitializeStructure => AutoCreateTable || AutoSyncStructure;
 
     /// <summary>
     /// 是否允许在 Production 由应用执行「结构初始化」（首次建表 / 引擎修正），默认 false。

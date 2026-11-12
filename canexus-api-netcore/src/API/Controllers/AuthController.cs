@@ -1,4 +1,5 @@
 
+using API.Extensions;
 using API.Logging;
 using Application.Contracts.Auth;
 using Application.Contracts.Commands;
@@ -20,7 +21,7 @@ namespace API.Controllers;
 /// <param name="sender">MediatR 请求发送器（命令 / 查询请求分发入口）。</param>
 /// <param name="jwtOptions">JWT 配置（refreshToken Cookie 可选模式）。</param>
 [ApiController]
-[ApiVersion("1.0")]
+[ApiVersion(ApiVersioningExtensions.CurrentVersion)]
 [Route("api/auth")]
 public class AuthController(ISender sender, IOptionsMonitor<JwtOption> jwtOptions) : ControllerBase
 {

@@ -32,8 +32,18 @@ public sealed partial class BootstrapOption : OptionBase
             return;
         }
 
-        EnsureInRange(AdminInitialPassword.Length, 6, 20, nameof(AdminInitialPassword),
-            "Bootstrap:AdminInitialPassword 长度必须在 6-20 位之间");
+        // 初始口令的长度口径统一取自 PasswordPolicyOption 的安全基线默认值（8-20 位），
+        // 不再在两处硬编码 6 / 8 位下限导致漂移（P2-4 / E5）。此处走 Options 管道 ValidateOnStart，
+        // 无法注入可热加载的策略实例，故以代码基线为准：即便部署方下调 Security:PasswordPolicy，
+        // 内置超管初始口令也不得低于生产基线，避免口令强度被间接降低。
+        // 一次性初始口令由 RequirePasswordChangeOnSeed（默认 true）在首登强制改为满足完整复杂度策略的口令，
+        // 故此处只校验长度 + 字母数字 + 禁止空白；大写 / 小写 / 特殊字符等完整复杂度由改密时的
+        // ValidationRules.PasswordRule 按部署方配置的 PasswordPolicyOption 强制执行。
+        var baseline = new PasswordPolicyOption();
+        EnsureInRange(AdminInitialPassword.Length, baseline.MinLength, baseline.MaxLength, nameof(AdminInitialPassword),
+            $"Bootstrap:AdminInitialPassword 长度必须在 {baseline.MinLength}-{baseline.MaxLength} 位之间（与口令策略基线一致）");
+        Ensure(!AdminInitialPassword.Any(char.IsWhiteSpace), nameof(AdminInitialPassword),
+            "Bootstrap:AdminInitialPassword 不允许包含空白字符");
         Ensure(PasswordPattern().IsMatch(AdminInitialPassword), nameof(AdminInitialPassword),
             "Bootstrap:AdminInitialPassword 必须同时包含字母与数字");
     }

@@ -1,5 +1,6 @@
 
 using API.Authorization;
+using API.Extensions;
 using API.Logging;
 using Application.Contracts.Commands;
 using Application.Contracts.Posts;
@@ -17,7 +18,7 @@ namespace API.Controllers;
 /// <remarks>构造函数。</remarks>
 /// <param name="sender">MediatR 请求发送器（命令 / 查询请求分发入口）。</param>
 [ApiController]
-[ApiVersion("1.0")]
+[ApiVersion(ApiVersioningExtensions.CurrentVersion)]
 [Route("api/system/post")]
 [Authorize]
 public class SysPostController(ISender sender) : ControllerBase

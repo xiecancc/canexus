@@ -1,5 +1,6 @@
 
 using API.Authorization;
+using API.Extensions;
 using Application.Contracts.Jobs;
 using Application.Contracts.Queries;
 using Asp.Versioning;
@@ -14,7 +15,7 @@ namespace API.Controllers;
 /// <remarks>构造函数。</remarks>
 /// <param name="sender">MediatR 请求发送器（命令 / 查询请求分发入口）。</param>
 [ApiController]
-[ApiVersion("1.0")]
+[ApiVersion(ApiVersioningExtensions.CurrentVersion)]
 [Route("api/monitor/job-log")]
 [Authorize]
 public class SysJobLogController(ISender sender) : ControllerBase

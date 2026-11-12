@@ -153,6 +153,26 @@ public class OptionValidationTests
         Assert.Throws<ArgumentOutOfRangeException>(() => option.Validate());
     }
 
+    /// <summary>验证结构初始化开关为两开关或运算：任一为 true 即允许初始化，全 false 才拒绝。</summary>
+    /// <param name="autoCreateTable">AutoCreateTable 取值。</param>
+    /// <param name="autoSyncStructure">AutoSyncStructure 取值。</param>
+    /// <param name="expected">ShouldInitializeStructure 期望值。</param>
+    [TestCase(true, true, true)]
+    [TestCase(true, false, true)]
+    [TestCase(false, true, true)]
+    [TestCase(false, false, false)]
+    public void DatabaseOption_ShouldInitializeStructure_IsLogicalOrOfBothSwitches(
+        bool autoCreateTable, bool autoSyncStructure, bool expected)
+    {
+        var option = new DatabaseOption
+        {
+            AutoCreateTable = autoCreateTable,
+            AutoSyncStructure = autoSyncStructure
+        };
+
+        Assert.That(option.ShouldInitializeStructure, Is.EqualTo(expected));
+    }
+
     /// <summary>验证数据库类型取值非法时校验抛出异常。</summary>
     [Test]
     public void DatabaseOption_InvalidDbType_Throws()
@@ -355,5 +375,48 @@ public class OptionValidationTests
         var option = new HttpsOption { HstsMaxAgeDays = 731 };
 
         Assert.Throws<ArgumentException>(() => option.Validate());
+    }
+
+    // —— BootstrapOption（初始口令口径与 PasswordPolicyOption 基线对齐）——
+
+    /// <summary>留空初始口令为合法配置（生产由宿主启动期强校验、非生产由种子初始化器生成）。</summary>
+    [Test]
+    public void BootstrapOption_EmptyPassword_Passes()
+    {
+        Assert.DoesNotThrow(() => new BootstrapOption { AdminInitialPassword = string.Empty }.Validate());
+    }
+
+    /// <summary>初始口令长度下限与 PasswordPolicyOption 基线一致：低于 8 位被拒绝。</summary>
+    [Test]
+    public void BootstrapOption_ShortPassword_Throws()
+    {
+        var ex = Assert.Throws<ArgumentOutOfRangeException>(() =>
+            new BootstrapOption { AdminInitialPassword = "Ab1" }.Validate());
+        Assert.That(ex!.Message, Does.Contain("8-20"));
+    }
+
+    /// <summary>8-20 位、含字母与数字、无空白的初始口令通过校验（下限与口令策略基线一致）。</summary>
+    [Test]
+    public void BootstrapOption_ValidPassword_Passes()
+    {
+        Assert.DoesNotThrow(() => new BootstrapOption { AdminInitialPassword = "admin123" }.Validate());
+        Assert.DoesNotThrow(() => new BootstrapOption { AdminInitialPassword = "Aa123456789012345678" }.Validate());
+    }
+
+    /// <summary>超过口令策略基线上限（20 位）的初始口令被拒绝。</summary>
+    [Test]
+    public void BootstrapOption_PasswordAboveMaxLength_Throws()
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            new BootstrapOption { AdminInitialPassword = "Aa1234567890123456789" }.Validate());
+    }
+
+    /// <summary>仅字母 / 仅数字 / 含空白的初始口令被拒绝（字符类与禁止空白与策略一致）。</summary>
+    [Test]
+    public void BootstrapOption_WeakPassword_Throws()
+    {
+        Assert.Throws<ArgumentException>(() => new BootstrapOption { AdminInitialPassword = "abcdefgh" }.Validate());
+        Assert.Throws<ArgumentException>(() => new BootstrapOption { AdminInitialPassword = "12345678" }.Validate());
+        Assert.Throws<ArgumentException>(() => new BootstrapOption { AdminInitialPassword = "abcd 123" }.Validate());
     }
 }

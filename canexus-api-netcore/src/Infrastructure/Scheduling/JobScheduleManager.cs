@@ -134,7 +134,36 @@ public sealed class JobScheduleManager(
             }
         }
 
-        logger.LogInformation("定时任务同步完成：运行中 {Count} 个，调度器内本系统任务 {Existing} 个", jobs.Count, existingKeys.Count);
+        // P2-7 结果校验：上面单任务装载的 try/catch 会吞掉失败（仅记 LogError），若不复核，
+        // 应用会带着「库中启用但调度器缺失」的任务静默启动。同步后重新读取调度器实际 JobKey 集合核对。
+        var actualKeys = (await scheduler.GetJobKeys(GroupMatcher<JobKey>.AnyGroup(), cancellationToken))
+            .Where(key => key.Name.StartsWith("sys_job_", StringComparison.Ordinal))
+            .ToHashSet();
+        var missingKeys = desiredKeys.Where(key => !actualKeys.Contains(key)).ToArray();
+        if (missingKeys.Length > 0)
+        {
+            logger.LogError(
+                "定时任务同步结果校验失败：库内启用 {Desired} 个，调度器内本系统任务 {Actual} 个，缺失 {Missing} 个（{JobKeys}），触发一次兜底重新同步",
+                desiredKeys.Count, actualKeys.Count, missingKeys.Length,
+                string.Join(", ", missingKeys.Select(key => key.Name)));
+
+            // 兜底：仅对缺失任务再执行一次差异同步（不整库重扫，保持「提交后事件驱动」架构与最小副作用）
+            foreach (var job in jobs.Where(job => missingKeys.Contains(BuildJobKey(job.Id, job.JobGroup))))
+            {
+                try
+                {
+                    await EnsureScheduledAsync(scheduler, job, cancellationToken);
+                    logger.LogInformation("定时任务同步兜底重新同步成功：{JobName}（{JobType}）", job.JobName, job.JobType);
+                }
+                catch (Exception exception)
+                {
+                    logger.LogError(exception, "定时任务同步兜底重新同步仍失败：{JobName}（{JobType}）", job.JobName, job.JobType);
+                }
+            }
+        }
+
+        logger.LogInformation("定时任务同步完成：库内启用 {Desired} 个，调度器内本系统任务 {Actual} 个（校验时口径）",
+            desiredKeys.Count, actualKeys.Count);
     }
 
     /// <summary>

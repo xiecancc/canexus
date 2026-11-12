@@ -51,13 +51,11 @@ internal static class RoleMenuSupport
     /// <summary>全量替换角色-菜单授权（先删后插，调用方需保证工作单元事务内执行）。</summary>
     public static async Task ReplaceRoleMenusAsync(IDomainRepository<SysRoleMenu> roleMenuRepository, Guid roleId, List<Guid> menuIds, CancellationToken cancellationToken)
     {
-        // 按条件物理删除旧授权（单条 SQL），再插入新授权集合
+        // 按条件物理删除旧授权（单条 SQL），再批量插入新授权集合（单条多值 INSERT，与用户-角色关联同口径）
         await roleMenuRepository.HardDeleteAsync(rm => rm.RoleId == roleId, cancellationToken);
-
-        foreach (var menuId in menuIds.Distinct())
-        {
-            await roleMenuRepository.InsertAsync(new SysRoleMenu { RoleId = roleId, MenuId = menuId }, cancellationToken);
-        }
+        await roleMenuRepository.InsertAsync(
+            menuIds.Distinct().Select(menuId => new SysRoleMenu { RoleId = roleId, MenuId = menuId }),
+            cancellationToken);
     }
 }
 

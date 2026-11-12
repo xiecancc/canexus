@@ -276,7 +276,12 @@ curl -s http://localhost:5000/api/auth/user-info \
 `Database__ConnectionString`、`Cache__RedisEnabled`。
 
 所有配置节在启动时统一绑定并校验（继承 `OptionBase` 的选项类），任何一项非法都会在启动阶段报错，
-不会带病运行。
+不会带病运行。`appsettings.json` 只写与代码默认值不同的差异项：Jwt 签发者 / 受众 / 有效期、
+口令策略、登录锁定阈值、导出行数上限、缓存 TTL 与键前缀、上传扩展名白名单等默认值统一在
+对应配置类（如 `PasswordPolicyOption`、`CacheOption`）中维护，部署方需要调整时再写差异项，
+避免配置与代码两处重复导致值漂移。Redis 连接串以 `Cache:RedisConfiguration` 为单一来源：
+缓存 L2、失效广播、分布式锁与分布式限流共用，限流未显式配置 `RateLimit:RedisConfiguration`
+时自动回退到缓存连接串（`docker-compose.yml` 亦不再重复声明）。
 
 ### 主要配置项
 
@@ -287,10 +292,10 @@ curl -s http://localhost:5000/api/auth/user-info \
 | `Database:ConnectionString` | 空 | MySQL 连接串，必填 |
 | `Database:AutoCreateDatabase` | `true` | 库不存在时是否用管理连接创建 |
 | `Database:AutoCreateTable` | `true` | 首次初始化是否建表；Production 必须为 `false` |
-| `Database:AutoSyncStructure` | `true` | 是否同步表结构；Production 必须为 `false` |
+| `Database:AutoSyncStructure` | `true` | `Database:AutoCreateTable` 的兼容别名（语义等价、恒以或运算并用）；Production 必须为 `false`，新配置只用 `Database:AutoCreateTable` |
 | `Database:AllowSchemaInitialization` | `false` | 全新生产库首次建库建表的一次性授权 |
 | `Database:MigrationsEnabled` | `true` | 是否启用迁移执行通道（按序执行全部幂等 `ISchemaMigration` 脚本） |
-| `Database:ValidateModelStructure` | `false` | 启动时比对实体模型与库表列 / 主键，发现绕过 CodeFirst / 迁移通道的改表 |
+| `Database:ValidateModelStructure` | `false` | 启动时比对实体模型与库表列 / 非空约束 / 主键 / 列长度与类型族 / 索引覆盖（`ModelStructureValidator`），发现绕过 CodeFirst / 迁移通道的改表即阻止启动；只拦截、不自动改表 |
 
 **认证与安全**
 
@@ -312,7 +317,7 @@ curl -s http://localhost:5000/api/auth/user-info \
 | --- | --- | --- |
 | `MultiTenancy:Enabled` | `false` | 多租户开关；Production 必须显式声明 |
 | `Cache:RedisEnabled` | `false` | L2 分布式缓存开关；Production 必须为 `true` |
-| `Cache:RedisConfiguration` | `localhost:6379` | Redis 连接串 |
+| `Cache:RedisConfiguration` | `localhost:6379` | Redis 连接串（单一来源；缓存 L2 / 失效广播 / 分布式锁 / 分布式限流共用） |
 | `Cache:Hot/Medium/Cold` | 见配置文件 | 三档 TTL（本地 / 分布式秒数） |
 | `Outbox:Enabled` | `true` | 领域事件 Outbox worker 开关 |
 | `Outbox:PollIntervalSeconds` | `5` | 轮询间隔 |
@@ -322,6 +327,7 @@ curl -s http://localhost:5000/api/auth/user-info \
 | `RateLimit:GlobalPermitLimit` | `0` | 全局每窗口请求数；`0` 表示不启用，Production 必须大于 0 |
 | `RateLimit:AuthPermitLimit` | `100` | 验证码 / 登录 / 刷新令牌端点配额 |
 | `RateLimit:UseRedis` | `false` | 分布式限流；多副本部署必须开启 |
+| `RateLimit:RedisConfiguration` | 回退 `Cache:RedisConfiguration` | 可选；仅为限流单独指定 Redis 时显式覆盖，未配置时自动回退缓存连接串 |
 | `FileStorage:MaxSizeMB` | `10` | 上传大小上限（Kestrel 请求体上限自动对齐为 +1MB） |
 | `FileStorage:RootPath` | `uploads` | 本地存储根目录 |
 | `Export:MaxRows` | `10000` | 单次导出最大行数，超出截断并在文件名标注 |
@@ -354,7 +360,7 @@ curl -s http://localhost:5000/api/auth/user-info \
 | `Database:AutoSyncStructure` | `false` |
 | `Database:AllowSchemaInitialization` | 必须为 `false`（显式 `true` 会被拦截；全新库一次性初始化请临时改为 `true`，完成后移除） |
 | `Database:MigrationsEnabled` | 必须为 `true`（显式 `false` 会让结构脱离迁移通道，仅限外部脚本全权管理结构的部署） |
-| `Database:ValidateModelStructure` | `true`（启动期比对实体模型与实际列 / 主键，发现绕过 CodeFirst / 迁移通道的改表即阻止启动） |
+| `Database:ValidateModelStructure` | `true`（启动期比对实体模型与实际列 / 非空约束 / 主键 / 列长度与类型族 / 索引覆盖，发现绕过 CodeFirst / 迁移通道的改表即阻止启动） |
 | `Https:RedirectEnabled` | `true` |
 | `Https:HstsEnabled` | `true` |
 | `RateLimit:Enabled` 且 `RateLimit:GlobalPermitLimit` | `true` 且大于 0 |
@@ -508,8 +514,8 @@ curl -s http://localhost:5000/api/auth/user-info \
 | 层 | 判定方式 | 行为 |
 | --- | --- | --- |
 | 库 | 用剥离库名的管理连接查 `information_schema.SCHEMATA` | 不存在且允许时建库，否则明确拒绝启动 |
-| 结构 | 按 `information_schema.TABLES` 找出缺失的模型表 | 缺表时 CodeFirst 一次性建表并修正为 InnoDB；表齐全时**不执行任何建表 DDL**。随后按序执行全部幂等迁移脚本 |
-| Quartz 表 | 按 `information_schema.TABLES` 统计 11 张 `QRTZ_*` 表是否齐全 | 缺表时以 `CREATE TABLE IF NOT EXISTS`（索引内联在表定义中）幂等补齐；宿主启动块内显式调用一次，不再注册宿主服务 |
+| 结构 | 用 SqlSugar ORM 元数据（`DbMaintenance.GetTableInfoList(false)`，禁用缓存）找出缺失的模型表 | 缺表时 CodeFirst 一次性建表并修正为 InnoDB；表齐全时**不执行任何建表 DDL**。随后按序执行全部幂等迁移脚本 |
+| Quartz 表 | 用 SqlSugar ORM 元数据核对 11 张 `QRTZ_*` 表是否齐全（部分表残留也能自愈补齐） | 缺表时以 `CREATE TABLE IF NOT EXISTS`（索引内联在表定义中）幂等补齐；宿主启动块内显式调用一次，不再注册宿主服务 |
 | 种子 | 按稳定键幂等补齐 | 只补缺失项，不覆盖已修改数据 |
 
 框架处于开发初期，**所有数据库都是临时的，可直接删除重建**：
@@ -534,9 +540,16 @@ DROP DATABASE IF EXISTS super_admin_test;   -- 开发 / 测试库同理
    （原生 SQL 经 `ITransactionSqlRunner` 挂接事务；MySQL DDL 有隐式提交，故脚本必须可重复执行）。
 
 - 生产环境禁止应用自动改表（`Database:AutoCreateTable` / `Database:AutoSyncStructure` 必须为 false）；
+  两个历史开关语义等价、恒以或运算并用，初始化判定收敛到 `DatabaseOption` 的单一入口；
+  新配置只用 `Database:AutoCreateTable`，另一项仅作向后兼容别名；
+- 表级缺表判定与 Quartz 表完整性判定统一走 SqlSugar ORM 元数据，库级判定仍用剥离库名的
+  管理连接（目标库尚未创建时业务连接不可用，不能改用 ORM 元数据）；该调整只换探测手段，
+  不改变「缺表 CodeFirst 一次性建表 + 幂等迁移」的初始化语义，也不引入列同步或迁移历史；
 - 全新生产库需显式设置 `Database:AllowSchemaInitialization=true` 完成一次性初始化，随后移除该项
   （稳态下生产基线校验要求其为 false）；
-- `Database:ValidateModelStructure` 在生产必须为 `true`：比对实体模型与实际表结构，发现绕过 CodeFirst / 迁移通道的改表即阻止启动，是防止手工改表破坏结构一致性的最后一道安全网。
+- `Database:ValidateModelStructure` 在生产必须为 `true`：比对实体模型与实际表结构（列、非空约束、
+  主键、列长度与类型族、索引覆盖），发现绕过 CodeFirst / 迁移通道的改表即阻止启动，
+  是防止手工改表破坏结构一致性的最后一道安全网；比对只做确定性规则，不自动改表。
 
 ## 测试
 
@@ -573,7 +586,10 @@ export SUPER_ADMIN_TEST_CONN="server=localhost;port=3306;database=super_admin_te
 
 CI 分两条流水线：
 
-- `.github/workflows/backend-ci.yml`：README 类型校验 → 还原 → 编译 → 格式检查 → 全量测试；
+- `.github/workflows/backend-ci.yml`：NuGet 还原 → 交付门禁脚本（README 类型校验 / 构建 /
+  格式检查 / 全量测试 + 行覆盖率采集）→ 上传 cobertura 覆盖率产物；脚本为
+  `scripts/verify-delivery.py`，与本地 `python scripts/verify-delivery.py` 同源（见
+  [CONTRIBUTING.md](CONTRIBUTING.md)）。
   `services` 同时提供 `mysql:8.0` 与 `redis:7-alpine`（后者带 healthcheck），
   因为 `DistributedRateLimitApiTests` 强依赖 `localhost:6379` 且断言 Redis 可达；
 - `.github/workflows/frontend-ci.yml`（前端路径变更时触发）：`pnpm install --frozen-lockfile` →
@@ -721,7 +737,9 @@ dotnet user-secrets set "Jwt:Secret" "不少于 32 字节的随机字符串" --p
 ### 启动报错：`Bootstrap:AdminInitialPassword` 必须显式提供
 
 非 Development 环境必须提供内置超管初始口令；Development 未提供时会随机生成并在控制台输出一次。
-口令需满足 `Security:PasswordPolicy`（默认 8-20 位，含字母与数字）。
+口令需满足 `Security:PasswordPolicy`（默认 8-20 位，含字母与数字）；初始口令的长度区间
+在启动期直接与 `PasswordPolicyOption` 的代码基线对齐（不依赖配置是否显式写出该节），
+且不允许包含空白字符，避免内置账号口令绕过统一策略。
 
 ### Production 启动失败，列出多项「基线校验失败」
 
@@ -797,6 +815,69 @@ Development 可不启用（缓存退化为进程内 L1、限流失效为单实�
 不要修改 `.editorconfig` 降级。
 
 ## 变更记录
+
+### 2026-11-12（四）：深度评审 P2 收尾（配置减负 / 结构校验 / 任务调度 / 性能与样板收敛）
+
+本批为评审报告 P2 剩余项的收尾，遵循「不为规范化而规范化」：**开发态仍走删库重建，
+不引入迁移框架、迁移历史表或自动列同步**，只收敛配置语义、改用 ORM 已有能力、补齐观测与兜底。
+
+**配置减负（P2-4 / P2-11）**
+
+1. **配置模板只写差异项**：`appsettings.json` 删除与代码默认值逐项一致的冗余键
+   （Jwt 签发者 / 受众 / 有效期、口令策略、登录锁定阈值、导出行数上限、缓存 TTL / 键前缀 /
+   负载上限、上传扩展名白名单、限流 Redis 连接串）。已逐项核对 `JwtOption`、
+   `PasswordPolicyOption`、`LoginLockOption`、`ExportOption`、`CacheOption`、
+   `FileStorageOption` 的代码默认值，删除后行为不变；部署方需要调整时再写差异项。
+   `docker-compose.yml` 同步移除重复的限流 Redis 连接串声明。
+2. **Redis 连接串单一来源**：`SecurityDependencyExtensions` 新增统一解析入口，
+   `RateLimit:RedisConfiguration` 未显式配置时回退到 `Cache:RedisConfiguration`，
+   使缓存 L2、失效广播、分布式锁、分布式限流共用同一 Redis；显式覆盖优先级保留。
+3. **初始口令策略对齐**：`BootstrapOption` 的长度校验改为直接复用
+   `PasswordPolicyOption` 的代码基线（不依赖配置节是否显式写出），并拒绝空白字符。
+4. **重叠开关收敛**：`DatabaseOption` 明确 `Database:AutoSyncStructure` 是
+   `Database:AutoCreateTable` 的向后兼容别名（恒以或运算并用、语义等价），
+   新增统一判定入口（代码内的初始化判定属性）；
+   `DbInitializer` 与 Quartz 建表改用 SqlSugar ORM 元数据（表清单探测禁用缓存）替代手写
+   information_schema 查询，库级判定仍保留剥离库名的管理连接。架构测试白名单同步去掉
+   已不再使用裸 Ado 的 `DatabaseSchemaProbe` 条目。**不改变初始化语义、不引入列同步**。
+
+**结构校验与调度（P2-6 / P2-7 / P2-8）**
+
+5. **模型结构校验补强**：`ModelStructureValidator` 在原列存在性 / 非空约束 / 主键比对之外，
+   增加确定性的列长度、类型族、小数位精度与「模型声明索引是否被覆盖」比对；
+   纯比对逻辑抽出为可单测方法，新增 `ModelStructureValidatorTests` 覆盖差异与误报边界。
+   刻意不解析 MySQL 类型别名文本，避免 `int(11)` 之类误报；只拦截漂移、不自动改表。
+   Aop 对 CopyNew / SetColumns 写入路径的覆盖经调研判定为高风险低收益，本批**只给结论不改代码**。
+6. **任务调度同步兜底**：`JobScheduleManager` 在单任务装载的异常被吞掉后复核调度器实际任务数，
+   对缺失任务逐个重新同步并记录失败告警；`JobExecuteWrapper` 补齐任务级异常日志。
+   MySQL 高可用仅给出运维结论，不在本批引入代码改动。
+7. **缓存监控降级可重试**：`CacheMonitorProvider` 改为按 `CacheOption` 统一建连参数、
+   异步懒加载，连接失败不缓存永久失败状态，后续请求可重试；监控端点始终可响应，
+   缓存故障告警仍由健康检查承担。
+
+**性能、整洁与样板（P2-9 / P2-1 / P2-3 / P2-10）**
+
+8. **三项低风险性能 / 整洁改动**（P2-9）：最新公告查询下推分页与排序后取前 N 条，
+   角色菜单授权改为批量插入，文件上传元数据写库失败时补偿删除已落盘孤儿文件；
+   新增 `ApplicationHardeningTests` 覆盖。日志实体抽公共基类、树形查询结果缓存
+   经调研判定为高风险 / 收益不明，本批**只给结论不改代码**。
+9. **控制器版本常量联动**（P2-1）：20 个控制器统一由硬编码版本号改为引用
+   `ApiVersioningExtensions.CurrentVersion`，破坏性版本发布时只需改一处；
+   `ApiVersioningExtensions` 注释同步修正。新增 `docs/CRUD样板收敛路线.md`，
+   记录现状、暂不做全量泛型基类 / Source Generator 的理由与按模块分批路线，
+   明确「明确不做」清单（不重写充血聚合、不移 SqlSugar 特性、不引入 ABP / EF Core / Auto API）。
+10. **CI 与文档漂移**（P2-3 / P2-10）：README 的后端 CI 描述改为「NuGet 还原 → 交付门禁脚本
+    （README 类型校验 / 构建 / 格式 / 全量测试 + 覆盖率采集）→ 上传 cobertura 产物」，
+    并链接 `CONTRIBUTING.md`；相关文档补 `docs/CRUD样板收敛路线.md` 与
+    `docs/事务语义与ORM选型说明.md`。
+
+**明确不做**（沿用评审 P3 结论）：不为规范化重写充血聚合、不引入迁移框架 / 自动列同步、
+不做控制器全量泛型化、不统一文件下载 / 健康检查响应包装。
+
+**验证**：`dotnet build api.slnx` 0 警告 0 错误；`dotnet test api.slnx` 全量 593 项通过
+（Domain 92 / Application 148 / Infrastructure 148 / API 205）；`dotnet format api.slnx
+--verify-no-changes`、`python scripts/check-readme-types.py` 均通过。本批无前端源码改动，
+未重跑前端流水线。
 
 ### 2026-11-12（三）：深度评审 P1 收尾 + P2 首批（多租户 / 数据范围 / 权限版本号 / 依赖安全 / 前端 / 门禁）
 
@@ -1031,6 +1112,8 @@ Development 可不启用（缓存退化为进程内 L1、限流失效为单实�
 - 贡献流程与提交规范：[CONTRIBUTING.md](../CONTRIBUTING.md)
 - 错误码与权限定义：`src/Domain.Shared/Results/ErrorCodes.cs`、`src/Domain.Shared/Permissions/PermissionDefinitions.cs`
 - 配置模板：`src/API/appsettings.json`
+- CRUD 样板收敛路线：`docs/CRUD样板收敛路线.md`
+- 事务语义与 ORM 选型：`docs/事务语义与ORM选型说明.md`
 - CI 门禁：`.github/workflows/backend-ci.yml`
 
 ## 开源许可

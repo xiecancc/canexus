@@ -160,6 +160,26 @@ public class JobScheduleSyncTests
         Assert.That(await scheduler.GetJobDetail(jobKey), Is.Null, "停用任务应从调度器删除");
     }
 
+    /// <summary>P2-7 结果校验口径：启动同步后，库中启用任务均已真实存在于调度器（逐 Job 核对）。</summary>
+    [Test]
+    public async Task SyncResult_AllEnabledJobs_PresentInScheduler()
+    {
+        var jobs = new[]
+        {
+            await CreateJobAsync("verify-a", "0 0 0 1 1 ? 2037"),
+            await CreateJobAsync("verify-b", "0 0 0 1 1 ? 2037")
+        };
+        var manager = _provider.GetRequiredService<IJobScheduleManager>();
+        await manager.InitializeAsync();
+
+        var scheduler = await _provider.GetRequiredService<ISchedulerFactory>().GetScheduler();
+        foreach (var job in jobs)
+        {
+            var detail = await scheduler.GetJobDetail(BuildJobKey(job));
+            Assert.That(detail, Is.Not.Null, $"启用任务 {job.JobName} 同步后应真实存在于调度器");
+        }
+    }
+
     /// <summary>一次性清理：停掉两个调度器、删除临时库。</summary>
     [OneTimeTearDown]
     public async Task OneTimeTearDown()

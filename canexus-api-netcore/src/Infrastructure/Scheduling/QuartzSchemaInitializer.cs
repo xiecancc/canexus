@@ -1,5 +1,6 @@
 
 using MySqlConnector;
+using SqlSugar;
 
 namespace Infrastructure.Scheduling;
 
@@ -15,8 +16,13 @@ namespace Infrastructure.Scheduling;
 /// </summary>
 public static class QuartzSchemaInitializer
 {
-    /// <summary>Quartz 官方 QRTZ_ 表数量（含 QRTZ_LOCKS）；用于判定结构是否完整。</summary>
-    private const int ExpectedTableCount = 11;
+    /// <summary>Quartz 官方 QRTZ_ 表名清单（含 QRTZ_LOCKS）；用于 ORM 元数据完整性判定。</summary>
+    private static readonly string[] QuartzTableNames =
+    [
+        "QRTZ_JOB_DETAILS", "QRTZ_TRIGGERS", "QRTZ_SIMPLE_TRIGGERS", "QRTZ_CRON_TRIGGERS",
+        "QRTZ_SIMPROP_TRIGGERS", "QRTZ_BLOB_TRIGGERS", "QRTZ_CALENDARS", "QRTZ_PAUSED_TRIGGER_GRPS",
+        "QRTZ_FIRED_TRIGGERS", "QRTZ_SCHEDULER_STATE", "QRTZ_LOCKS"
+    ];
 
     /// <summary>
     /// Quartz.NET 3.x MySQL 集群表结构（11 表 + 官方索引，转 InnoDB + utf8mb4）。
@@ -46,24 +52,31 @@ public static class QuartzSchemaInitializer
     /// <param name="cancellationToken">取消令牌。</param>
     public static async Task EnsureSchemaAsync(string connectionString, CancellationToken cancellationToken = default)
     {
-        await using var connection = new MySqlConnection(connectionString);
-        await connection.OpenAsync(cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();
 
-        // 完整性判定（而非仅看 QRTZ_LOCKS）：上次初始化中途失败留下部分表时也能自愈补齐
-        await using (var probe = connection.CreateCommand())
+        // 完整性判定（而非仅看 QRTZ_LOCKS）：上次初始化中途失败留下部分表时也能自愈补齐。
+        // 改用 SqlSugar DbMaintenance ORM 元数据（GetTableInfoList(false)）替代手写 information_schema 计数：
+        // 业务库此时已由 DbInitializer 确保存在，可用业务连接读取当前库真实表清单（禁用缓存）。
+        using var probeClient = new SqlSugarClient(new ConnectionConfig
         {
-            probe.CommandText =
-                "SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() " +
-                "AND TABLE_NAME IN ('QRTZ_JOB_DETAILS','QRTZ_TRIGGERS','QRTZ_SIMPLE_TRIGGERS','QRTZ_CRON_TRIGGERS'," +
-                "'QRTZ_SIMPROP_TRIGGERS','QRTZ_BLOB_TRIGGERS','QRTZ_CALENDARS','QRTZ_PAUSED_TRIGGER_GRPS'," +
-                "'QRTZ_FIRED_TRIGGERS','QRTZ_SCHEDULER_STATE','QRTZ_LOCKS')";
-            var count = Convert.ToInt32(await probe.ExecuteScalarAsync(cancellationToken));
-            if (count == ExpectedTableCount)
-            {
-                return;
-            }
+            ConnectionString = connectionString,
+            DbType = DbType.MySql,
+            IsAutoCloseConnection = true,
+            InitKeyType = InitKeyType.Attribute
+        });
+        var existingTables = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var table in probeClient.DbMaintenance.GetTableInfoList(false))
+        {
+            existingTables.Add(table.Name);
         }
 
+        if (QuartzTableNames.All(existingTables.Contains))
+        {
+            return;
+        }
+
+        await using var connection = new MySqlConnection(connectionString);
+        await connection.OpenAsync(cancellationToken);
         foreach (var statement in SchemaDdl.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
         {
             await using var command = connection.CreateCommand();

@@ -14,6 +14,7 @@ using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.HttpsPolicy;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.Routing;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
@@ -105,10 +106,11 @@ public static class SecurityDependencyExtensions
     {
         services.AddRateLimiter();
 
-        // Redis 分布式限流复用单一 ConnectionMultiplexer（懒创建：仅 UseRedis=true 且首次解析限流选项时建立连接）
+        // Redis 分布式限流复用单一 ConnectionMultiplexer（懒创建：仅 UseRedis=true 且首次解析限流选项时建立连接）。
+        // 连接串经统一入口解析：RateLimit 未显式配置时回退到 Cache:RedisConfiguration（单一来源，P2-4）。
         services.AddSingleton<IConnectionMultiplexer>(sp => ConnectionMultiplexer.Connect(
-            RedisConnectionOptions.Create(
-                sp.GetRequiredService<IOptionsMonitor<RateLimitOption>>().CurrentValue.RedisConfiguration)));
+            RedisConnectionOptions.Create(ResolveRateLimitRedisConfiguration(
+                sp.GetRequiredService<IConfiguration>()))));
 
         // 限流参数从 RateLimitOption（IOptionsMonitor）注入，经 Options 管道在首次解析时定型（限流参数不支持热加载）
         services.AddOptions<RateLimiterOptions>()
@@ -301,6 +303,28 @@ public static class SecurityDependencyExtensions
     }
 
     #endregion
+
+    /// <summary>
+    /// 解析分布式限流使用的 Redis 连接串（P2-4：连接串单一来源）。
+    /// <para>优先取显式配置的 <c>RateLimit:RedisConfiguration</c>（保留现有部署的显式覆盖优先级）；
+    /// 未显式配置（键缺失或为空）时回退到 <c>Cache:RedisConfiguration</c>，使缓存 L2、失效广播、
+    /// 分布式锁与分布式限流共用同一 Redis，避免两处重复维护导致口径漂移。</para>
+    /// </summary>
+    /// <param name="configuration">宿主最终生效的配置。</param>
+    /// <returns>StackExchange.Redis 格式连接串；两者均未配置时回退到 <see cref="RateLimitOption"/> 代码默认值。</returns>
+    public static string ResolveRateLimitRedisConfiguration(IConfiguration configuration)
+    {
+        ArgumentNullException.ThrowIfNull(configuration);
+
+        var rateLimit = configuration["RateLimit:RedisConfiguration"];
+        if (!string.IsNullOrWhiteSpace(rateLimit))
+        {
+            return rateLimit;
+        }
+
+        var cache = configuration["Cache:RedisConfiguration"];
+        return string.IsNullOrWhiteSpace(cache) ? new RateLimitOption().RedisConfiguration : cache;
+    }
 
     /// <summary>获取限流分区键：客户端 IP（无 RemoteIpAddress 时回退为常量，仅见于测试宿主等极端场景）。</summary>
     /// <param name="httpContext">HTTP 上下文。</param>

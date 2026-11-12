@@ -111,15 +111,16 @@ public sealed class DbInitializer(
         IReadOnlyList<ISchemaMigration> orderedMigrations,
         CancellationToken cancellationToken)
     {
-        // 迁移机制关闭：结构由外部自行管理，保留原 CodeFirst 开关行为
+        // 迁移机制关闭：仅跳过迁移通道；缺表仍会按开关执行一次 CodeFirst 建表，
+        // 结构最终完全由外部管理时需同时关闭 AutoCreateTable 与 AutoSyncStructure 两个开关
         if (!options.MigrationsEnabled)
         {
-            if (entityTypes.Count > 0 && (options.AutoCreateTable || options.AutoSyncStructure))
+            if (entityTypes.Count > 0 && options.ShouldInitializeStructure)
             {
                 client.CodeFirst.InitTables(entityTypes.ToArray());
             }
 
-            logger.LogInformation("数据库初始化[结构层]：MigrationsEnabled=false，跳过迁移（结构由外部管理）");
+            logger.LogInformation("数据库初始化[结构层]：MigrationsEnabled=false，跳过迁移（仍按开关执行一次性 CodeFirst 建表；结构最终由外部管理需同时关闭两个开关）");
             state.MarkSchema(DatabaseInitializationStage.Ready);
             return;
         }
@@ -134,7 +135,7 @@ public sealed class DbInitializer(
             logger.LogWarning("数据库初始化[结构层]：{LockKey} 不可用，降级为无锁执行（依赖幂等脚本）", SchemaLockKey);
         }
 
-        var missingTables = await DatabaseSchemaProbe.FindMissingTablesAsync(client, modelTableNames, cancellationToken);
+        var missingTables = DatabaseSchemaProbe.FindMissingTables(client, modelTableNames, cancellationToken);
         if (missingTables.Count > 0)
         {
             await InitializeTablesAsync(entityTypes, modelTableNames, missingTables.Count, cancellationToken);
@@ -180,7 +181,7 @@ public sealed class DbInitializer(
                 + "请先由运维建立结构，或显式配置 Database:AllowSchemaInitialization=true 授权一次性初始化。");
         }
 
-        if (!options.AutoCreateTable && !options.AutoSyncStructure)
+        if (!options.ShouldInitializeStructure)
         {
             throw new InvalidOperationException(
                 "数据库结构未初始化，但 AutoCreateTable 与 AutoSyncStructure 均为关闭，无法建立结构。");

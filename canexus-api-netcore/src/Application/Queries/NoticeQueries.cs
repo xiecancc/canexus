@@ -22,13 +22,19 @@ public sealed class NoticeQueryLatestHandler(IAggregateRepository<SysNotice> not
     protected override async Task<List<NoticeLatestResponse>> HandleAsync(NoticeQueryLatest query, CancellationToken cancellationToken)
     {
         var limit = NoticeQueryLimits.NormalizeLatestCount(query.Count);
-        var notices = await noticeRepository.GetListAsync([n => n.Status == CommonStatus.Enabled], cancellationToken: cancellationToken);
-        var latest = notices
-            .OrderByDescending(n => n.CreatedAt)
-            .ThenByDescending(n => n.Id)
-            .Take(limit)
-            .ToList();
-        return mapper.Map<List<NoticeLatestResponse>>(latest);
+        // 排序与取数下推到数据库：复用通用分页查询，PageIndex=1 / PageSize=limit 即 SQL 层 ORDER BY + LIMIT，
+        // 替代原「拉全表 → 内存排序 → Take」。orders 与原内存规则一致（创建时间倒序、Id 倒序作平局裁决），
+        // 过滤条件与软删除 / 租户全局过滤器语义保持不变。
+        var paged = await noticeRepository.GetPagedAsync(
+            new PagedRequest { PageIndex = 1, PageSize = limit },
+            [n => n.Status == CommonStatus.Enabled],
+            new Dictionary<Expression<Func<SysNotice, object>>, bool?>
+            {
+                [n => n.CreatedAt] = false,
+                [n => n.Id] = false
+            },
+            cancellationToken);
+        return mapper.Map<List<NoticeLatestResponse>>(paged.Items);
     }
 }
 

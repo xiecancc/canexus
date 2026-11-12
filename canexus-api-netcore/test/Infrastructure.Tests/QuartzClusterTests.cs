@@ -37,7 +37,7 @@ public class QuartzClusterTests
             await adminClient.Ado.ExecuteCommandAsync("CREATE DATABASE IF NOT EXISTS `" + _tempDatabaseName + "`");
         }
 
-        // QRTZ_ 集群表（幂等，内部按 information_schema 判存在）+ 计数探针表
+        // QRTZ_ 集群表（幂等，内部按 DbMaintenance ORM 元数据判存在）+ 计数探针表
         // 探针表显式 ENGINE=InnoDB：本服务器默认引擎为 MyISAM（无行锁 / DML 事务语义），与生产表引擎对齐
         await QuartzSchemaInitializer.EnsureSchemaAsync(_tempConnection);
         using (var tempClient = new SqlSugarScope(CreateConnectionConfig(_tempConnection)))

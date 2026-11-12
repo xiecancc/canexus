@@ -41,7 +41,6 @@ public class TransactionBoundaryArchitectureTests
     private static readonly string[] BareAdoWhitelist =
     [
         "src/API/HealthChecks/DatabaseHealthCheck.cs",
-        "src/Infrastructure/DataAccess/DatabaseSchemaProbe.cs",
         "src/Infrastructure/DataAccess/DbInitializer.cs",
         "src/Infrastructure/DataAccess/ModelStructureValidator.cs",
         "src/Infrastructure/DataAccess/SchemaMigrator.cs",

@@ -67,7 +67,11 @@ public class JobExecuteWrapper(
             log.Status = ExecutionStatus.Failure;
             log.Result = "执行失败";
             log.Exception = TruncateException(exception.ToString());
-            logger.LogError(exception, "定时任务执行失败：{JobName}", job.JobName);
+            // P2-7 任务级失败告警：结构化字段含 JobKey / 异常类型 / 耗时，便于按任务聚合与告警；
+            // SysJobLog 留痕仍在 finally 中统一写库，这里不重复写库、不改表结构
+            logger.LogError(exception,
+                "定时任务执行失败：JobKey={JobKey} JobName={JobName} JobId={JobId} ExceptionType={ExceptionType} CostMs={CostMs}",
+                context.JobDetail.Key, job.JobName, job.Id, exception.GetType().FullName, stopwatch.ElapsedMilliseconds);
         }
         finally
         {

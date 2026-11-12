@@ -58,9 +58,9 @@ services:
       Cache__RedisConfiguration: "redis:6379"
       Cache__InstanceName: "super-admin:"
       # 分布式限流：Redis 原子计数，多副本共享配额（P1-A5）
+      # 连接串复用 Cache__RedisConfiguration（单一来源）；RateLimit 未显式配置时自动回退，无需重复声明
       RateLimit__Enabled: "true"
       RateLimit__UseRedis: "true"
-      RateLimit__RedisConfiguration: "redis:6379"
       RateLimit__RedisKeyPrefix: "super-admin:rl:"
       # 领域事件 Outbox（P1-A2）：生产启用，独立 worker 投递
       Outbox__Enabled: "true"

@@ -196,22 +196,96 @@ public class SchemaInitializationTests
         }
     }
 
+    /// <summary>表齐全判定：DbMaintenance 元数据下 FindMissingTables 返回空，不触发建表。</summary>
+    [Test]
+    public void FindMissingTables_AllPresent_ReturnsEmpty()
+    {
+        var modelTableNames = GetModelTableNames();
+
+        var missing = DatabaseSchemaProbe.FindMissingTables(_client, modelTableNames);
+
+        Assert.That(missing, Is.Empty, "模型表齐全时不得判定为缺表");
+    }
+
+    /// <summary>缺表判定：删除一张模型表后 FindMissingTables 应仅返回该表（禁用缓存，读到真实表清单）。</summary>
+    [Test]
+    public async Task FindMissingTables_OneDropped_ReturnsOnlyThatTable()
+    {
+        var modelTableNames = GetModelTableNames();
+        var dropped = modelTableNames.Single(name => string.Equals(name, "sys_post", StringComparison.OrdinalIgnoreCase));
+        await _client.Ado.ExecuteCommandAsync("DROP TABLE sys_post");
+
+        var missing = DatabaseSchemaProbe.FindMissingTables(_client, modelTableNames);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(missing.Count, Is.EqualTo(1));
+            Assert.That(missing, Does.Contain(dropped));
+        });
+    }
+
+    /// <summary>两个开关都为 false（ShouldInitializeStructure=false）且缺表时明确拒绝初始化。</summary>
+    [Test]
+    public async Task BothSwitchesFalse_MissingTables_RejectsInitialization()
+    {
+        await _client.Ado.ExecuteCommandAsync("DROP TABLE sys_post");
+
+        var exception = Assert.ThrowsAsync<InvalidOperationException>(
+            () => CreateInitializer(new DatabaseInitializationState(), "Testing",
+                autoCreateTable: false, autoSyncStructure: false).InitializeAsync());
+        Assert.That(exception!.Message, Does.Contain("无法建立结构"));
+    }
+
+    /// <summary>任一开关为 true（ShouldInitializeStructure=true）时缺表允许 CodeFirst 一次性建表。</summary>
+    [Test]
+    public async Task EitherSwitchTrue_MissingTables_AllowsInitialization()
+    {
+        await _client.Ado.ExecuteCommandAsync("DROP TABLE sys_post");
+
+        var state = new DatabaseInitializationState();
+        await CreateInitializer(state, "Testing",
+            autoCreateTable: false, autoSyncStructure: true).InitializeAsync();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(state.Snapshot().Schema, Is.EqualTo("Ready"));
+            Assert.That(TableExistsAsync("sys_post").GetAwaiter().GetResult(), Is.True,
+                "任一开关为 true 时缺表应允许一次性 CodeFirst 建表");
+        });
+    }
+
+    /// <summary>按生产 DbInitializer 口径取模型表名清单。</summary>
+    /// <returns>模型表名清单。</returns>
+    private string[] GetModelTableNames()
+    {
+        return [.. typeof(AggregateBase).Assembly.GetTypes()
+            .Where(IsConcreteEntityType)
+            .Select(type => _client.EntityMaintenance.GetEntityInfo(type).DbTableName)
+            .Distinct(StringComparer.OrdinalIgnoreCase)];
+    }
+
     /// <summary>装配与生产同构的初始化器（分布式锁桩降级为无锁）。</summary>
     /// <param name="state">初始化结论状态。</param>
     /// <param name="environmentName">宿主环境名。</param>
     /// <param name="migrations">迁移清单。</param>
     /// <param name="migrationsEnabled">是否启用迁移机制。</param>
+    /// <param name="autoCreateTable">AutoCreateTable 开关取值。</param>
+    /// <param name="autoSyncStructure">AutoSyncStructure 开关取值。</param>
     /// <returns>初始化器。</returns>
     private DbInitializer CreateInitializer(
         DatabaseInitializationState state,
         string environmentName,
         IEnumerable<ISchemaMigration>? migrations = null,
-        bool migrationsEnabled = true)
+        bool migrationsEnabled = true,
+        bool autoCreateTable = true,
+        bool autoSyncStructure = true)
     {
         var options = new DatabaseOption
         {
             ConnectionString = _connection,
-            MigrationsEnabled = migrationsEnabled
+            MigrationsEnabled = migrationsEnabled,
+            AutoCreateTable = autoCreateTable,
+            AutoSyncStructure = autoSyncStructure
         };
         return new DbInitializer(
             _client, options, NullLogger<DbInitializer>.Instance, _migrator,

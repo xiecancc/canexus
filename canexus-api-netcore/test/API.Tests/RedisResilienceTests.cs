@@ -1,7 +1,10 @@
 
 using System.Threading.RateLimiting;
+using API.Extensions;
 using API.RateLimiting;
 using Infrastructure.Redis;
+using Infrastructure.Shared.Options;
+using Microsoft.Extensions.Configuration;
 using StackExchange.Redis;
 
 namespace API.Tests;
@@ -74,4 +77,50 @@ public class RedisResilienceTests
         ConnectionMultiplexerFactory = () => throw new RedisConnectionException(
             ConnectionFailureType.UnableToConnect, CommandFlags.None, "模拟 Redis 停机")
     };
+
+    // —— Redis 连接串单一来源 / 回退优先级（P2-4）——
+
+    /// <summary>RateLimit 未显式配置 Redis 连接串时回退到 Cache:RedisConfiguration。</summary>
+    [Test]
+    public void RateLimitRedis_NotConfigured_FallsBackToCache()
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Cache:RedisConfiguration"] = "cache-redis:6380"
+            })
+            .Build();
+
+        Assert.That(
+            SecurityDependencyExtensions.ResolveRateLimitRedisConfiguration(configuration),
+            Is.EqualTo("cache-redis:6380"));
+    }
+
+    /// <summary>RateLimit 显式配置时优先使用显式值，不回退（保留现有部署覆盖优先级）。</summary>
+    [Test]
+    public void RateLimitRedis_ExplicitlyConfigured_TakesPrecedenceOverCache()
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Cache:RedisConfiguration"] = "cache-redis:6380",
+                ["RateLimit:RedisConfiguration"] = "rate-redis:6381"
+            })
+            .Build();
+
+        Assert.That(
+            SecurityDependencyExtensions.ResolveRateLimitRedisConfiguration(configuration),
+            Is.EqualTo("rate-redis:6381"));
+    }
+
+    /// <summary>两者均未配置时回退到 RateLimitOption 代码默认值，返回非空连接串。</summary>
+    [Test]
+    public void RateLimitRedis_NeitherConfigured_FallsBackToOptionDefault()
+    {
+        var configuration = new ConfigurationBuilder().Build();
+
+        Assert.That(
+            SecurityDependencyExtensions.ResolveRateLimitRedisConfiguration(configuration),
+            Is.EqualTo(new RateLimitOption().RedisConfiguration));
+    }
 }
