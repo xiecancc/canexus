@@ -31,7 +31,7 @@ public class SysRoleController(ISender sender) : ControllerBase
     [RequirePermission(PermissionDefinitions.SystemRoleList)]
     public async Task<IActionResult> Page([FromQuery] RolePageRequest request, CancellationToken cancellationToken = default)
     {
-        return Ok(Result.Ok(await sender.Send(new RoleQueryPaged(request), cancellationToken)));
+        return this.OkData(await sender.Send(new RoleQueryPaged(request), cancellationToken));
     }
 
     /// <summary>获取全部启用角色（不分页，含超管角色，用于用户分配角色下拉）。</summary>
@@ -41,7 +41,7 @@ public class SysRoleController(ISender sender) : ControllerBase
     [RequirePermission(PermissionDefinitions.SystemRoleList)]
     public async Task<IActionResult> All(CancellationToken cancellationToken = default)
     {
-        return Ok(Result.Ok(await sender.Send(new RoleQueryDropdown(), cancellationToken)));
+        return this.OkData(await sender.Send(new RoleQueryDropdown(), cancellationToken));
     }
 
     /// <summary>获取角色详情（含授权菜单 Id 集合，前端用作菜单授权回显）。</summary>
@@ -52,7 +52,7 @@ public class SysRoleController(ISender sender) : ControllerBase
     [RequirePermission(PermissionDefinitions.SystemRoleQuery)]
     public async Task<IActionResult> Get(Guid id, CancellationToken cancellationToken = default)
     {
-        return Ok(Result.Ok(await sender.Send(new RoleQueryDetail(id), cancellationToken)));
+        return this.OkData(await sender.Send(new RoleQueryDetail(id), cancellationToken));
     }
 
     /// <summary>创建角色（roleKey 唯一且不可使用保留值 super_admin；菜单授权全删全插）。</summary>
@@ -65,7 +65,7 @@ public class SysRoleController(ISender sender) : ControllerBase
     public async Task<IActionResult> Create([FromBody] RoleInputRequest request, CancellationToken cancellationToken = default)
     {
         var affected = await sender.Send(new RoleCreateCommand(request), cancellationToken);
-        return Ok(Result.Ok(affected, message: "创建成功"));
+        return this.OkData(affected, "创建成功");
     }
 
     /// <summary>更新角色（内置 super_admin 角色整体拒绝编辑）。</summary>
@@ -80,7 +80,7 @@ public class SysRoleController(ISender sender) : ControllerBase
     public async Task<IActionResult> Update(Guid id, Guid version, [FromBody] RoleInputRequest request, CancellationToken cancellationToken = default)
     {
         var affected = await sender.Send(new RoleUpdateCommand(id, version, request), cancellationToken);
-        return Ok(Result.Ok(affected, message: "更新成功"));
+        return this.OkData(affected, "更新成功");
     }
 
     /// <summary>删除角色（内置 super_admin 角色拒绝删除；已被用户引用拒绝删除）。</summary>
@@ -94,7 +94,7 @@ public class SysRoleController(ISender sender) : ControllerBase
     public async Task<IActionResult> Delete(Guid id, Guid version, CancellationToken cancellationToken = default)
     {
         var affected = await sender.Send(new RoleDeleteCommand(id, version), cancellationToken);
-        return Ok(Result.Ok(affected, message: "删除成功"));
+        return this.OkData(affected, "删除成功");
     }
 
     /// <summary>恢复角色（解除软删除墓碑；幂等执行，不存在或未删除时静默忽略）。</summary>
@@ -108,7 +108,7 @@ public class SysRoleController(ISender sender) : ControllerBase
     public async Task<IActionResult> Restore(Guid id, Guid version, CancellationToken cancellationToken = default)
     {
         var restored = await sender.Send(new RoleRestoreCommand(id, version), cancellationToken);
-        return Ok(Result.Ok(restored, message: restored ? "恢复成功" : "角色不存在或未删除，无需恢复"));
+        return this.OkData(restored, message: restored ? "恢复成功" : "角色不存在或未删除，无需恢复");
     }
 
     /// <summary>修改角色状态（独立启停：仅提交状态字段；停用后权限缓存由监听器全量失效即时生效；super_admin 拒绝启停）。</summary>
@@ -123,7 +123,7 @@ public class SysRoleController(ISender sender) : ControllerBase
     public async Task<IActionResult> UpdateStatus(Guid id, Guid version, [FromBody] RoleStatusRequest request, CancellationToken cancellationToken = default)
     {
         var affected = await sender.Send(new RoleUpdateStatusCommand(id, version, request), cancellationToken);
-        return Ok(Result.Ok(affected, message: "状态修改成功"));
+        return this.OkData(affected, "状态修改成功");
     }
 
     /// <summary>导出角色列表（xlsx；复用列表同口径筛选，行数上限 10000）。</summary>

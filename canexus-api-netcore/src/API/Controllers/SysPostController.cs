@@ -31,7 +31,7 @@ public class SysPostController(ISender sender) : ControllerBase
     [RequirePermission(PermissionDefinitions.SystemPostList)]
     public async Task<IActionResult> Page([FromQuery] PostPageRequest request, CancellationToken cancellationToken = default)
     {
-        return Ok(Result.Ok(await sender.Send(new PostQueryPaged(request), cancellationToken)));
+        return this.OkData(await sender.Send(new PostQueryPaged(request), cancellationToken));
     }
 
     /// <summary>岗位下拉查询（仅启用岗位，显示顺序升序；供用户管理页岗位分配）。</summary>
@@ -41,7 +41,7 @@ public class SysPostController(ISender sender) : ControllerBase
     [RequirePermission(PermissionDefinitions.SystemUserList)]
     public async Task<IActionResult> Dropdown(CancellationToken cancellationToken = default)
     {
-        return Ok(Result.Ok(await sender.Send(new PostQueryDropdown(), cancellationToken)));
+        return this.OkData(await sender.Send(new PostQueryDropdown(), cancellationToken));
     }
 
     /// <summary>按 Id 查询岗位详情。</summary>
@@ -52,7 +52,7 @@ public class SysPostController(ISender sender) : ControllerBase
     [RequirePermission(PermissionDefinitions.SystemPostQuery)]
     public async Task<IActionResult> GetById(Guid id, CancellationToken cancellationToken = default)
     {
-        return Ok(Result.Ok(await sender.Send(new PostQueryDetail(id), cancellationToken)));
+        return this.OkData(await sender.Send(new PostQueryDetail(id), cancellationToken));
     }
 
     /// <summary>创建岗位。</summary>
@@ -65,7 +65,7 @@ public class SysPostController(ISender sender) : ControllerBase
     public async Task<IActionResult> Create([FromBody] PostInputRequest request, CancellationToken cancellationToken = default)
     {
         var affected = await sender.Send(new PostCreateCommand(request), cancellationToken);
-        return Ok(Result.Ok(affected, message: "创建成功"));
+        return this.OkData(affected, "创建成功");
     }
 
     /// <summary>更新岗位（校验规则与创建一致）。</summary>
@@ -80,7 +80,7 @@ public class SysPostController(ISender sender) : ControllerBase
     public async Task<IActionResult> Update(Guid id, Guid version, [FromBody] PostInputRequest request, CancellationToken cancellationToken = default)
     {
         var affected = await sender.Send(new PostUpdateCommand(id, version, request), cancellationToken);
-        return Ok(Result.Ok(affected, message: "更新成功"));
+        return this.OkData(affected, "更新成功");
     }
 
     /// <summary>删除岗位（岗位仍被用户引用时返回 401304 拒绝删除）。</summary>
@@ -94,7 +94,7 @@ public class SysPostController(ISender sender) : ControllerBase
     public async Task<IActionResult> Delete(Guid id, Guid version, CancellationToken cancellationToken = default)
     {
         var affected = await sender.Send(new PostDeleteCommand(id, version), cancellationToken);
-        return Ok(Result.Ok(affected, message: "删除成功"));
+        return this.OkData(affected, "删除成功");
     }
 
     /// <summary>恢复岗位（解除软删除墓碑；幂等执行，不存在或未删除时静默忽略）。</summary>
@@ -108,6 +108,6 @@ public class SysPostController(ISender sender) : ControllerBase
     public async Task<IActionResult> Restore(Guid id, Guid version, CancellationToken cancellationToken = default)
     {
         var restored = await sender.Send(new PostRestoreCommand(id, version), cancellationToken);
-        return Ok(Result.Ok(restored, message: restored ? "恢复成功" : "岗位不存在或未删除，无需恢复"));
+        return this.OkData(restored, message: restored ? "恢复成功" : "岗位不存在或未删除，无需恢复");
     }
 }

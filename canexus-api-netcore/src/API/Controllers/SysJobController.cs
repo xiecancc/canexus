@@ -31,7 +31,7 @@ public class SysJobController(ISender sender) : ControllerBase
     [RequirePermission(PermissionDefinitions.MonitorJobList)]
     public async Task<IActionResult> Page([FromQuery] JobPageRequest request, CancellationToken cancellationToken = default)
     {
-        return Ok(Result.Ok(await sender.Send(new JobQueryPaged(request), cancellationToken)));
+        return this.OkData(await sender.Send(new JobQueryPaged(request), cancellationToken));
     }
 
     /// <summary>创建定时任务（Cron 与任务类型校验；status=1 时创建后立即入调度）。</summary>
@@ -44,7 +44,7 @@ public class SysJobController(ISender sender) : ControllerBase
     public async Task<IActionResult> Create([FromBody] JobInputRequest request, CancellationToken cancellationToken = default)
     {
         var affected = await sender.Send(new JobCreateCommand(request), cancellationToken);
-        return Ok(Result.Ok(affected, message: "创建成功"));
+        return this.OkData(affected, "创建成功");
     }
 
     /// <summary>更新定时任务（按新定义重调度）。</summary>
@@ -59,7 +59,7 @@ public class SysJobController(ISender sender) : ControllerBase
     public async Task<IActionResult> Update(Guid id, Guid version, [FromBody] JobInputRequest request, CancellationToken cancellationToken = default)
     {
         var affected = await sender.Send(new JobUpdateCommand(id, version, request), cancellationToken);
-        return Ok(Result.Ok(affected, message: "更新成功"));
+        return this.OkData(affected, "更新成功");
     }
 
     /// <summary>删除定时任务（同时移出调度）。</summary>
@@ -73,7 +73,7 @@ public class SysJobController(ISender sender) : ControllerBase
     public async Task<IActionResult> Delete(Guid id, Guid version, CancellationToken cancellationToken = default)
     {
         var affected = await sender.Send(new JobDeleteCommand(id, version), cancellationToken);
-        return Ok(Result.Ok(affected, message: "删除成功"));
+        return this.OkData(affected, "删除成功");
     }
 
     /// <summary>恢复定时任务（解除软删除墓碑；启用状态任务重新入调度。幂等执行，不存在或未删除时静默忽略）。</summary>
@@ -87,7 +87,7 @@ public class SysJobController(ISender sender) : ControllerBase
     public async Task<IActionResult> Restore(Guid id, Guid version, CancellationToken cancellationToken = default)
     {
         var restored = await sender.Send(new JobRestoreCommand(id, version), cancellationToken);
-        return Ok(Result.Ok(restored, message: restored ? "恢复成功" : "任务不存在或未删除，无需恢复"));
+        return this.OkData(restored, message: restored ? "恢复成功" : "任务不存在或未删除，无需恢复");
     }
 
     /// <summary>修改任务状态（1 运行入调度，0 暂停移出调度）。</summary>
@@ -102,7 +102,7 @@ public class SysJobController(ISender sender) : ControllerBase
     public async Task<IActionResult> UpdateStatus(Guid id, Guid version, [FromBody] JobStatusRequest request, CancellationToken cancellationToken = default)
     {
         var affected = await sender.Send(new JobUpdateStatusCommand(id, version, request), cancellationToken);
-        return Ok(Result.Ok(affected, message: "状态更新成功"));
+        return this.OkData(affected, "状态更新成功");
     }
 
     /// <summary>立即触发一次执行（不影响既定 Cron 调度）。</summary>

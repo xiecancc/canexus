@@ -28,6 +28,6 @@ public class SysJobLogController(ISender sender) : ControllerBase
     [RequirePermission(PermissionDefinitions.MonitorJobQuery)]
     public async Task<IActionResult> Page([FromQuery] JobLogPageRequest request, CancellationToken cancellationToken = default)
     {
-        return Ok(Result.Ok(await sender.Send(new JobLogQueryPaged(request), cancellationToken)));
+        return this.OkData(await sender.Send(new JobLogQueryPaged(request), cancellationToken));
     }
 }

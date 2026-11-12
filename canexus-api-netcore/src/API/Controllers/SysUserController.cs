@@ -32,7 +32,7 @@ public class SysUserController(ISender sender) : ControllerBase
     [RequirePermission(PermissionDefinitions.SystemUserList)]
     public async Task<IActionResult> Page([FromQuery] UserPageRequest request, CancellationToken cancellationToken = default)
     {
-        return Ok(Result.Ok(await sender.Send(new UserQueryPaged(request), cancellationToken)));
+        return this.OkData(await sender.Send(new UserQueryPaged(request), cancellationToken));
     }
 
     /// <summary>获取用户详情（含角色 Id 集合）。</summary>
@@ -43,7 +43,7 @@ public class SysUserController(ISender sender) : ControllerBase
     [RequirePermission(PermissionDefinitions.SystemUserQuery)]
     public async Task<IActionResult> Get(Guid id, CancellationToken cancellationToken = default)
     {
-        return Ok(Result.Ok(await sender.Send(new UserQueryDetail(id), cancellationToken)));
+        return this.OkData(await sender.Send(new UserQueryDetail(id), cancellationToken));
     }
 
     /// <summary>创建用户（用户名唯一；密码缺省取参数配置 sys.user.initPassword，一律首登强制改密）。</summary>
@@ -56,7 +56,7 @@ public class SysUserController(ISender sender) : ControllerBase
     public async Task<IActionResult> Create([FromBody] UserInputRequest request, CancellationToken cancellationToken = default)
     {
         var affected = await sender.Send(new UserCreateCommand(request), cancellationToken);
-        return Ok(Result.Ok(affected, message: "创建成功"));
+        return this.OkData(affected, "创建成功");
     }
 
     /// <summary>批量导入用户（Excel/xlsx，multipart/form-data；全量成功才入库，行级错误随响应回执返回）。
@@ -76,7 +76,7 @@ public class SysUserController(ISender sender) : ControllerBase
 
         await using var stream = file.OpenReadStream();
         var data = await sender.Send(new UserImportCommand(stream), cancellationToken);
-        return Ok(Result.Ok(data, message: data.FailureCount == 0 ? $"导入成功，共 {data.SuccessCount} 条" : "导入失败，详见行级错误明细（未写入任何数据）"));
+        return this.OkData(data, message: data.FailureCount == 0 ? $"导入成功，共 {data.SuccessCount} 条" : "导入失败，详见行级错误明细（未写入任何数据）");
     }
 
     /// <summary>更新用户（不含用户名；内置超管 admin 拒绝编辑；角色全量替换）。</summary>
@@ -91,7 +91,7 @@ public class SysUserController(ISender sender) : ControllerBase
     public async Task<IActionResult> Update(Guid id, Guid version, [FromBody] UserInputRequest request, CancellationToken cancellationToken = default)
     {
         var affected = await sender.Send(new UserUpdateCommand(id, version, request), cancellationToken);
-        return Ok(Result.Ok(affected, message: "更新成功"));
+        return this.OkData(affected, "更新成功");
     }
 
     /// <summary>删除用户（内置超管 admin 与当前登录人自身拒绝删除）。</summary>
@@ -105,7 +105,7 @@ public class SysUserController(ISender sender) : ControllerBase
     public async Task<IActionResult> Delete(Guid id, Guid version, CancellationToken cancellationToken = default)
     {
         var affected = await sender.Send(new UserDeleteCommand(id, version), cancellationToken);
-        return Ok(Result.Ok(affected, message: "删除成功"));
+        return this.OkData(affected, "删除成功");
     }
 
     /// <summary>恢复用户（解除软删除墓碑；幂等执行，不存在或未删除时静默忽略）。</summary>
@@ -119,7 +119,7 @@ public class SysUserController(ISender sender) : ControllerBase
     public async Task<IActionResult> Restore(Guid id, Guid version, CancellationToken cancellationToken = default)
     {
         var restored = await sender.Send(new UserRestoreCommand(id, version), cancellationToken);
-        return Ok(Result.Ok(restored, message: restored ? "恢复成功" : "用户不存在或未删除，无需恢复"));
+        return this.OkData(restored, message: restored ? "恢复成功" : "用户不存在或未删除，无需恢复");
     }
 
     /// <summary>修改用户状态（内置超管 admin 拒绝操作）。</summary>
@@ -134,7 +134,7 @@ public class SysUserController(ISender sender) : ControllerBase
     public async Task<IActionResult> UpdateStatus(Guid id, Guid version, [FromBody] UserStatusRequest request, CancellationToken cancellationToken = default)
     {
         var affected = await sender.Send(new UserUpdateStatusCommand(id, version, request), cancellationToken);
-        return Ok(Result.Ok(affected, message: "状态更新成功"));
+        return this.OkData(affected, "状态更新成功");
     }
 
     /// <summary>重置密码（BCrypt 存储）。</summary>
@@ -149,7 +149,7 @@ public class SysUserController(ISender sender) : ControllerBase
     public async Task<IActionResult> ResetPassword(Guid id, Guid version, [FromBody] UserPasswordRequest request, CancellationToken cancellationToken = default)
     {
         var affected = await sender.Send(new UserResetPasswordCommand(id, version, request), cancellationToken);
-        return Ok(Result.Ok(affected, message: "密码重置成功"));
+        return this.OkData(affected, "密码重置成功");
     }
 
     /// <summary>分配角色（全量替换）。</summary>
@@ -164,7 +164,7 @@ public class SysUserController(ISender sender) : ControllerBase
     public async Task<IActionResult> UpdateRoles(Guid id, Guid version, [FromBody] UserRolesRequest request, CancellationToken cancellationToken = default)
     {
         var affected = await sender.Send(new UserUpdateRolesCommand(id, version, request), cancellationToken);
-        return Ok(Result.Ok(affected, message: "角色分配成功"));
+        return this.OkData(affected, "角色分配成功");
     }
 
     /// <summary>导出用户列表（xlsx；复用列表同口径筛选与数据范围过滤，行数上限 10000）。</summary>

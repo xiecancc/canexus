@@ -32,7 +32,7 @@ public class SysMenuController(ISender sender) : ControllerBase
     [RequirePermission(PermissionDefinitions.SystemMenuList)]
     public async Task<IActionResult> Tree([FromQuery] string? keyword, [FromQuery] Domain.Shared.Enums.CommonStatus? status, CancellationToken cancellationToken = default)
     {
-        return Ok(Result.Ok(await sender.Send(new MenuQueryTree(keyword, status), cancellationToken)));
+        return this.OkData(await sender.Send(new MenuQueryTree(keyword, status), cancellationToken));
     }
 
     /// <summary>获取菜单详情。</summary>
@@ -43,7 +43,7 @@ public class SysMenuController(ISender sender) : ControllerBase
     [RequirePermission(PermissionDefinitions.SystemMenuQuery)]
     public async Task<IActionResult> Get(Guid id, CancellationToken cancellationToken = default)
     {
-        return Ok(Result.Ok(await sender.Send(new MenuQueryDetail(id), cancellationToken)));
+        return this.OkData(await sender.Send(new MenuQueryDetail(id), cancellationToken));
     }
 
     /// <summary>创建菜单（目录必有 path；菜单必有 path 与 component；按钮必有 perms）。</summary>
@@ -56,7 +56,7 @@ public class SysMenuController(ISender sender) : ControllerBase
     public async Task<IActionResult> Create([FromBody] MenuInputRequest request, CancellationToken cancellationToken = default)
     {
         var affected = await sender.Send(new MenuCreateCommand(request), cancellationToken);
-        return Ok(Result.Ok(affected, message: "创建成功"));
+        return this.OkData(affected, "创建成功");
     }
 
     /// <summary>更新菜单（父级不可选自身或自己的后代）。</summary>
@@ -71,7 +71,7 @@ public class SysMenuController(ISender sender) : ControllerBase
     public async Task<IActionResult> Update(Guid id, Guid version, [FromBody] MenuInputRequest request, CancellationToken cancellationToken = default)
     {
         var affected = await sender.Send(new MenuUpdateCommand(id, version, request), cancellationToken);
-        return Ok(Result.Ok(affected, message: "更新成功"));
+        return this.OkData(affected, "更新成功");
     }
 
     /// <summary>删除菜单（存在子菜单或已被角色引用时拒绝）。</summary>
@@ -85,7 +85,7 @@ public class SysMenuController(ISender sender) : ControllerBase
     public async Task<IActionResult> Delete(Guid id, Guid version, CancellationToken cancellationToken = default)
     {
         var affected = await sender.Send(new MenuDeleteCommand(id, version), cancellationToken);
-        return Ok(Result.Ok(affected, message: "删除成功"));
+        return this.OkData(affected, "删除成功");
     }
 
     /// <summary>恢复菜单（解除软删除墓碑；幂等执行，不存在或未删除时静默忽略）。</summary>
@@ -99,6 +99,6 @@ public class SysMenuController(ISender sender) : ControllerBase
     public async Task<IActionResult> Restore(Guid id, Guid version, CancellationToken cancellationToken = default)
     {
         var restored = await sender.Send(new MenuRestoreCommand(id, version), cancellationToken);
-        return Ok(Result.Ok(restored, message: restored ? "恢复成功" : "菜单不存在或未删除，无需恢复"));
+        return this.OkData(restored, message: restored ? "恢复成功" : "菜单不存在或未删除，无需恢复");
     }
 }

@@ -31,7 +31,7 @@ public class SysNoticeController(ISender sender) : ControllerBase
     [RequirePermission(PermissionDefinitions.SystemNoticeList)]
     public async Task<IActionResult> Page([FromQuery] NoticePageRequest request, CancellationToken cancellationToken = default)
     {
-        return Ok(Result.Ok(await sender.Send(new NoticeQueryPaged(request), cancellationToken)));
+        return this.OkData(await sender.Send(new NoticeQueryPaged(request), cancellationToken));
     }
 
     /// <summary>按 Id 查询通知公告详情（含正文，供编辑回显与查看全文）。</summary>
@@ -42,7 +42,7 @@ public class SysNoticeController(ISender sender) : ControllerBase
     [RequirePermission(PermissionDefinitions.SystemNoticeQuery)]
     public async Task<IActionResult> GetById(Guid id, CancellationToken cancellationToken = default)
     {
-        return Ok(Result.Ok(await sender.Send(new NoticeQueryDetail(id), cancellationToken)));
+        return this.OkData(await sender.Send(new NoticeQueryDetail(id), cancellationToken));
     }
 
     /// <summary>创建通知公告。</summary>
@@ -55,7 +55,7 @@ public class SysNoticeController(ISender sender) : ControllerBase
     public async Task<IActionResult> Create([FromBody] NoticeInputRequest request, CancellationToken cancellationToken = default)
     {
         var affected = await sender.Send(new NoticeCreateCommand(request), cancellationToken);
-        return Ok(Result.Ok(affected, message: "创建成功"));
+        return this.OkData(affected, "创建成功");
     }
 
     /// <summary>更新通知公告（校验规则与创建一致）。</summary>
@@ -70,7 +70,7 @@ public class SysNoticeController(ISender sender) : ControllerBase
     public async Task<IActionResult> Update(Guid id, Guid version, [FromBody] NoticeInputRequest request, CancellationToken cancellationToken = default)
     {
         var affected = await sender.Send(new NoticeUpdateCommand(id, version, request), cancellationToken);
-        return Ok(Result.Ok(affected, message: "更新成功"));
+        return this.OkData(affected, "更新成功");
     }
 
     /// <summary>删除通知公告。</summary>
@@ -84,7 +84,7 @@ public class SysNoticeController(ISender sender) : ControllerBase
     public async Task<IActionResult> Delete(Guid id, Guid version, CancellationToken cancellationToken = default)
     {
         var affected = await sender.Send(new NoticeDeleteCommand(id, version), cancellationToken);
-        return Ok(Result.Ok(affected, message: "删除成功"));
+        return this.OkData(affected, "删除成功");
     }
 
     /// <summary>恢复通知公告（解除软删除墓碑；幂等执行，不存在或未删除时静默忽略）。</summary>
@@ -98,7 +98,7 @@ public class SysNoticeController(ISender sender) : ControllerBase
     public async Task<IActionResult> Restore(Guid id, Guid version, CancellationToken cancellationToken = default)
     {
         var restored = await sender.Send(new NoticeRestoreCommand(id, version), cancellationToken);
-        return Ok(Result.Ok(restored, message: restored ? "恢复成功" : "公告不存在或未删除，无需恢复"));
+        return this.OkData(restored, message: restored ? "恢复成功" : "公告不存在或未删除，无需恢复");
     }
 
     /// <summary>查询最新通知公告（仅正常状态，按创建时间倒序；供首页公告卡片，任何登录用户可用，不校验业务权限）。</summary>
@@ -109,6 +109,6 @@ public class SysNoticeController(ISender sender) : ControllerBase
     [AllowAnyAuthenticated]
     public async Task<IActionResult> Latest([FromQuery] int count = 5, CancellationToken cancellationToken = default)
     {
-        return Ok(Result.Ok(await sender.Send(new NoticeQueryLatest(count), cancellationToken)));
+        return this.OkData(await sender.Send(new NoticeQueryLatest(count), cancellationToken));
     }
 }

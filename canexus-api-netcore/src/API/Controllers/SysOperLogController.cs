@@ -31,7 +31,7 @@ public class SysOperLogController(ISender sender) : ControllerBase
     [RequirePermission(PermissionDefinitions.MonitorOperlogList)]
     public async Task<IActionResult> Page([FromQuery] OperLogPageRequest request, CancellationToken cancellationToken = default)
     {
-        return Ok(Result.Ok(await sender.Send(new OperLogQueryPaged(request), cancellationToken)));
+        return this.OkData(await sender.Send(new OperLogQueryPaged(request), cancellationToken));
     }
 
     /// <summary>按时间范围清空操作日志（物理删除，危险操作；须显式确认与时间范围；清空动作本身经 [OperLog] 留痕，
@@ -61,7 +61,7 @@ public class SysOperLogController(ISender sender) : ControllerBase
     public async Task<IActionResult> Delete(Guid id, Guid version, CancellationToken cancellationToken = default)
     {
         var affected = await sender.Send(new OperLogDeleteCommand(id, version), cancellationToken);
-        return Ok(Result.Ok(affected, message: "删除成功"));
+        return this.OkData(affected, "删除成功");
     }
 
     /// <summary>导出操作日志（xlsx；复用列表同口径筛选，行数上限 10000）。</summary>

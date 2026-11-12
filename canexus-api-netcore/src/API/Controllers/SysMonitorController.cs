@@ -27,6 +27,6 @@ public class SysMonitorController(ISender sender) : ControllerBase
     [RequirePermission(PermissionDefinitions.MonitorServerList)]
     public async Task<IActionResult> Server(CancellationToken cancellationToken = default)
     {
-        return Ok(Result.Ok(await sender.Send(new ServerMonitorQuery(), cancellationToken)));
+        return this.OkData(await sender.Send(new ServerMonitorQuery(), cancellationToken));
     }
 }

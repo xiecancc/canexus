@@ -32,7 +32,7 @@ public class SysDeptController(ISender sender) : ControllerBase
     [RequirePermission(PermissionDefinitions.SystemDeptList)]
     public async Task<IActionResult> Tree([FromQuery] string? keyword, [FromQuery] Domain.Shared.Enums.CommonStatus? status, CancellationToken cancellationToken = default)
     {
-        return Ok(Result.Ok(await sender.Send(new DeptQueryTree(keyword, status), cancellationToken)));
+        return this.OkData(await sender.Send(new DeptQueryTree(keyword, status), cancellationToken));
     }
 
     /// <summary>获取部门详情。</summary>
@@ -43,7 +43,7 @@ public class SysDeptController(ISender sender) : ControllerBase
     [RequirePermission(PermissionDefinitions.SystemDeptQuery)]
     public async Task<IActionResult> Get(Guid id, CancellationToken cancellationToken = default)
     {
-        return Ok(Result.Ok(await sender.Send(new DeptQueryDetail(id), cancellationToken)));
+        return this.OkData(await sender.Send(new DeptQueryDetail(id), cancellationToken));
     }
 
     /// <summary>创建部门（父部门存在性由处理器校验）。</summary>
@@ -56,7 +56,7 @@ public class SysDeptController(ISender sender) : ControllerBase
     public async Task<IActionResult> Create([FromBody] DeptInputRequest request, CancellationToken cancellationToken = default)
     {
         var affected = await sender.Send(new DeptCreateCommand(request), cancellationToken);
-        return Ok(Result.Ok(affected, message: "创建成功"));
+        return this.OkData(affected, "创建成功");
     }
 
     /// <summary>更新部门（父级不可选自身或自己的后代）。</summary>
@@ -71,7 +71,7 @@ public class SysDeptController(ISender sender) : ControllerBase
     public async Task<IActionResult> Update(Guid id, Guid version, [FromBody] DeptInputRequest request, CancellationToken cancellationToken = default)
     {
         var affected = await sender.Send(new DeptUpdateCommand(id, version, request), cancellationToken);
-        return Ok(Result.Ok(affected, message: "更新成功"));
+        return this.OkData(affected, "更新成功");
     }
 
     /// <summary>删除部门（存在子部门或部门下存在用户时拒绝）。</summary>
@@ -85,7 +85,7 @@ public class SysDeptController(ISender sender) : ControllerBase
     public async Task<IActionResult> Delete(Guid id, Guid version, CancellationToken cancellationToken = default)
     {
         var affected = await sender.Send(new DeptDeleteCommand(id, version), cancellationToken);
-        return Ok(Result.Ok(affected, message: "删除成功"));
+        return this.OkData(affected, "删除成功");
     }
 
     /// <summary>恢复部门（解除软删除墓碑；幂等执行，不存在或未删除时静默忽略）。</summary>
@@ -99,6 +99,6 @@ public class SysDeptController(ISender sender) : ControllerBase
     public async Task<IActionResult> Restore(Guid id, Guid version, CancellationToken cancellationToken = default)
     {
         var restored = await sender.Send(new DeptRestoreCommand(id, version), cancellationToken);
-        return Ok(Result.Ok(restored, message: restored ? "恢复成功" : "部门不存在或未删除，无需恢复"));
+        return this.OkData(restored, message: restored ? "恢复成功" : "部门不存在或未删除，无需恢复");
     }
 }

@@ -36,7 +36,7 @@ public class AuthController(ISender sender, IOptionsMonitor<JwtOption> jwtOption
     [EnableRateLimiting(AuthRateLimitPolicy)]
     public async Task<IActionResult> Captcha(CancellationToken cancellationToken = default)
     {
-        return Ok(Result.Ok(await sender.Send(new AuthQueryCaptcha(), cancellationToken)));
+        return this.OkData(await sender.Send(new AuthQueryCaptcha(), cancellationToken));
     }
 
     /// <summary>账号密码登录（验证码校验 + 失败锁定策略）。</summary>
@@ -52,7 +52,7 @@ public class AuthController(ISender sender, IOptionsMonitor<JwtOption> jwtOption
         var userAgent = Request.Headers.UserAgent.ToString();
         var data = await sender.Send(new AuthLoginCommand(request, ip, userAgent), cancellationToken);
         WriteRefreshTokenCookie(data.RefreshToken);
-        return Ok(Result.Ok(data, "登录成功"));
+        return this.OkData(data, "登录成功");
     }
 
     /// <summary>刷新令牌（轮换：旧 refreshToken 失效，发放新令牌对）。</summary>
@@ -69,7 +69,7 @@ public class AuthController(ISender sender, IOptionsMonitor<JwtOption> jwtOption
         var refreshToken = ResolveRefreshToken(request.RefreshToken);
         var data = await sender.Send(new AuthRefreshTokenCommand(refreshToken, ip, userAgent), cancellationToken);
         WriteRefreshTokenCookie(data.RefreshToken);
-        return Ok(Result.Ok(data));
+        return this.OkData(data);
     }
 
     /// <summary>登出：吊销 refreshToken（不传时吊销当前用户全部活跃令牌）。</summary>
@@ -100,7 +100,7 @@ public class AuthController(ISender sender, IOptionsMonitor<JwtOption> jwtOption
     public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordRequest request, CancellationToken cancellationToken = default)
     {
         var affected = await sender.Send(new AuthChangePasswordCommand(request.OldPassword, request.NewPassword), cancellationToken);
-        return Ok(Result.Ok(affected, message: "密码修改成功，请重新登录"));
+        return this.OkData(affected, "密码修改成功，请重新登录");
     }
 
     /// <summary>获取当前登录用户信息（角色与权限标识，超管权限为 ["*:*:*"]）。</summary>
@@ -112,7 +112,7 @@ public class AuthController(ISender sender, IOptionsMonitor<JwtOption> jwtOption
     [API.Authorization.AllowAnyAuthenticated]
     public async Task<IActionResult> UserInfo(CancellationToken cancellationToken = default)
     {
-        return Ok(Result.Ok(await sender.Send(new UserQueryInfo(), cancellationToken)));
+        return this.OkData(await sender.Send(new UserQueryInfo(), cancellationToken));
     }
 
     /// <summary>获取当前用户的前端路由树（按角色过滤，仅目录 / 菜单，排除按钮与隐藏项）。</summary>
@@ -124,7 +124,7 @@ public class AuthController(ISender sender, IOptionsMonitor<JwtOption> jwtOption
     [API.Authorization.AllowAnyAuthenticated]
     public async Task<IActionResult> Routes(CancellationToken cancellationToken = default)
     {
-        return Ok(Result.Ok(await sender.Send(new UserQueryRoutes(), cancellationToken)));
+        return this.OkData(await sender.Send(new UserQueryRoutes(), cancellationToken));
     }
 
     /// <summary>解析刷新令牌：请求体优先；开启 Cookie 模式且请求体为空时回退到 Cookie（前端平滑迁移）。</summary>

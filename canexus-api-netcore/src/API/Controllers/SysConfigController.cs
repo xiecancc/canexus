@@ -31,7 +31,7 @@ public class SysConfigController(ISender sender) : ControllerBase
     [RequirePermission(PermissionDefinitions.SystemConfigList)]
     public async Task<IActionResult> Page([FromQuery] ConfigPageRequest request, CancellationToken cancellationToken = default)
     {
-        return Ok(Result.Ok(await sender.Send(new ConfigQueryPaged(request), cancellationToken)));
+        return this.OkData(await sender.Send(new ConfigQueryPaged(request), cancellationToken));
     }
 
     /// <summary>按参数键名查询参数值（走缓存，写操作后立即刷新）。</summary>
@@ -56,7 +56,7 @@ public class SysConfigController(ISender sender) : ControllerBase
     public async Task<IActionResult> Create([FromBody] ConfigInputRequest request, CancellationToken cancellationToken = default)
     {
         var affected = await sender.Send(new ConfigCreateCommand(request), cancellationToken);
-        return Ok(Result.Ok(affected, message: "创建成功"));
+        return this.OkData(affected, "创建成功");
     }
 
     /// <summary>更新参数配置（键名可变更，新旧键缓存均失效；内置参数可编辑）。</summary>
@@ -71,7 +71,7 @@ public class SysConfigController(ISender sender) : ControllerBase
     public async Task<IActionResult> Update(Guid id, Guid version, [FromBody] ConfigInputRequest request, CancellationToken cancellationToken = default)
     {
         var affected = await sender.Send(new ConfigUpdateCommand(id, version, request), cancellationToken);
-        return Ok(Result.Ok(affected, message: "更新成功"));
+        return this.OkData(affected, "更新成功");
     }
 
     /// <summary>删除参数配置（内置参数拒绝删除）。</summary>
@@ -85,7 +85,7 @@ public class SysConfigController(ISender sender) : ControllerBase
     public async Task<IActionResult> Delete(Guid id, Guid version, CancellationToken cancellationToken = default)
     {
         var affected = await sender.Send(new ConfigDeleteCommand(id, version), cancellationToken);
-        return Ok(Result.Ok(affected, message: "删除成功"));
+        return this.OkData(affected, "删除成功");
     }
 
     /// <summary>恢复参数配置（解除软删除墓碑；幂等执行，不存在或未删除时静默忽略）。</summary>
@@ -99,6 +99,6 @@ public class SysConfigController(ISender sender) : ControllerBase
     public async Task<IActionResult> Restore(Guid id, Guid version, CancellationToken cancellationToken = default)
     {
         var restored = await sender.Send(new ConfigRestoreCommand(id, version), cancellationToken);
-        return Ok(Result.Ok(restored, message: restored ? "恢复成功" : "参数不存在或未删除，无需恢复"));
+        return this.OkData(restored, message: restored ? "恢复成功" : "参数不存在或未删除，无需恢复");
     }
 }

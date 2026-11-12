@@ -31,7 +31,7 @@ public class SysDictDataController(ISender sender) : ControllerBase
     [RequirePermission(PermissionDefinitions.SystemDictList)]
     public async Task<IActionResult> Page([FromQuery] DictDataPageRequest request, CancellationToken cancellationToken = default)
     {
-        return Ok(Result.Ok(await sender.Send(new DictDataQueryPaged(request), cancellationToken)));
+        return this.OkData(await sender.Send(new DictDataQueryPaged(request), cancellationToken));
     }
 
     /// <summary>按字典类型查询启用状态的字典数据（走缓存，写操作后立即刷新）。</summary>
@@ -42,7 +42,7 @@ public class SysDictDataController(ISender sender) : ControllerBase
     [RequirePermission(PermissionDefinitions.SystemDictQuery)]
     public async Task<IActionResult> GetByType(string dictType, CancellationToken cancellationToken = default)
     {
-        return Ok(Result.Ok(await sender.Send(new DictDataQueryByType(dictType), cancellationToken)));
+        return this.OkData(await sender.Send(new DictDataQueryByType(dictType), cancellationToken));
     }
 
     /// <summary>创建字典数据（所属类型必须存在；同类型下标签 / 键值唯一）。</summary>
@@ -55,7 +55,7 @@ public class SysDictDataController(ISender sender) : ControllerBase
     public async Task<IActionResult> Create([FromBody] DictDataInputRequest request, CancellationToken cancellationToken = default)
     {
         var affected = await sender.Send(new DictDataCreateCommand(request), cancellationToken);
-        return Ok(Result.Ok(affected, message: "创建成功"));
+        return this.OkData(affected, "创建成功");
     }
 
     /// <summary>更新字典数据（类型可迁移，迁移后新旧类型缓存均失效）。</summary>
@@ -70,7 +70,7 @@ public class SysDictDataController(ISender sender) : ControllerBase
     public async Task<IActionResult> Update(Guid id, Guid version, [FromBody] DictDataInputRequest request, CancellationToken cancellationToken = default)
     {
         var affected = await sender.Send(new DictDataUpdateCommand(id, version, request), cancellationToken);
-        return Ok(Result.Ok(affected, message: "更新成功"));
+        return this.OkData(affected, "更新成功");
     }
 
     /// <summary>删除字典数据。</summary>
@@ -84,7 +84,7 @@ public class SysDictDataController(ISender sender) : ControllerBase
     public async Task<IActionResult> Delete(Guid id, Guid version, CancellationToken cancellationToken = default)
     {
         var affected = await sender.Send(new DictDataDeleteCommand(id, version), cancellationToken);
-        return Ok(Result.Ok(affected, message: "删除成功"));
+        return this.OkData(affected, "删除成功");
     }
 
     /// <summary>恢复字典数据（解除软删除墓碑；幂等执行，不存在或未删除时静默忽略）。</summary>
@@ -98,6 +98,6 @@ public class SysDictDataController(ISender sender) : ControllerBase
     public async Task<IActionResult> Restore(Guid id, Guid version, CancellationToken cancellationToken = default)
     {
         var restored = await sender.Send(new DictDataRestoreCommand(id, version), cancellationToken);
-        return Ok(Result.Ok(restored, message: restored ? "恢复成功" : "字典数据不存在或未删除，无需恢复"));
+        return this.OkData(restored, message: restored ? "恢复成功" : "字典数据不存在或未删除，无需恢复");
     }
 }

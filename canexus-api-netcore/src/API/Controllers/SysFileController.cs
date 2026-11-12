@@ -43,7 +43,7 @@ public class SysFileController(ISender sender, IFileStorage fileStorage) : Contr
 
         await using var stream = file.OpenReadStream();
         var data = await sender.Send(new FileUploadCommand(file.FileName, file.ContentType, bizCategory, stream), cancellationToken);
-        return Ok(Result.Ok(data, message: "上传成功"));
+        return this.OkData(data, "上传成功");
     }
 
     /// <summary>分页查询文件元数据（文件名模糊 / 用途分类过滤，按创建时间倒序）。</summary>
@@ -54,7 +54,7 @@ public class SysFileController(ISender sender, IFileStorage fileStorage) : Contr
     [RequirePermission(PermissionDefinitions.SystemFileList)]
     public async Task<IActionResult> Page([FromQuery] FilePageRequest request, CancellationToken cancellationToken = default)
     {
-        return Ok(Result.Ok(await sender.Send(new FileQueryPaged(request), cancellationToken)));
+        return this.OkData(await sender.Send(new FileQueryPaged(request), cancellationToken));
     }
 
     /// <summary>按 Id 查询文件详情（元数据回显）。</summary>
@@ -65,7 +65,7 @@ public class SysFileController(ISender sender, IFileStorage fileStorage) : Contr
     [RequirePermission(PermissionDefinitions.SystemFileQuery)]
     public async Task<IActionResult> GetById(Guid id, CancellationToken cancellationToken = default)
     {
-        return Ok(Result.Ok(await sender.Send(new FileQueryDetail(id), cancellationToken)));
+        return this.OkData(await sender.Send(new FileQueryDetail(id), cancellationToken));
     }
 
     /// <summary>下载文件（流式回传物理文件，文件名沿用原始上传名）。</summary>
@@ -97,6 +97,6 @@ public class SysFileController(ISender sender, IFileStorage fileStorage) : Contr
     public async Task<IActionResult> Delete(Guid id, Guid version, CancellationToken cancellationToken = default)
     {
         var affected = await sender.Send(new FileDeleteCommand(id, version), cancellationToken);
-        return Ok(Result.Ok(affected, message: "删除成功"));
+        return this.OkData(affected, "删除成功");
     }
 }

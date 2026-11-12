@@ -31,7 +31,7 @@ public class SysOnlineUserController(ISender sender) : ControllerBase
     [RequirePermission(PermissionDefinitions.MonitorOnlineList)]
     public async Task<IActionResult> Page([FromQuery] OnlineUserPageRequest request, CancellationToken cancellationToken = default)
     {
-        return Ok(Result.Ok(await sender.Send(new OnlineUserQueryPaged(request), cancellationToken)));
+        return this.OkData(await sender.Send(new OnlineUserQueryPaged(request), cancellationToken));
     }
 
     /// <summary>强制下线指定在线会话（吊销对应 refreshToken，会话将无法继续刷新令牌；高危操作留痕审计）。</summary>

@@ -26,6 +26,6 @@ public class SysCacheMonitorController(ISender sender) : ControllerBase
     [RequirePermission(PermissionDefinitions.MonitorCacheList)]
     public async Task<IActionResult> Cache(CancellationToken cancellationToken = default)
     {
-        return Ok(Result.Ok(await sender.Send(new CacheMonitorQuery(), cancellationToken)));
+        return this.OkData(await sender.Send(new CacheMonitorQuery(), cancellationToken));
     }
 }

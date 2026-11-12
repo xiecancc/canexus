@@ -28,6 +28,6 @@ public class SysEntityChangeLogController(ISender sender) : ControllerBase
     [RequirePermission(PermissionDefinitions.MonitorChangelogList)]
     public async Task<IActionResult> Page([FromQuery] EntityChangeLogPageRequest request, CancellationToken cancellationToken = default)
     {
-        return Ok(Result.Ok(await sender.Send(new EntityChangeLogQueryPaged(request), cancellationToken)));
+        return this.OkData(await sender.Send(new EntityChangeLogQueryPaged(request), cancellationToken));
     }
 }
