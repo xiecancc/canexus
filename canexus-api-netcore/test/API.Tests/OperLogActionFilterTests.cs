@@ -167,6 +167,15 @@ public class OperLogActionFilterTests
         public string? TraceId => "trace-test";
 
         /// <inheritdoc />
+        public string? HttpMethod => null;
+
+        /// <inheritdoc />
+        public string? RequestPath => null;
+
+        /// <inheritdoc />
+        public string? ClientIp => null;
+
+        /// <inheritdoc />
         public bool IsOperLogHandled { get; private set; }
 
         /// <inheritdoc />

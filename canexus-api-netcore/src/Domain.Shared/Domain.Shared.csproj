@@ -1,16 +1,5 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <PropertyGroup>
-    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
-    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
-    <TargetFramework>net10.0</TargetFramework>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <Nullable>enable</Nullable>
-
-    <!-- XML 文档输出：编译生成与程序集同名的 *.xml（CS1591/CS1572/CS1573 已升级为错误，注释缺失或漂移将导致编译失败） -->
-    <GenerateDocumentationFile>true</GenerateDocumentationFile>
-  </PropertyGroup>
-
   <ItemGroup>
     <!-- 本地化资源：错误消息 JSON 键值表嵌入主程序集（键约定 Error_{错误码}，zh-CN 为默认资源）；
          文件名用下划线分隔文化（ErrorMessages_zh-CN.json）——点分隔会被 MSBuild 识别为文化后缀

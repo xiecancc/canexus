@@ -3,6 +3,7 @@ using Application.Events;
 using Domain.Entities;
 using Domain.Repositories;
 using Domain.Services.Users;
+using Domain.Shared.Localization;
 using Domain.Shared.Results;
 using Infrastructure.Shared.Caching;
 using Microsoft.AspNetCore.Authorization;
@@ -99,8 +100,12 @@ public sealed class MustChangePasswordMiddleware(
         }
 
         logger.LogWarning("强制改密拦截：用户 {UserId} 尚未修改初始密码（路径 {Path}）", userId, context.Request.Path);
+        // 403 短路补拒绝审计：强制改密拦截须落操作日志（非阻塞、异常自吞）
+        _ = AuthorizationRejectionAudit.WriteAsync(context, "首次登录须先修改初始密码",
+            ErrorCodes.MustChangePasswordRequired);
         await UnifiedResponseWriter.WriteResultAsync(
             context, StatusCodes.Status403Forbidden,
-            Result.Fail(ErrorCodes.MustChangePasswordRequired, "首次登录须先修改初始密码"));
+            Result.Fail(ErrorCodes.MustChangePasswordRequired,
+                ErrorMessageLocalizer.Localize(ErrorCodes.MustChangePasswordRequired, "首次登录须先修改初始密码")));
     }
 }

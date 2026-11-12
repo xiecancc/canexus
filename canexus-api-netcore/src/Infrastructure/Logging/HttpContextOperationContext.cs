@@ -34,6 +34,17 @@ public sealed class HttpContextOperationContext(IHttpContextAccessor accessor) :
     }
 
     /// <inheritdoc />
+    public string? HttpMethod => accessor.HttpContext?.Request.Method;
+
+    // 仅取 Path，不拼 QueryString：查询串可能携带令牌 / 敏感参数，写入审计列会泄露
+    /// <inheritdoc />
+    public string? RequestPath => accessor.HttpContext?.Request.Path.Value;
+
+    // 客户端 IP 直接取连接远端地址；不处理 X-Forwarded-For（可信代理已有独立链路，避免伪造头污染审计）
+    /// <inheritdoc />
+    public string? ClientIp => accessor.HttpContext?.Connection.RemoteIpAddress?.ToString();
+
+    /// <inheritdoc />
     public bool IsOperLogHandled =>
         accessor.HttpContext is not null
         && accessor.HttpContext.Items.TryGetValue(OperLogHandledKey, out var handled)

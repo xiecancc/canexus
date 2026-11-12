@@ -3,6 +3,7 @@ using System.Net;
 using System.Threading.RateLimiting;
 using API.Middlewares;
 using API.RateLimiting;
+using Domain.Shared.Localization;
 using Domain.Shared.Results;
 using Infrastructure.Redis;
 using Infrastructure.Shared.Options;
@@ -137,7 +138,8 @@ public static class SecurityDependencyExtensions
                     await UnifiedResponseWriter.WriteResultAsync(
                         context.HttpContext,
                         StatusCodes.Status429TooManyRequests,
-                        Result.Fail(ErrorCodes.CommonTooManyRequests, "请求过于频繁，请稍后重试"),
+                        Result.Fail(ErrorCodes.CommonTooManyRequests,
+                            ErrorMessageLocalizer.Localize(ErrorCodes.CommonTooManyRequests, "请求过于频繁，请稍后重试")),
                         headers,
                         cancellationToken);
                 };

@@ -2,6 +2,7 @@
 using API.Authorization;
 using Application.Permissions;
 using Domain.Services.Users;
+using Domain.Shared.Localization;
 using Domain.Shared.Results;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -45,6 +46,9 @@ public sealed class PermissionAuthorizationFilter(
                 if (!currentUser.IsAuthenticated)
                 {
                     context.Result = Unauthorized();
+                    // 401 短路补拒绝审计：端点级未认证尝试同样留痕（非阻塞、异常自吞）
+                    _ = AuthorizationRejectionAudit.WriteAsync(context.HttpContext, "未认证访问被拒绝",
+                        Domain.Shared.Results.ErrorCodes.AuthUnauthorized);
                 }
 
                 return;
@@ -55,10 +59,14 @@ public sealed class PermissionAuthorizationFilter(
             logger.LogError("权限默认拒绝：端点 {Path} 未声明 [RequirePermission] 也未声明豁免，已拒绝访问（应在启动期反向扫描中修复）",
                 context.HttpContext.Request.Path);
             context.Result = new JsonResult(Result.Fail(Domain.Shared.Results.ErrorCodes.AuthForbidden,
-                "端点未声明访问策略，已默认拒绝"))
+                ErrorMessageLocalizer.Localize(Domain.Shared.Results.ErrorCodes.AuthForbidden,
+                    "端点未声明访问策略，已默认拒绝")))
             {
                 StatusCode = StatusCodes.Status403Forbidden
             };
+            // 授权过滤器短路后 OperLogActionFilter 不再执行，默认拒绝尝试须手动补拒绝审计（非阻塞、异常自吞）
+            _ = AuthorizationRejectionAudit.WriteAsync(context.HttpContext, "端点未声明访问策略，已默认拒绝",
+                Domain.Shared.Results.ErrorCodes.AuthForbidden);
             return;
         }
 
@@ -66,10 +74,14 @@ public sealed class PermissionAuthorizationFilter(
         {
             logger.LogWarning("权限校验拒绝：未认证请求访问 {Permission}（路径 {Path}）",
                 permission.Permission, context.HttpContext.Request.Path);
-            context.Result = new JsonResult(Result.Fail(Domain.Shared.Results.ErrorCodes.AuthUnauthorized, "未登录或令牌无效"))
+            context.Result = new JsonResult(Result.Fail(Domain.Shared.Results.ErrorCodes.AuthUnauthorized,
+                ErrorMessageLocalizer.Localize(Domain.Shared.Results.ErrorCodes.AuthUnauthorized, "未登录或令牌无效")))
             {
                 StatusCode = StatusCodes.Status401Unauthorized
             };
+            // 401 短路补拒绝审计：越权 / 未认证尝试须落操作日志（非阻塞、异常自吞）
+            _ = AuthorizationRejectionAudit.WriteAsync(context.HttpContext, "未认证访问被拒绝",
+                Domain.Shared.Results.ErrorCodes.AuthUnauthorized);
             return;
         }
 
@@ -84,16 +96,21 @@ public sealed class PermissionAuthorizationFilter(
             return;
         }
 
-        context.Result = new JsonResult(Result.Fail(Domain.Shared.Results.ErrorCodes.AuthForbidden, "无权限访问"))
+        context.Result = new JsonResult(Result.Fail(Domain.Shared.Results.ErrorCodes.AuthForbidden,
+            ErrorMessageLocalizer.Localize(Domain.Shared.Results.ErrorCodes.AuthForbidden, "无权限访问")))
         {
             StatusCode = StatusCodes.Status403Forbidden
         };
         logger.LogWarning("权限校验拒绝：用户 {UserId} 无 {Permission} 权限（路径 {Path}）",
             userId, permission.Permission, context.HttpContext.Request.Path);
+        // 403 短路补拒绝审计：越权尝试须落操作日志（非阻塞、异常自吞）
+        _ = AuthorizationRejectionAudit.WriteAsync(context.HttpContext, "无权限访问",
+            Domain.Shared.Results.ErrorCodes.AuthForbidden);
     }
 
     /// <summary>401 统一响应。</summary>
-    private static JsonResult Unauthorized() => new(Result.Fail(Domain.Shared.Results.ErrorCodes.AuthUnauthorized, "未登录或令牌无效"))
+    private static JsonResult Unauthorized() => new(Result.Fail(Domain.Shared.Results.ErrorCodes.AuthUnauthorized,
+                ErrorMessageLocalizer.Localize(Domain.Shared.Results.ErrorCodes.AuthUnauthorized, "未登录或令牌无效")))
     {
         StatusCode = StatusCodes.Status401Unauthorized
     };

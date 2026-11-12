@@ -8,8 +8,11 @@ namespace Domain.Shared.Localization;
 /// 错误消息本地化器（轻量 JSON 资源实现，替代 resx + WinForms 资源工具链）。
 /// <para>资源约定：<c>Localization/ErrorMessages.{culture}.json</c>（嵌入资源），
 /// 键为 <c>Error_{错误码}</c>（如 Error_40005）。
-/// 查找顺序：默认文化（zh）直接返回调用方原始文案（保留动态诊断细节）；
-/// 非默认文化按 请求文化 → 语言回退 → zh-CN 默认资源 → 原始文案兜底。</para>
+/// 查找顺序：默认文化（zh）返回经 <see cref="ErrorMessageSanitizer"/> 脱敏后的调用方原始文案
+/// （保留合法动态诊断细节、屏蔽 SQL / 路径 / 口令 / 令牌）；
+/// 非默认文化按 请求文化 → 语言回退 → zh-CN 默认资源 → 脱敏后的原始文案兜底。</para>
+/// <para>安全边界（B3）：静态资源文案是可信内容、直接返回；任何「调用方原始文案」在离开本类型前
+/// 一律先脱敏，避免业务异常消息里的内部实现细节原样返回客户端。</para>
 /// </summary>
 public static class ErrorMessageLocalizer
 {
@@ -30,10 +33,11 @@ public static class ErrorMessageLocalizer
 
     /// <summary>按指定文化本地化错误码消息（供测试与特殊场景显式指定文化）。</summary>
     /// <remarks>
-    /// 默认文化（zh）直接返回调用方原始文案而非资源表文本：部分错误码的消息携带动态细节
+    /// 默认文化（zh）返回经脱敏后的调用方原始文案而非资源表静态文本：部分错误码的消息携带动态细节
     /// （如「不支持的文件类型：'.exe'（允许的扩展名：…）」「内容签名与声明扩展名不符」），
     /// 资源表是静态文案，覆盖后会丢失排查所需的上下文；原始文案本就以中文书写，
-    /// 即为默认语言的正确呈现。非默认文化按 资源 → zh 资源 → 原始文案 回退，
+    /// 即为默认语言的正确呈现。脱敏只移除 SQL / 路径 / 口令 / 令牌等高风险片段，不影响这些细节。
+    /// 非默认文化按 资源 → zh 资源 → 脱敏后原始文案 回退，
     /// 保证 en-US 等语言始终有英文呈现（EX-01 本地化覆盖缺口的目标即在此）。
     /// </remarks>
     /// <param name="culture">目标文化（取 CurrentUICulture，由请求本地化中间件按 Accept-Language 设置）。</param>
@@ -42,14 +46,17 @@ public static class ErrorMessageLocalizer
     /// <returns>本地化后的消息。</returns>
     public static string Localize(CultureInfo culture, int errorCode, string fallback)
     {
+        // 所有「原始文案」出口共用一份脱敏结果：zh 直接返回路径 + 未收录错误码的回退路径
+        var safeFallback = ErrorMessageSanitizer.Sanitize(fallback);
+
         if (string.Equals(culture.TwoLetterISOLanguageName, "zh", StringComparison.OrdinalIgnoreCase))
         {
-            return fallback;
+            return safeFallback;
         }
 
         var key = $"Error_{errorCode}";
 
-        // 精确文化 → 语言回退（zh-CN 匹配 zh 资源不存在时）→ 默认资源 → 兜底
+        // 精确文化 → 语言回退（zh-CN 匹配 zh 资源不存在时）→ 默认资源 → 脱敏文案兜底
         foreach (var name in new[] { culture.Name, culture.TwoLetterISOLanguageName })
         {
             if (TryGetMessage(name, key, out var message))
@@ -58,7 +65,7 @@ public static class ErrorMessageLocalizer
             }
         }
 
-        return TryGetMessage("zh-CN", key, out var default_) ? default_ : fallback;
+        return TryGetMessage("zh-CN", key, out var default_) ? default_ : safeFallback;
     }
 
     /// <summary>从缓存 / 嵌入资源加载指定文化的键值表并查询。</summary>

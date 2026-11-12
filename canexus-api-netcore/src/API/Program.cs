@@ -133,7 +133,8 @@ public class Program
                             .Select(error => string.IsNullOrEmpty(error.ErrorMessage) ? pair.Key : error.ErrorMessage))
                         .ToList();
 
-                    var result = Result.Fail(ErrorCodes.CommonValidationFailed, string.Join("；", messages));
+                    var result = Result.Fail(ErrorCodes.CommonValidationFailed,
+                        ErrorMessageLocalizer.Localize(ErrorCodes.CommonValidationFailed, string.Join("；", messages)));
                     return new BadRequestObjectResult(result);
                 };
             });

@@ -177,6 +177,100 @@ public class ProductionConfigurationValidatorTests
         });
     }
 
+    /// <summary>P1-8：未显式配置 RequirePasswordChangeOnSeed（appsettings.json 不含该键）时 Production 启动被拒绝。</summary>
+    [Test]
+    public void ProductionBaseline_RejectsMissingPasswordChangeOnSeed()
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Jwt:Secret"] = "Prod-Only@Random#Secret-2026-abcdefghijklmnopqrstuvwxyz",
+                ["Bootstrap:AdminInitialPassword"] = "Prod-Only@Initial#Password-2026"
+            })
+            .Build();
+
+        var exception = Assert.Throws<InvalidOperationException>(
+            () => ProductionConfigurationValidator.Validate(configuration, new StubEnvironment("Production")));
+        Assert.That(exception!.Message, Does.Contain("Bootstrap:RequirePasswordChangeOnSeed 在 Production 必须为 true"));
+    }
+
+    /// <summary>P1-8：RequirePasswordChangeOnSeed 显式为 true 且其余基线全部合规时，Validate 不抛异常。</summary>
+    [Test]
+    public void ProductionBaseline_AcceptsExplicitlyEnabledPasswordChangeOnSeed()
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Jwt:Secret"] = "Prod-Only@Random#Secret-2026-abcdefghijklmnopqrstuvwxyz",
+                ["Bootstrap:AdminInitialPassword"] = "Prod-Only@Initial#Password-2026",
+                ["Bootstrap:RequirePasswordChangeOnSeed"] = "true",
+                ["Database:AutoCreateTable"] = "false",
+                ["Database:AutoSyncStructure"] = "false",
+                ["Database:AllowSchemaInitialization"] = "false",
+                ["Database:MigrationsEnabled"] = "true",
+                ["Database:ValidateModelStructure"] = "true",
+                ["Https:RedirectEnabled"] = "true",
+                ["Https:HstsEnabled"] = "true",
+                ["RateLimit:Enabled"] = "true",
+                ["RateLimit:GlobalPermitLimit"] = "100",
+                ["MultiTenancy:Enabled"] = "false",
+                ["Cache:RedisEnabled"] = "true",
+                ["RateLimit:UseRedis"] = "true"
+            })
+            .Build();
+
+        Assert.DoesNotThrow(
+            () => ProductionConfigurationValidator.Validate(configuration, new StubEnvironment("Production")));
+    }
+
+    /// <summary>P1-8：未开启 ValidateModelStructure 时 Production 启动被拒绝。</summary>
+    [Test]
+    public void ProductionBaseline_RequiresValidateModelStructureEnabled()
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Database:ValidateModelStructure"] = "false"
+            })
+            .Build();
+
+        var exception = Assert.Throws<InvalidOperationException>(
+            () => ProductionConfigurationValidator.Validate(configuration, new StubEnvironment("Production")));
+        Assert.That(exception!.Message, Does.Contain("Database:ValidateModelStructure 在 Production 必须为 true"));
+    }
+
+    /// <summary>P1-8：AllowSchemaInitialization 稳态保留 true 时 Production 启动被拒绝（仅一次性初始化可临时开启）。</summary>
+    [Test]
+    public void ProductionBaseline_RejectsAllowSchemaInitializationEnabled()
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Database:AllowSchemaInitialization"] = "true"
+            })
+            .Build();
+
+        var exception = Assert.Throws<InvalidOperationException>(
+            () => ProductionConfigurationValidator.Validate(configuration, new StubEnvironment("Production")));
+        Assert.That(exception!.Message, Does.Contain("Database:AllowSchemaInitialization 在 Production 稳态必须为 false"));
+    }
+
+    /// <summary>P1-8：显式关闭迁移通道时 Production 启动被拒绝。</summary>
+    [Test]
+    public void ProductionBaseline_RejectsDisabledMigrations()
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Database:MigrationsEnabled"] = "false"
+            })
+            .Build();
+
+        var exception = Assert.Throws<InvalidOperationException>(
+            () => ProductionConfigurationValidator.Validate(configuration, new StubEnvironment("Production")));
+        Assert.That(exception!.Message, Does.Contain("Database:MigrationsEnabled 在 Production 必须为 true"));
+    }
+
     /// <summary>测试用宿主环境桩。</summary>
     private sealed class StubEnvironment(string name) : IHostEnvironment
     {

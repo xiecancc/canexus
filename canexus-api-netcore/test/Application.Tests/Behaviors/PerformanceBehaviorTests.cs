@@ -82,4 +82,28 @@ public class PerformanceBehaviorTests
 
         Assert.That(logger.Entries, Is.Empty, "未超过阈值的请求不应输出慢请求日志");
     }
+
+    /// <summary>处理器抛异常时 finally 仍停表并输出慢请求告警，且异常原样传播（不吞异常）。</summary>
+    [Test]
+    public void Handle_NextThrows_StillLogsElapsedAndPropagates()
+    {
+        var logger = new RecordingLogger<PerformanceBehavior<SlowObservabilityRequest, bool>>();
+        var behavior = new PerformanceBehavior<SlowObservabilityRequest, bool>(logger);
+        var expected = new InvalidOperationException("处理器失败");
+        var next = new RequestHandlerDelegate<bool>(async _ =>
+        {
+            await Task.Delay(600);
+            throw expected;
+        });
+
+        var thrown = Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await behavior.Handle(new SlowObservabilityRequest(), next, CancellationToken.None));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(thrown, Is.SameAs(expected), "异常须原样传播，不得被 finally 吞掉");
+            Assert.That(logger.Entries.Any(entry => entry.Contains("慢请求")), Is.True,
+                "异常路径仍须在 finally 中输出耗时 / 慢请求告警");
+        });
+    }
 }

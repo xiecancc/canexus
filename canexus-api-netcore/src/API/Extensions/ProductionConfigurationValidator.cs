@@ -58,13 +58,17 @@ public static class ProductionConfigurationValidator
         }
     }
 
-    /// <summary>校验 Production 部署基线：安全传输、业务限流、显式声明的租户与缓存策略、可信代理白名单。</summary>
+    /// <summary>校验 Production 部署基线：种子口令收敛、禁止应用自动改表与一次性初始化授权、迁移通道与只读结构校验、安全传输、业务限流、显式声明的租户与缓存策略、可信代理白名单。</summary>
     private static void ValidateProductionBaseline(IConfiguration configuration, List<string> issues)
     {
+        // 必须「显式」配置为 true：未配置（appsettings.json 不含该键）或解析后不为 true 都拒绝。
+        // 种子 admin 首登强制改密是内置超管口令交付后的唯一收敛手段，不能依赖隐式默认值。
         var requireChange = configuration["Bootstrap:RequirePasswordChangeOnSeed"];
-        if (requireChange is not null && bool.TryParse(requireChange, out var required) && !required)
+        if (string.IsNullOrWhiteSpace(requireChange)
+            || !bool.TryParse(requireChange, out var required)
+            || !required)
         {
-            issues.Add("Bootstrap:RequirePasswordChangeOnSeed 在 Production 必须为 true（种子 admin 首登须改密）");
+            issues.Add("Bootstrap:RequirePasswordChangeOnSeed 在 Production 必须为 true（必须显式配置为 true，种子 admin 首登须改密）");
         }
 
         // 生产不得由应用自动改表：结构变更须经迁移通道的幂等脚本，
@@ -77,6 +81,27 @@ public static class ProductionConfigurationValidator
         if (configuration.GetValue("Database:AutoSyncStructure", true))
         {
             issues.Add("Database:AutoSyncStructure 在 Production 必须显式配置为 false（禁止应用自动同步表结构）");
+        }
+
+        // AllowSchemaInitialization 仅用于「全新生产库」一次性授权应用建库 / 建表（DbInitializer 库层与缺表路径），
+        // 结构就绪后保留 true 等于允许应用随时自动改表；README 要求初始化完成后移除该项，故稳态必须为 false。
+        if (configuration.GetValue("Database:AllowSchemaInitialization", false))
+        {
+            issues.Add("Database:AllowSchemaInitialization 在 Production 稳态必须为 false（仅全新库一次性初始化可临时设为 true，完成后须移除）");
+        }
+
+        // 关闭迁移通道会跳过全部幂等 ISchemaMigration 脚本，结构完全脱离框架收敛（DbInitializer 结构层），
+        // 与「结构变更须经迁移通道」的生产约束冲突；默认 true，仅拦截显式关闭。
+        if (!configuration.GetValue("Database:MigrationsEnabled", true))
+        {
+            issues.Add("Database:MigrationsEnabled 在 Production 必须为 true（不得关闭幂等迁移通道，否则结构变更脱离框架收敛）");
+        }
+
+        // 启动期只读比对实体模型快照与 information_schema 列 / 主键（ModelStructureValidator），
+        // 是发现「绕过 CodeFirst / 迁移通道直接改表」的唯一安全网，生产必须开启。
+        if (!configuration.GetValue("Database:ValidateModelStructure", false))
+        {
+            issues.Add("Database:ValidateModelStructure 在 Production 必须为 true（启动期只读结构校验，拦截绕过迁移通道的结构漂移）");
         }
 
         if (!configuration.GetValue("Https:RedirectEnabled", false))

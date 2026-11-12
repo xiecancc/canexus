@@ -1,0 +1,16 @@
+<Project>
+
+  <!-- 中央构建属性：仓库根目录，src/ 与 test/ 下 11 个项目共同继承。
+       各 csproj 仅保留自身特有属性（如 API 的 UserSecretsId、测试项目的 LangVersion / IsPackable）。 -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+
+    <!-- XML 文档输出：编译生成与程序集同名的 *.xml（CS1591/CS1572/CS1573 已升级为错误，注释缺失或漂移将导致编译失败） -->
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+  </PropertyGroup>
+
+</Project>

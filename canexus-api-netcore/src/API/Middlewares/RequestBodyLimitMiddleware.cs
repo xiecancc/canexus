@@ -1,3 +1,4 @@
+using Domain.Shared.Localization;
 using Domain.Shared.Results;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Configuration;
@@ -33,7 +34,8 @@ public sealed class RequestBodyLimitMiddleware(
                 context.Request.ContentLength, limitBytes, context.Request.Path);
             await UnifiedResponseWriter.WriteResultAsync(
                 context, StatusCodes.Status413PayloadTooLarge,
-                Result.Fail(ErrorCodes.FileSizeExceeded, "上传文件大小超出上限"));
+                Result.Fail(ErrorCodes.FileSizeExceeded,
+                    ErrorMessageLocalizer.Localize(ErrorCodes.FileSizeExceeded, "上传文件大小超出上限")));
             return;
         }
 

@@ -46,7 +46,10 @@ public sealed class GlobalExceptionHandlingMiddleware(RequestDelegate next, ILog
             }
 
             logger.LogWarning("验证异常：{Message}（TraceId：{TraceId}）", message, context.TraceIdentifier);
-            await WriteResultAsync(context, StatusCodes.Status400BadRequest, Result.Fail(ErrorCodes.CommonValidationFailed, message));
+            // 校验失败文案同样经本地化器 + 脱敏：zh 保留逐字段细节，en-US 返回资源表英文文案
+            await WriteResultAsync(context, StatusCodes.Status400BadRequest,
+                Result.Fail(ErrorCodes.CommonValidationFailed,
+                    ErrorMessageLocalizer.Localize(ErrorCodes.CommonValidationFailed, message)));
         }
         catch (Microsoft.AspNetCore.Http.BadHttpRequestException exception)
         {
@@ -56,7 +59,8 @@ public sealed class GlobalExceptionHandlingMiddleware(RequestDelegate next, ILog
             await WriteResultAsync(
                 context,
                 StatusCodes.Status413PayloadTooLarge,
-                Result.Fail(ErrorCodes.FileSizeExceeded, "上传文件大小超出上限"));
+                Result.Fail(ErrorCodes.FileSizeExceeded,
+                    ErrorMessageLocalizer.Localize(ErrorCodes.FileSizeExceeded, "上传文件大小超出上限")));
         }
         catch (OperationCanceledException) when (context.RequestAborted.IsCancellationRequested)
         {
@@ -73,7 +77,8 @@ public sealed class GlobalExceptionHandlingMiddleware(RequestDelegate next, ILog
             await WriteResultAsync(
                 context,
                 StatusCodes.Status500InternalServerError,
-                Result.Fail(ErrorCodes.CommonSystemError, "服务器内部错误"));
+                Result.Fail(ErrorCodes.CommonSystemError,
+                    ErrorMessageLocalizer.Localize(ErrorCodes.CommonSystemError, "服务器内部错误")));
         }
     }
 

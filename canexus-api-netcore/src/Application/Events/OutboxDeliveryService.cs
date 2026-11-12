@@ -60,7 +60,9 @@ public sealed class OutboxDeliveryService(
             try
             {
                 var domainEvent = OutboxEventSerializer.Deserialize(message.EventType, message.Payload);
-                await publisher.Publish(new DomainEventNotification(domainEvent), cancellationToken);
+                // 把消息 Id 随信封传给监听器：带副作用的监听器（如站外通知渠道）据此做幂等去重，
+                // 避免「其他监听器失败 → 本条消息重投 → 已成功的渠道被重复投递」（P1-5 / D4）。
+                await publisher.Publish(new DomainEventNotification(domainEvent, message.Id), cancellationToken);
                 if (!await repository.MarkProcessedAsync(message.Id, owner, DateTime.UtcNow, cancellationToken))
                 {
                     // 认领已被其他副本接管（租约过期）：本轮结果作废，不记失败也不重复投递

@@ -112,4 +112,6 @@ healthchecksdb
 dump.rdb
 *.sql.gz
 
-# 注意：packages.lock.json、Directory.Build.props、launchSettings.json 必须提交
+# 注意：Directory.Build.props 已提交并集中管理全部项目共同构建属性（TargetFramework / 警告策略 / 文档输出等）；
+# 未启用 NuGet 锁文件（无 RestorePackagesWithLockFile），packages.lock.json 不存在且无需提交；
+# launchSettings.json 已纳入版本控制，改动需审慎

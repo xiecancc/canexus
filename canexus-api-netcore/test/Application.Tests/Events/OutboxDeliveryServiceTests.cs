@@ -123,6 +123,27 @@ public class OutboxDeliveryServiceTests
         });
     }
 
+    /// <summary>
+    /// 发布的通知信封必须携带 Outbox 消息 Id：带副作用的监听器（公告渠道）据此做幂等去重（P1-5 / D4）。
+    /// </summary>
+    [Test]
+    public async Task DeliverAsync_PassesOutboxMessageIdToNotification()
+    {
+        var repository = new FakeOutboxMessageRepository();
+        var publisher = new RecordingPublisher();
+        var service = CreateService(repository, publisher);
+        var message = CreateClaimedMessage();
+
+        await service.DeliverAsync([message], Owner, CancellationToken.None);
+
+        var envelope = publisher.Published.OfType<DomainEventNotification>().Single();
+        Assert.Multiple(() =>
+        {
+            Assert.That(envelope.OutboxMessageId, Is.EqualTo(message.Id));
+            Assert.That(repository.MarkProcessedCalls, Is.EqualTo(1));
+        });
+    }
+
     /// <summary>认领易主（MarkProcessed 命中 0 行）时：不重复投递也不误记失败。</summary>
     [Test]
     public async Task DeliverAsync_StaleClaim_SkipsWithoutRecordingFailure()

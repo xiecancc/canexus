@@ -1,5 +1,6 @@
 
 using API.Middlewares;
+using Domain.Shared.Localization;
 using Domain.Shared.Results;
 using Infrastructure.Auth;
 using Infrastructure.Shared.Options;
@@ -61,7 +62,7 @@ public static class AuthDependencyExtensions
                             : expired
                                 ? (ErrorCodes.AuthTokenExpired, "令牌已过期，请重新登录")
                                 : (ErrorCodes.AuthUnauthorized, "未登录或令牌无效");
-                        var result = Result.Fail(code, message);
+                        var result = Result.Fail(code, ErrorMessageLocalizer.Localize(code, message));
                         await UnifiedResponseWriter.WriteResultAsync(
                             context.HttpContext, StatusCodes.Status401Unauthorized, result);
                     }

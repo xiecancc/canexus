@@ -1,5 +1,7 @@
+using API.Authorization;
 using Application.Permissions;
 using Domain.Services.Users;
+using Domain.Shared.Localization;
 using Domain.Shared.Permissions;
 using Domain.Shared.Results;
 using Infrastructure.Shared.Tenants;
@@ -52,9 +54,12 @@ public sealed class TenantAuthorizationMiddleware(
             {
                 logger.LogWarning("租户越权拒绝：用户 {UserId} 请求租户 {Requested}，与声明租户 {UserTenant} 不一致（路径 {Path}）",
                     currentUser.UserId, requested, userTenant, context.Request.Path);
+                // 跨租户拒绝短路补拒绝审计（非阻塞、异常自吞）
+                _ = AuthorizationRejectionAudit.WriteAsync(context, "跨租户访问被拒绝", ErrorCodes.TenantForbidden);
                 await UnifiedResponseWriter.WriteResultAsync(
                     context, StatusCodes.Status403Forbidden,
-                    Result.Fail(ErrorCodes.TenantForbidden, "跨租户访问被拒绝"));
+                    Result.Fail(ErrorCodes.TenantForbidden,
+                        ErrorMessageLocalizer.Localize(ErrorCodes.TenantForbidden, "跨租户访问被拒绝")));
                 return;
             }
 
@@ -73,9 +78,11 @@ public sealed class TenantAuthorizationMiddleware(
 
                 logger.LogWarning("租户拒绝：用户 {UserId} 的声明租户 {UserTenant} {Message}（路径 {Path}）",
                     currentUser.UserId, userTenant, message, context.Request.Path);
+                // 声明租户状态异常拒绝补拒绝审计（非阻塞、异常自吞）
+                _ = AuthorizationRejectionAudit.WriteAsync(context, message, code);
                 await UnifiedResponseWriter.WriteResultAsync(
                     context, StatusCodes.Status403Forbidden,
-                    Result.Fail(code, message));
+                    Result.Fail(code, ErrorMessageLocalizer.Localize(code, message)));
                 return;
             }
 
@@ -96,9 +103,12 @@ public sealed class TenantAuthorizationMiddleware(
             {
                 logger.LogWarning("平台切换租户被拒绝：用户 {UserId} 缺少 {Permission} 权限（请求租户 {Requested}，路径 {Path}）",
                     currentUser.UserId, PermissionDefinitions.SystemTenantSwitch, requested, context.Request.Path);
+                // 平台切换租户权限拒绝补拒绝审计（非阻塞、异常自吞）
+                _ = AuthorizationRejectionAudit.WriteAsync(context, "缺少平台切换租户权限", ErrorCodes.AuthForbidden);
                 await UnifiedResponseWriter.WriteResultAsync(
                     context, StatusCodes.Status403Forbidden,
-                    Result.Fail(ErrorCodes.AuthForbidden, "缺少平台切换租户权限"));
+                    Result.Fail(ErrorCodes.AuthForbidden,
+                        ErrorMessageLocalizer.Localize(ErrorCodes.AuthForbidden, "缺少平台切换租户权限")));
                 return;
             }
 
@@ -114,9 +124,11 @@ public sealed class TenantAuthorizationMiddleware(
             if (code != 0)
             {
                 logger.LogWarning("租户拒绝：请求租户 {Requested} {Message}（路径 {Path}）", requested, message, context.Request.Path);
+                // 请求租户状态异常拒绝补拒绝审计（非阻塞、异常自吞）
+                _ = AuthorizationRejectionAudit.WriteAsync(context, message, code);
                 await UnifiedResponseWriter.WriteResultAsync(
                     context, ErrorCodes.GetHttpStatusCode(code),
-                    Result.Fail(code, message));
+                    Result.Fail(code, ErrorMessageLocalizer.Localize(code, message)));
                 return;
             }
 

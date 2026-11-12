@@ -31,7 +31,8 @@ CodeFirst 依实体模型一次性建表、随后按序执行幂等迁移脚本�
 - **数据权限**：按角色配置数据范围（全部 / 本部门 / 本部门及以下 / 仅本人等），查询层统一过滤。
 - **多租户**：开关式共享库行级隔离；租户解析、归属校验、停用与到期拦截；超管可跨租户。
 - **审计**：操作日志、登录日志、字段级实体变更日志（敏感值脱敏），异常路径同样留痕。
-- **领域事件**：事务 Outbox 持久化 + 后台 worker 重试，权限 / 字典 / 配置缓存失效由监听器驱动。
+- **领域事件**：事务 Outbox 持久化 + 后台 worker 重试，权限 / 字典 / 配置缓存失效由监听器驱动；
+  通知公告渠道监听器按 Outbox 消息 Id 幂等去重，同一消息因其他监听器失败重投时不会重复发送渠道通知。
 - **可靠性**：乐观并发（版本令牌）覆盖更新 / 软删除 / 恢复三条写入路径（统一走 `ExecuteCommandWithOptLock`）、
   可空时间戳 `DeletedAt` 软删除与物理删除双通道显式分离、无历史依赖的幂等迁移框架、分布式锁、统一异常与响应结构。
 - **可运维**：结构化日志（Serilog）、健康检查（存活 / 就绪）、限流、OpenTelemetry Trace 与 Metrics（可选）。
@@ -330,9 +331,12 @@ curl -s http://localhost:5000/api/auth/user-info \
 | --- | --- |
 | `Jwt:Secret` | 非空，不得为示例值或开发回退值（非 Development 校验） |
 | `Bootstrap:AdminInitialPassword` | 非空（非 Development 校验） |
-| `Bootstrap:RequirePasswordChangeOnSeed` | 不得显式设为 `false` |
+| `Bootstrap:RequirePasswordChangeOnSeed` | 必须显式 `true`（种子 admin 首登须改密） |
 | `Database:AutoCreateTable` | `false` |
 | `Database:AutoSyncStructure` | `false` |
+| `Database:AllowSchemaInitialization` | 必须为 `false`（显式 `true` 会被拦截；全新库一次性初始化请临时改为 `true`，完成后移除） |
+| `Database:MigrationsEnabled` | 必须为 `true`（显式 `false` 会让结构脱离迁移通道，仅限外部脚本全权管理结构的部署） |
+| `Database:ValidateModelStructure` | `true`（启动期比对实体模型与实际列 / 主键，发现绕过 CodeFirst / 迁移通道的改表即阻止启动） |
 | `Https:RedirectEnabled` | `true` |
 | `Https:HstsEnabled` | `true` |
 | `RateLimit:Enabled` 且 `RateLimit:GlobalPermitLimit` | `true` 且大于 0 |
@@ -431,6 +435,19 @@ curl -s http://localhost:5000/api/auth/user-info \
 ### 本地化
 
 默认 `zh-CN`，支持 `en-US`，按 `Accept-Language` 协商，业务异常消息随文化翻译。
+所有统一错误文案在返回客户端前统一经本地化器与脱敏器处理：
+
+- zh 文化返回经脱敏的调用方原始文案（保留「不支持的文件类型：'.exe'」这类合法动态细节，
+  移除 SQL 片段 / 绝对路径 / 口令赋值 / Bearer 与 JWT 令牌 / 长随机令牌串与堆栈帧，并限长 300 字符）；
+- 非 zh 文化按资源表翻译（资源缺失时回退 zh-CN 资源、再回退脱敏后的原始文案）；
+- 资源表静态文案为可信内容，不重复脱敏。
+
+### 拒绝访问审计
+
+端点级权限过滤、跨租户中间件、强制改密中间件的全部拒绝分支（未认证 401、无权限 403、
+跨租户、强制改密）在返回统一错误的同时，异步写入一条 `SysOperLog` 审计记录（Title=「访问拒绝」，
+含请求 URL（Query 脱敏）、IP、操作人、TraceId、错误码与脱敏后的拒绝原因）；
+审计写入自身失败仅记日志，不影响业务响应。
 
 ### 权限模型
 
@@ -480,8 +497,9 @@ DROP DATABASE IF EXISTS super_admin_test;   -- 开发 / 测试库同理
    （原生 SQL 经 `ITransactionSqlRunner` 挂接事务；MySQL DDL 有隐式提交，故脚本必须可重复执行）。
 
 - 生产环境禁止应用自动改表（`Database:AutoCreateTable` / `Database:AutoSyncStructure` 必须为 false）；
-- 全新生产库需显式设置 `Database:AllowSchemaInitialization=true` 完成一次性初始化，随后移除该项；
-- 可选开启 `Database:ValidateModelStructure`，比对实体模型与实际表结构，发现绕过 CodeFirst / 迁移通道的改表。
+- 全新生产库需显式设置 `Database:AllowSchemaInitialization=true` 完成一次性初始化，随后移除该项
+  （稳态下生产基线校验要求其为 false）；
+- `Database:ValidateModelStructure` 在生产必须为 `true`：比对实体模型与实际表结构，发现绕过 CodeFirst / 迁移通道的改表即阻止启动，是防止手工改表破坏结构一致性的最后一道安全网。
 
 ## 测试
 
@@ -750,6 +768,35 @@ Development 可不启用（缓存退化为进程内 L1、限流失效为单实�
 不要修改 `.editorconfig` 降级。
 
 ## 变更记录
+
+### 2026-11-12（二）：深度评审 P1 批次（拒绝审计 / 本地化脱敏 / Outbox 通知幂等 / 生产基线 / 中央构建）
+
+1. **拒绝访问审计（P1-1）**：新增 `AuthorizationRejectionAudit` 静态辅助类，权限过滤器（未认证 / 无权限 / 默认拒绝
+   4 个分支）、跨租户中间件（4 个拒绝分支）、强制改密中间件的全部拒绝路径异步写 `SysOperLog`
+   （Title=「访问拒绝」，URL Query 脱敏、原因脱敏截断）；写入失败仅记日志，不外泄异常。
+2. **MediatR 管道顺序修正（P1-7）**：日志 / 性能监控 Behavior 上移到最外层，
+   校验失败、越权拒绝、幂等命中等短路请求同样被性能统计与日志覆盖；
+   `PerformanceBehavior` 补 try/finally，异常路径也输出慢请求告警；
+   `AuditLogBehavior` 补有界重试（最多 2 次）与最终失败告警，并经 `IOperationContext`
+   新增的 HTTP 元数据字段记录真实 Method / Path / IP。
+3. **错误文案本地化 + 脱敏（P1-3）**：统一响应层全部错误出口（异常中间件、限流、请求体限制、
+   权限过滤器、跨租户 / 强制改密中间件、启动期验证）接入 `ErrorMessageLocalizer`；
+   新增 `ErrorMessageSanitizer` 对调用方原始文案统一脱敏（SQL / 路径 / 口令 / 令牌 / 堆栈帧，
+   限长 300，幂等可重入），zh 文化不再原样回吐异常消息，en-US 资源覆盖 69 个错误码。
+4. **Outbox 通知幂等去重（P1-5）**：`DomainEventNotification` 增加可选 Outbox 消息 Id
+   （由 `OutboxDeliveryService` 传入），`NoticeChannelDispatcher` 按消息 Id 缓存去重标记（24h），
+   同一 Outbox 消息因其他监听器失败重投时不再重复发送公告渠道通知。
+5. **生产基线加固（P1-8）**：`ProductionConfigurationValidator` 新增 4 项校验——
+   `Bootstrap:RequirePasswordChangeOnSeed` 必须显式 true；`Database:AllowSchemaInitialization`
+   稳态必须 false；`Database:MigrationsEnabled` 必须为 true；`Database:ValidateModelStructure`
+   必须为 true（启动期模型 / 库表比对作为防手工改表的安全网）。
+6. **中央构建文件（P1-9）**：新增 `Directory.Build.props` 集中管理 11 个项目的 6 项共有属性
+   （TargetFramework / TreatWarningsAsErrors / EnforceCodeStyleInBuild / GenerateDocumentationFile /
+   Nullable / ImplicitUsings），各 csproj 仅保留特有属性；API.csproj 补 3 个显式 ProjectReference。
+   依赖版本零变更（OpenTelemetry 混用 1.20.1 / 1.20.2 属 NuGet 上游可用版本差异，维持现状）。
+
+**验证**：`dotnet build api.slnx` 0 警告 0 错误；`dotnet test api.slnx` 全量通过；
+新增用例覆盖脱敏器、拒绝审计、性能异常路径、通知去重、生产基线新校验。
 
 ### 2026-11-12：深度评审 P0 实害修复（限流 / Quartz / 幂等 / CI / 命令级鉴权 / 调度一致性 / 错误响应）
 
