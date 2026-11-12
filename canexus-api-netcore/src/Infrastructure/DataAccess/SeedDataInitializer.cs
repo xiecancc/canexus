@@ -369,6 +369,12 @@ public sealed class SeedDataInitializer(
             ("修改", PermissionDefinitions.SystemTenantEdit),
             ("删除", PermissionDefinitions.SystemTenantRemove));
         await EnsureMenuAsync(Menu(MenuType.Menu, SeedId(109), "岗位管理", "post", "system/post/index", PermissionDefinitions.SystemPostList, "post", order: 9, parentId: SeedId(100)));
+        await EnsureMenuAsync(Menu(MenuType.Menu, SeedId(110), "文件管理", "file", "system/file/index", PermissionDefinitions.SystemFileList, "Upload", order: 10, parentId: SeedId(100)));
+        await EnsureButtonsAsync(SeedId(110), "文件", startId: 1101, declaredPerms,
+            ("查询", PermissionDefinitions.SystemFileQuery),
+            ("上传", PermissionDefinitions.SystemFileUpload),
+            ("下载", PermissionDefinitions.SystemFileDownload),
+            ("删除", PermissionDefinitions.SystemFileRemove));
         await EnsureButtonsAsync(SeedId(109), "岗位", startId: 1081, declaredPerms,
             ("查询", PermissionDefinitions.SystemPostQuery),
             ("新增", PermissionDefinitions.SystemPostAdd),
@@ -390,6 +396,11 @@ public sealed class SeedDataInitializer(
             ("清空", PermissionDefinitions.MonitorLogininforClean),
             ("导出", PermissionDefinitions.MonitorLogininforExport));
         await EnsureMenuAsync(Menu(MenuType.Menu, SeedId(203), "缓存监控", "cache", "monitor/cache/index", PermissionDefinitions.MonitorCacheList, "redis", order: 3, parentId: SeedId(200)));
+        await EnsureMenuAsync(Menu(MenuType.Menu, SeedId(204), "在线会话", "online", "monitor/online/index", PermissionDefinitions.MonitorOnlineList, "Monitor", order: 4, parentId: SeedId(200)));
+        await EnsureButtonsAsync(SeedId(204), "在线会话", startId: 2041, declaredPerms,
+            ("强制下线", PermissionDefinitions.MonitorOnlineForceLogout));
+        await EnsureMenuAsync(Menu(MenuType.Menu, SeedId(205), "服务器监控", "server", "monitor/server/index", PermissionDefinitions.MonitorServerList, "Cpu", order: 5, parentId: SeedId(200)));
+        await EnsureMenuAsync(Menu(MenuType.Menu, SeedId(206), "变更日志", "changelog", "system/entity-change/index", PermissionDefinitions.MonitorChangelogList, "Document", order: 6, parentId: SeedId(200)));
 
         // 系统工具目录
         await EnsureMenuAsync(Menu(MenuType.Directory, SeedId(300), "系统工具", "tool", null, icon: "tool", order: 4));
