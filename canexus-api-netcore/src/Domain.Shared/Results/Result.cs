@@ -22,6 +22,11 @@ public class Result
     /// <summary>响应消息：成功时为提示信息，失败时为错误描述。</summary>
     public string Message { get; init; } = string.Empty;
 
+    /// <summary>字段级校验错误（P1-C2）：属性名 → 错误消息列表，供前端把错误定位到表单字段。
+    /// <para>仅校验失败响应携带；其余响应该字段不输出（WhenWritingNull），保证既有响应体结构不变。</para></summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public Dictionary<string, string[]>? Errors { get; init; }
+
     /// <summary>是否成功（仅供服务端内部判断，不参与 JSON 序列化，保证响应体结构一致）。</summary>
     [JsonIgnore]
     public bool IsSuccess => Code == SuccessCode;
@@ -45,8 +50,17 @@ public class Result
     /// <summary>创建失败响应。</summary>
     /// <param name="code">业务错误码（分段规则见 <see cref="ErrorCodes"/>）。</param>
     /// <param name="message">错误描述。</param>
+    /// <param name="errors">可选的字段级校验错误（属性名 → 错误消息列表）；null 时响应体不输出该字段。</param>
     /// <returns>统一响应结果。</returns>
-    public static Result Fail(int code, string message) => new() { Code = code, Message = message };
+    public static Result Fail(int code, string message, IReadOnlyDictionary<string, string[]>? errors = null)
+        => new()
+        {
+            Code = code,
+            Message = message,
+            Errors = errors is null
+                ? null
+                : new Dictionary<string, string[]>(errors, StringComparer.Ordinal)
+        };
 }
 
 /// <summary>统一响应结果（带数据载荷）。</summary>

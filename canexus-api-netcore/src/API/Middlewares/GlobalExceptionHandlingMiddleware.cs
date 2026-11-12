@@ -39,18 +39,28 @@ public sealed class GlobalExceptionHandlingMiddleware(RequestDelegate next, ILog
         }
         catch (FluentValidation.ValidationException exception)
         {
-            // 验证异常：由 MediatR 验证管道行为抛出，拼接全部失败项，返回 400 + 通用校验失败错误码
+            // 验证异常：由 MediatR 验证管道行为抛出，返回 400 + 通用校验失败错误码；
+            // 汇总消息供展示，并按属性名分组携带字段级错误（P1-C2）供前端把错误定位到表单字段
             var message = string.Join("；", exception.Errors.Select(error => error.ErrorMessage).Where(m => !string.IsNullOrWhiteSpace(m)));
             if (string.IsNullOrWhiteSpace(message))
             {
                 message = "请求参数校验失败";
             }
 
+            var fieldErrors = exception.Errors
+                .Where(error => !string.IsNullOrWhiteSpace(error.PropertyName))
+                .GroupBy(error => error.PropertyName, StringComparer.Ordinal)
+                .ToDictionary(
+                    group => group.Key,
+                    group => group.Select(error => error.ErrorMessage).Where(m => !string.IsNullOrWhiteSpace(m)).ToArray(),
+                    StringComparer.Ordinal);
+
             logger.LogWarning("验证异常：{Message}（TraceId：{TraceId}）", message, context.TraceIdentifier);
             // 校验失败文案同样经本地化器 + 脱敏：zh 保留逐字段细节，en-US 返回资源表英文文案
             await WriteResultAsync(context, StatusCodes.Status400BadRequest,
                 Result.Fail(ErrorCodes.CommonValidationFailed,
-                    ErrorMessageLocalizer.Localize(ErrorCodes.CommonValidationFailed, message)));
+                    ErrorMessageLocalizer.Localize(ErrorCodes.CommonValidationFailed, message),
+                    fieldErrors));
         }
         catch (Microsoft.AspNetCore.Http.BadHttpRequestException exception)
         {

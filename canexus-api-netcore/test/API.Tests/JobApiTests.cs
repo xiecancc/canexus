@@ -343,6 +343,9 @@ public class JobApiTests
                 Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest), $"{name} 应被 400 拒绝");
                 Assert.That(body.RootElement.GetProperty("code").GetInt32(), Is.EqualTo(40001),
                     $"{name} 应映射为 CommonValidationFailed");
+                // P1-C2：校验失败响应携带字段级错误（属性名 → 消息列表），供前端定位表单字段
+                Assert.That(body.RootElement.TryGetProperty("errors", out var errors) && errors.ValueKind == JsonValueKind.Object,
+                    Is.True, $"{name} 校验失败响应应携带 errors 字段级错误结构");
             });
         }
     }
