@@ -102,7 +102,7 @@ public class ProductionConfigurationValidatorTests
         Assert.That(exception!.Message, Does.Contain("Cache:RedisEnabled 在 Production 必须为 true"));
     }
 
-    /// <summary>回归：显式开启 Redis 后该基线项不再出现在失败清单中。</summary>
+    /// <summary>回归：显式开启 Redis L2 缓存后，该基线项不再出现在失败清单中。</summary>
     [Test]
     public void ProductionBaseline_AcceptsRedisEnabled()
     {
@@ -110,6 +110,7 @@ public class ProductionConfigurationValidatorTests
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
                 ["Cache:RedisEnabled"] = "true",
+                ["RateLimit:UseRedis"] = "true",
                 ["Jwt:Secret"] = "Prod-Only@Random#Secret-2026-abcdefghijklmnopqrstuvwxyz",
                 ["Bootstrap:AdminInitialPassword"] = "Prod-Only@Initial#Password-2026"
             })
@@ -118,6 +119,62 @@ public class ProductionConfigurationValidatorTests
         var exception = Assert.Throws<InvalidOperationException>(
             () => ProductionConfigurationValidator.Validate(configuration, new StubEnvironment("Production")));
         Assert.That(exception!.Message, Does.Not.Contain("Cache:RedisEnabled"));
+    }
+
+    /// <summary>回归：Production 启用 Redis 缓存但未开启分布式限流时，仍会因多副本配额放大而阻止启动。</summary>
+    [Test]
+    public void ProductionBaseline_RequiresDistributedRateLimitEnabled()
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Cache:RedisEnabled"] = "true",
+                ["RateLimit:UseRedis"] = "false"
+            })
+            .Build();
+
+        var exception = Assert.Throws<InvalidOperationException>(
+            () => ProductionConfigurationValidator.Validate(configuration, new StubEnvironment("Production")));
+        Assert.That(exception!.Message, Does.Contain("RateLimit:UseRedis 在 Production 必须为 true"));
+    }
+
+    /// <summary>回归：Production 未配置 RateLimit:UseRedis（默认 false）同样被拦截，不允许依赖隐式默认值。</summary>
+    [Test]
+    public void ProductionBaseline_RejectsMissingDistributedRateLimitSwitch()
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Cache:RedisEnabled"] = "true"
+            })
+            .Build();
+
+        var exception = Assert.Throws<InvalidOperationException>(
+            () => ProductionConfigurationValidator.Validate(configuration, new StubEnvironment("Production")));
+        Assert.That(exception!.Message, Does.Contain("RateLimit:UseRedis 在 Production 必须为 true"));
+    }
+
+    /// <summary>回归：两个 Redis 开关同时显式开启后，该基线项不再出现在失败清单中。</summary>
+    [Test]
+    public void ProductionBaseline_AcceptsBothRedisSwitchesEnabled()
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Cache:RedisEnabled"] = "true",
+                ["RateLimit:UseRedis"] = "true",
+                ["Jwt:Secret"] = "Prod-Only@Random#Secret-2026-abcdefghijklmnopqrstuvwxyz",
+                ["Bootstrap:AdminInitialPassword"] = "Prod-Only@Initial#Password-2026"
+            })
+            .Build();
+
+        var exception = Assert.Throws<InvalidOperationException>(
+            () => ProductionConfigurationValidator.Validate(configuration, new StubEnvironment("Production")));
+        Assert.Multiple(() =>
+        {
+            Assert.That(exception!.Message, Does.Not.Contain("Cache:RedisEnabled"));
+            Assert.That(exception.Message, Does.Not.Contain("RateLimit:UseRedis"));
+        });
     }
 
     /// <summary>测试用宿主环境桩。</summary>

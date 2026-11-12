@@ -1,0 +1,63 @@
+name: frontend-ci
+
+# 前端回归门禁：把 .husky/pre-push 里的 type-check / Vitest 检查固化到 CI，
+# 并补上生产构建（validate + build），避免 --no-verify 绕过或仅靠本地钩子。
+on:
+  push:
+    paths:
+      - 'canexus-admin-vue/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - '.github/workflows/frontend-ci.yml'
+  pull_request:
+    paths:
+      - 'canexus-admin-vue/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - '.github/workflows/frontend-ci.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: frontend-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  frontend:
+    name: type-check / unit test / build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    defaults:
+      run:
+        working-directory: canexus-admin-vue
+
+    env:
+      CI: 'true'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 12.18.0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '26'
+          cache: 'pnpm'
+          cache-dependency-path: canexus-admin-vue/pnpm-lock.yaml
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Type check
+        run: pnpm type-check
+
+      - name: Unit test
+        run: pnpm test:unit run
+
+      - name: Build
+        run: pnpm build-only

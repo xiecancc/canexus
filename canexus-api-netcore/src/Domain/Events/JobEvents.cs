@@ -2,11 +2,11 @@
 using Domain.Entities;
 
 namespace Domain.Events;
-/// <summary>定时任务创建领域事件：任务创建成功后发布，Domain 为创建后的状态（调度同步仍由处理器经 IJobScheduleManager 完成，本事件面向后续监听扩展）。</summary>
+/// <summary>定时任务创建领域事件：任务创建成功后发布，Domain 为创建后的状态（调度同步由 Outbox 提交后事件监听器 JobScheduleSynchronizationHandler 完成，本事件面向后续监听扩展）。</summary>
 /// <param name="newEntity">创建后的定时任务。</param>
 public sealed class JobCreatedEvent(SysJob newEntity) : AggregateCreatedEvent<SysJob>(newEntity);
 
-/// <summary>定时任务修改领域事件：任务更新（含启停与调度同步）成功后发布，Domain 为变更后状态、OldEntity 为变更前快照。</summary>
+/// <summary>定时任务修改领域事件：任务更新（含启停）成功后发布，Domain 为变更后状态、OldEntity 为变更前快照；调度同步由 Outbox 提交后事件监听器完成。</summary>
 /// <param name="oldEntity">变更前的任务快照。</param>
 /// <param name="newEntity">变更后的任务。</param>
 public sealed class JobUpdatedEvent(SysJob oldEntity, SysJob newEntity) : AggregateUpdatedEvent<SysJob>(oldEntity, newEntity);

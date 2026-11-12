@@ -1,4 +1,6 @@
 
+using Application.Contracts.Abstractions;
+
 namespace Application.Contracts.Auth;
 /// <summary>登录请求（字段非空由 AuthLoginCommandValidator 校验）。</summary>
 public class LoginRequest
@@ -30,8 +32,8 @@ public class LogoutRequest
     public string? RefreshToken { get; set; }
 }
 
-/// <summary>登录 / 刷新结果：令牌对与有效期。</summary>
-public class TokenPairDto
+/// <summary>登录 / 刷新结果：令牌对与有效期（含 JWT 明文，实现 <see cref="ISensitiveResult"/> 禁止幂等缓存）。</summary>
+public class TokenPairDto : ISensitiveResult
 {
     /// <summary>访问令牌（JWT）。</summary>
     public string AccessToken { get; set; } = string.Empty;

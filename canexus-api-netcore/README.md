@@ -115,7 +115,7 @@ canexus-api-netcore/
 ├── src/
 │   ├── API/                        # 宿主层
 │   │   ├── Controllers/            # REST 控制器（20 个，统一 {id:guid}/{version:guid} 路由约束）
-│   │   ├── Authorization/          # 权限特性与强制改密白名单特性
+│   │   ├── Authorization/          # 权限特性、命令级权限启动校验、强制改密白名单特性
 │   │   ├── Filters/                 # 权限过滤器、操作日志过滤器
 │   │   ├── Middlewares/            # 异常、租户、TraceId、请求体上限、强制改密
 │   │   ├── HealthChecks/           # 存活 / 就绪检查与 JSON 报告
@@ -128,8 +128,8 @@ canexus-api-netcore/
 │   │   ├── Commands/               # 写操作处理器（按实体合并单文件）
 │   │   ├── Queries/                # 读操作处理器
 │   │   ├── Validators/             # FluentValidation 验证器与公共规则
-│   │   ├── Behaviors/              # 验证 / 事务 / 数据范围 / 审计 / 幂等 / 性能
-│   │   ├── Events/                 # 领域事件监听器（缓存失效、事件审计）
+│   │   ├── Behaviors/              # 权限 / 验证 / 事务 / 数据范围 / 审计 / 幂等 / 性能
+│   │   ├── Events/                 # 领域事件监听器（缓存失效、事件审计、任务调度提交后同步）
 │   │   ├── Mappings/               # AutoMapper Profile（按实体拆分）
 │   │   ├── Permissions/            # 权限校验与缓存
 │   │   ├── Scopes/                 # 数据范围过滤
@@ -339,6 +339,7 @@ curl -s http://localhost:5000/api/auth/user-info \
 | `MultiTenancy:Enabled` | 显式 `true` / `false` |
 | `Forwarded:Enabled=true` 时 `Forwarded:KnownProxies` | 非空 |
 | `Cache:RedisEnabled` | `true`（会话吊销与缓存失效依赖跨实例统一视图） |
+| `RateLimit:UseRedis` | `true`（分布式限流独立开关；仅开 `Cache:RedisEnabled` 会让限流退化为进程内计数，多副本配额被放大） |
 
 ## 接口约定
 
@@ -434,8 +435,16 @@ curl -s http://localhost:5000/api/auth/user-info \
 ### 权限模型
 
 - 权限点集中声明于 `PermissionDefinitions`，命名约定 `模块:动作:资源`（如 `system:user:list`）；
-- 控制器通过 `[RequirePermission]` 引用常量，编译期检查；启动期扫描控制器声明与注册表比对，未注册即拒绝启动；
-- 超级管理员持有 `*:*:*`；普通角色按菜单 / 按钮授权，越权返回 403 / 40300；
+- **双层校验**：控制器通过 `[RequirePermission]` 引用常量（端点级，启动期 `PermissionsStartupValidator` 反向扫描）；
+  写命令通过 `[RequireCommandPermission]` / `[AllowAnonymousCommand]` / `[AllowAnyAuthenticatedCommand]` 声明策略
+  （命令级，由 `PermissionBehavior` 在 MediatR 管道内执行，`CommandPermissionStartupValidator` 启动期校验漏标）。
+  因此内部 `ISender.Send`、后台作业、未来新增 minimal API 等非 HTTP 入口同样受保护；端点特性降级为增强；
+- 新增写命令必须显式声明三种命令策略之一，漏标会在启动期 fail-closed 阻止宿主启动（运行期对未标注命令默认放行）；
+  `[RequireCommandPermission]` 的权限串同样必须已在 `PermissionDefinitions` 注册；
+- 新增 HTTP 端点一律走 MVC 控制器：现存 minimal API 仅健康检查与 OpenAPI 文档，均显式匿名；
+  `MinimalApiEndpointPolicyValidator` 在启动期反向扫描端点集合，新增受保护的裸 minimal 端点会阻止启动，
+  堵住「新增 minimal API 绕过权限过滤器 / 强制改密」的扩展缺口；
+- 超级管理员持有 `*:*:*`，在端点与命令两层均短路放行；普通角色按菜单 / 按钮授权，越权返回 403 / 40300；
 - 数据范围（全部 / 自定义部门 / 本部门 / 本部门及以下 / 仅本人）在查询层统一拼接过滤条件。
 
 ## 数据库初始化
@@ -446,6 +455,7 @@ curl -s http://localhost:5000/api/auth/user-info \
 | --- | --- | --- |
 | 库 | 用剥离库名的管理连接查 `information_schema.SCHEMATA` | 不存在且允许时建库，否则明确拒绝启动 |
 | 结构 | 按 `information_schema.TABLES` 找出缺失的模型表 | 缺表时 CodeFirst 一次性建表并修正为 InnoDB；表齐全时**不执行任何建表 DDL**。随后按序执行全部幂等迁移脚本 |
+| Quartz 表 | 按 `information_schema.TABLES` 统计 11 张 `QRTZ_*` 表是否齐全 | 缺表时以 `CREATE TABLE IF NOT EXISTS`（索引内联在表定义中）幂等补齐；宿主启动块内显式调用一次，不再注册宿主服务 |
 | 种子 | 按稳定键幂等补齐 | 只补缺失项，不覆盖已修改数据 |
 
 框架处于开发初期，**所有数据库都是临时的，可直接删除重建**：
@@ -455,7 +465,9 @@ DROP DATABASE IF EXISTS super_admin_test;   -- 开发 / 测试库同理
 ```
 
 重建后下一次启动会依次完成建库（如允许）、CodeFirst 建表、InnoDB 引擎修正、
-`QuartzSchemaInitializer` 幂等建立 `QRTZ_` 集群表、种子补齐。因此本框架**不保留任何迁移历史**：
+`QuartzSchemaInitializer` 幂等建立 `QRTZ_` 集群表、种子补齐。Quartz 建表的 11 条 DDL 全部使用
+`CREATE TABLE IF NOT EXISTS` 且索引内联，MySQL 以 metadata lock 串行化并发同名建表，
+多副本同时冷启动不会因 check-then-create 竞态导致第二实例启动失败。因此本框架**不保留任何迁移历史**：
 没有 `sys_schema_migration` 表、没有基线登记、没有已应用记录 / 脚本指纹 / 版本状态机，
 `/health/ready` 也只输出三层状态。
 
@@ -504,7 +516,13 @@ export SUPER_ADMIN_TEST_CONN="server=localhost;port=3306;database=super_admin_te
 | `Application.Tests` | 验证器、映射、权限校验、事件监听、处理器逻辑 |
 | `API.Tests` | 认证、系统管理、监控等全链路 HTTP 行为与 Redis 降级 |
 
-CI（`.github/workflows/backend-ci.yml`）依次执行：README 类型校验 → 还原 → 编译 → 格式检查 → 全量测试。
+CI 分两条流水线：
+
+- `.github/workflows/backend-ci.yml`：README 类型校验 → 还原 → 编译 → 格式检查 → 全量测试；
+  `services` 同时提供 `mysql:8.0` 与 `redis:7-alpine`（后者带 healthcheck），
+  因为 `DistributedRateLimitApiTests` 强依赖 `localhost:6379` 且断言 Redis 可达；
+- `.github/workflows/frontend-ci.yml`（前端路径变更时触发）：`pnpm install --frozen-lockfile` →
+  `pnpm type-check` → `pnpm test:unit run` → `pnpm build-only`，把本地 pre-push 检查固化到 CI。
 
 ## 部署
 
@@ -602,11 +620,14 @@ await userRoleRepository.HardDeleteAsync(ur => ur.UserId == command.Id, ct);
 ### 新增功能检查清单
 
 1. 权限点先在 `PermissionDefinitions` 声明，控制器引用常量（启动期会校验注册表一致性）；
-2. 写命令必须同时提供验证器，否则 `WriteCommandValidatorStartupValidator` 会在启动时失败；
+2. 写命令**同时**补：① `[RequireCommandPermission]` 等命令级策略标注（漏标会阻止启动）；
+   ② FluentValidation 验证器（缺失会被 `WriteCommandValidatorStartupValidator` 拦截）；
 3. 新增错误码同步补充 zh-CN / en-US 两份本地化资源；
 4. 需要前端路由的功能，同步补充菜单种子与按钮权限；
 5. 开发期数据库可直接删除重建；CodeFirst 无法表达的结构变更追加幂等 `ISchemaMigration` 脚本，禁止依赖生产环境自动改表；
-6. 补充对应层级的测试。
+6. 含令牌 / 凭据的响应实现 `ISensitiveResult`，避免被幂等管道写入 24h 缓存；
+7. 定时任务命令只写库 + 发领域事件，Quartz 同步交给 `JobScheduleSynchronizationHandler`（提交后投递）；
+8. 补充对应层级的测试。
 
 ### 任务完成后的固定动作（强制交付门禁）
 
@@ -658,7 +679,8 @@ dotnet user-secrets set "Jwt:Secret" "不少于 32 字节的随机字符串" --p
 ### Production 启动失败，列出多项「基线校验失败」
 
 这是刻意设计的 fail-fast：按提示逐项补齐[生产环境硬性基线](#生产环境硬性基线)即可，不会逐项试错。
-最常见的三项是 `Https:RedirectEnabled`、`Https:HstsEnabled` 与 `RateLimit:GlobalPermitLimit`。
+最常见的四项是 `Https:RedirectEnabled`、`Https:HstsEnabled`、`RateLimit:GlobalPermitLimit`
+与 `RateLimit:UseRedis`（后者是独立于 `Cache:RedisEnabled` 的开关，只开缓存 Redis 仍会被拦截）。
 
 ### 忘记 admin 密码 / 登录后提示必须先改密
 
@@ -672,7 +694,9 @@ dotnet user-secrets set "Jwt:Secret" "不少于 32 字节的随机字符串" --p
 1. 确认账号角色已勾选对应菜单 / 按钮权限；
 2. 确认前端路由与按钮权限串与后端 `PermissionDefinitions` 一致；
 3. 超管持有 `*:*:*`，若超管也 403，检查令牌中的角色声明与 `MultiTenancy:Enabled` 配置；
-4. 多租户场景下的跨租户访问固定返回 40301。
+4. 多租户场景下的跨租户访问固定返回 40301；
+5. 若是内部 `ISender.Send` 或后台作业调用命令，检查命令上的 `[RequireCommandPermission]` 是否与端点权限一致
+   （命令级鉴权独立于端点特性生效）。
 
 ### 接口返回 401，`code` 为 40102 或 40107
 
@@ -726,6 +750,39 @@ Development 可不启用（缓存退化为进程内 L1、限流失效为单实�
 不要修改 `.editorconfig` 降级。
 
 ## 变更记录
+
+### 2026-11-12：深度评审 P0 实害修复（限流 / Quartz / 幂等 / CI / 命令级鉴权 / 调度一致性 / 错误响应）
+
+**功能与使用方式变化**
+
+1. **生产限流开关对齐**：`ProductionConfigurationValidator` 在 Production 额外强制
+   `RateLimit:UseRedis=true`（此前只校验 `Cache:RedisEnabled`，而限流是否走 Redis 由独立开关决定）；
+   `appsettings.json` 的 RateLimit 配置节显式补出 UseRedis / RedisConfiguration / RedisKeyPrefix 三个键。
+   非 compose 部署必须同时提供这两个开关，否则启动即被拒绝，避免多副本配额被放大。
+2. **Quartz 建表并发安全**：`QuartzSchemaInitializer` 改为静态唯一入口，从宿主服务注册中
+   移除（消除一次启动两处调用）；11 条 DDL 改为 `CREATE TABLE IF NOT EXISTS` 且索引内联，
+   存在性判定由「仅看 `QRTZ_LOCKS`」改为「11 张表齐全」，中途失败留下部分表时可自愈补齐。
+3. **幂等正确性优先**：`IdempotencyBehavior` 拿不到锁不再降级无锁执行，改为抛 40005 拒绝；
+   持锁期间写 in-flight 占位（2 分钟）防止锁过期后并发穿透，处理器失败时清除占位以允许重试；
+   含令牌的响应实现 `ISensitiveResult`（当前为 `TokenPairDto`），整条幂等路径跳过，JWT 不再写入 24h L2 缓存。
+4. **命令级鉴权**：新增 `RequireCommandPermissionAttribute` / `AllowAnonymousCommandAttribute` /
+   `AllowAnyAuthenticatedCommandAttribute`，62 个写命令逐一声明策略；`PermissionBehavior` 位于审计之后、
+   验证之前，`CommandPermissionStartupValidator` 启动期校验漏标与权限注册（fail-closed）。
+   端点特性保留为增强层，内部 `ISender.Send` 与非 HTTP 入口也受保护；
+   同时新增 `MinimalApiEndpointPolicyValidator`，启动期反向扫描非 MVC 端点，
+   强制「新端点一律走控制器或显式匿名」，堵住新增 minimal API 绕过权限 / 强制改密的扩展缺口。
+5. **任务调度提交后同步**：5 个任务命令处理器移除事务内的 Quartz 调用，只写库 + 发领域事件；
+   新增 `JobScheduleSynchronizationHandler` 监听 Outbox 提交后投递的事件完成调度同步
+   （失败由 Outbox 重试机制补偿），删除顺序自然变为「先软删提交、再移出调度」；
+   `JobRunOnceCommandHandler` 保持原样。
+6. **错误响应保留跨切头 + 请求日志顺序**：`UnifiedResponseWriter` 在 `Response.Clear()` 前暂存并恢复
+   Access-Control-* / Strict-Transport-Security / Vary / X-Trace-Id 响应头；Serilog 请求日志中间件
+   上移到异常中间件外层，异常请求的结构化日志状态码不再是 200。
+7. **CI 补齐**：`backend-ci.yml` 增 `redis:7-alpine` service（带 healthcheck）；新增
+   `frontend-ci.yml` 跑前端类型检查 / Vitest / 生产构建。
+
+**验证**：`dotnet build api.slnx` 0 警告 0 错误；`dotnet test api.slnx` 全量通过；
+新增用例覆盖配置基线、命令权限、幂等锁 / 占位 / 敏感响应、调度同步事件、命令权限覆盖率。
 
 ### 2026-11-09（六）：远端 `origin` 重命名为 `github`
 

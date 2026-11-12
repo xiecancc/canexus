@@ -193,8 +193,11 @@ public static class DependencyExtensions
     /// <returns>服务集合。</returns>
     public static IServiceCollection AddScheduling(this IServiceCollection services)
     {
-        // Quartz 集群存储初始化（P1-A4）：幂等确保 QRTZ_ 表存在，必须先于调度器宿主启动
-        services.AddHostedService<QuartzSchemaInitializer>();
+        // QRTZ_ 表由宿主启动块在「库结构就绪后、任务装载前」显式调用一次
+        // QuartzSchemaInitializer.EnsureSchemaAsync（见 Program.cs），不再注册为 IHostedService：
+        // IHostedService 要等 app.Run() 才启动，赶不上启动块里的 JobScheduleManager.InitializeAsync；
+        // 过去「显式调用 + HostedService」两处都执行，且 HostedService 的建表 DDL 无 IF NOT EXISTS，
+        // 多副本并发冷启动会互相撞车。现在单一入口 + 幂等 DDL，重复调用也不再有害。
 
         // Quartz 调度器：MySQL 持久化 JobStore（JobStoreTX）+ 集群模式（P1-A4）。
         // 集群语义：任务定义 / 触发器 / 已触发记录全部持久化于共享 MySQL，实例间经 QRTZ_LOCKS 行锁竞争触发，

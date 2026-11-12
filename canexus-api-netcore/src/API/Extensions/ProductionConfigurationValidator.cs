@@ -107,11 +107,19 @@ public static class ProductionConfigurationValidator
             issues.Add("Forwarded:Enabled=true 时必须配置 Forwarded:KnownProxies 可信代理白名单");
         }
 
-        // 会话吊销标记、权限/令牌版本失效、分布式限流都以 Redis 为跨实例统一视图；
+        // 会话吊销标记、权限/令牌版本失效、缓存失效广播都以 Redis 为跨实例统一视图；
         // 单实例内存缓存无法满足「任一实例登出后其他实例立即生效」的安全语义。
         if (!configuration.GetValue("Cache:RedisEnabled", false))
         {
-            issues.Add("Cache:RedisEnabled 在 Production 必须为 true（会话吊销 / 缓存失效广播 / 分布式限流依赖 L2 统一视图）");
+            issues.Add("Cache:RedisEnabled 在 Production 必须为 true（会话吊销 / 缓存失效广播依赖 L2 统一视图）");
+        }
+
+        // 分布式限流是否走 Redis 由独立开关 RateLimit:UseRedis 决定（见 SecurityDependencyExtensions.AddApiRateLimiting），
+        // 默认 false = 进程内限流。仅校验 Cache:RedisEnabled 会漏掉「缓存走 Redis 但限流仍按副本各自计数」的配置：
+        // 多副本部署下认证端点配额被放大副本数倍，登录防爆破失效。两者必须同时显式开启。
+        if (!configuration.GetValue("RateLimit:UseRedis", false))
+        {
+            issues.Add("RateLimit:UseRedis 在 Production 必须为 true（分布式限流须与缓存 Redis 开关同时开启，否则多副本配额被放大）");
         }
     }
 }

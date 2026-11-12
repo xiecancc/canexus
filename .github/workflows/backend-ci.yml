@@ -38,6 +38,18 @@ jobs:
           --health-timeout=5s
           --health-retries=12
 
+      # DistributedRateLimitApiTests 硬编码 localhost:6379,defaultDatabase=3，
+      # 且断言 Redis 必须可达；缺此 service 会让全量 dotnet test 报红。
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=12
+
     defaults:
       run:
         working-directory: canexus-api-netcore

@@ -160,6 +160,12 @@ public class Program
             // 且不得出现无对应常量的多余键；缺失即在启动前汇总报错，避免 en-US 请求静默回退到中文文案
             ErrorMessageResourceValidator.Validate();
 
+            // 启动期一致性校验（P0-5 命令级鉴权）：全部写命令必须显式声明权限策略，
+            // 且 [RequireCommandPermission] 的权限标识须在集中注册表声明；
+            // 与端点级反向扫描构成双保险——内部 ISender.Send / 非 HTTP 入口同样受命令级保护，
+            // 漏标命令在运行期默认放行，故必须在此 fail-closed 阻止宿主启动。
+            CommandPermissionStartupValidator.Validate(typeof(Application.Contracts.Abstractions.ICommand).Assembly);
+
             // 反向代理转发头解析（P0-S5）：部署在 Nginx / SLB 之后时（Forwarded:Enabled=true）解析 X-Forwarded-*，
             // 还原真实客户端 IP 供限流分区与操作日志使用；须先于任何消费 RemoteIpAddress 的中间件挂载。
             // 未启用时为空操作；仅可在可信代理后开启，KnownProxies 白名单外的转发头一律忽略
@@ -172,14 +178,18 @@ public class Program
             // 请求本地化中间件（须先于异常中间件：CurrentUICulture 按请求文化设置后，业务异常消息才能按文化翻译）
             app.UseRequestLocalization();
 
-            // 全局异常处理中间件最先注册，确保后续管道异常均被统一捕获
+            // 请求日志（结构化记录方法、路径、状态码与耗时）：必须位于异常中间件「外层」，
+            // 异常路径由内层异常中间件写成 500 后，日志收尾读到的才是真实状态码；
+            // 放在内层时异常沿栈上抛，finally 读到的仍是默认 200，监控会漏报 5xx。
+            app.UseSerilogRequestLogging();
+
+            // 全局异常处理中间件：捕获其内层（CORS / HSTS / 限流 / 鉴权 / 端点）全部异常并写统一 Result。
+            // 位置保持在 CORS / HSTS 外层，但 UnifiedResponseWriter 会保留跨切响应头白名单，
+            // 因此错误响应仍带 Access-Control-Allow-Origin / Strict-Transport-Security。
             app.UseMiddleware<GlobalExceptionHandlingMiddleware>();
             // 请求体大小上限（P0-S3）：Content-Length 超过 FileStorage:MaxSizeMB+1MB 直接 413，
             // 与 Kestrel 线级上限（ConfigureKestrel）对齐，测试宿主（TestServer）行为一致
             app.UseMiddleware<RequestBodyLimitMiddleware>();
-
-            // 请求日志（结构化记录方法、路径、状态码与耗时）
-            app.UseSerilogRequestLogging();
 
             // HTTPS 安全传输：HSTS（仅非 Development 且 HstsEnabled 开启时）+ HTTP 强制重定向（RedirectEnabled 开启时）
             app.UseApiHttps();
@@ -212,9 +222,10 @@ public class Program
                 var dbInitializer = scope.ServiceProvider.GetRequiredService<DbInitializer>();
                 await dbInitializer.InitializeAsync();
 
-                // 开发期数据库可直接删除重建：QuartzSchemaInitializer 作为 IHostedService 要等 app.Run 才启动，
-                // 而下方 jobScheduleManager.InitializeAsync 会先解析调度器并校验 QRTZ_ 表。
-                // 故在结构就绪后、任务装载前显式调用同一幂等入口，保证全新库一次启动成功。
+                // QRTZ_ 表在「结构就绪后、任务装载前」初始化：下方 jobScheduleManager.InitializeAsync
+                // 会解析调度器并校验 QRTZ_ 表，而 IHostedService 要等 app.Run() 才启动，故显式调用一次。
+                // QuartzSchemaInitializer 是静态唯一入口（已不再注册 HostedService），DDL 全部
+                // CREATE TABLE IF NOT EXISTS，多副本并发冷启动不会因 check-then-create 竞态失败。
                 var databaseOptions = scope.ServiceProvider.GetRequiredService<IOptions<DatabaseOption>>();
                 await QuartzSchemaInitializer.EnsureSchemaAsync(databaseOptions.Value.ConnectionString);
 
@@ -250,6 +261,12 @@ public class Program
                 Predicate = check => check.Tags.Contains("ready"),
                 ResponseWriter = HealthReportWriter.WriteAsync
             }).AllowAnonymous();
+
+            // 启动期端点策略校验（评审 A3）：现存 minimal API 仅健康检查与 OpenAPI 文档，均显式匿名；
+            // 若有人新增受保护的 minimal API（只受 FallbackPolicy 认证，不受权限过滤器 / 强制改密拦截），
+            // 在此 fail-closed 阻止启动，提示改用 MVC 控制器并标注 [RequirePermission]。
+            MinimalApiEndpointPolicyValidator.Validate(
+                app.Services.GetRequiredService<EndpointDataSource>());
 
             app.Run();
         }
