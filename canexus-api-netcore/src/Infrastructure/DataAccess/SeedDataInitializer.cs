@@ -302,60 +302,120 @@ public sealed class SeedDataInitializer(
     /// 种子完整菜单树（增量幂等）：目录 / 菜单按「菜单类型 + 名称 + 路由」判重、按钮按「父菜单 + 权限标识」判重，
     /// 缺失项才插入；同名菜单 / 按钮已存在但 component / perms 过时（如定时任务 tool:job → monitor:job）则按名称原位纠偏更新。
     /// 纠偏仅涉及组件路径与鉴权标识两类代码契约字段，不触碰显示名 / 排序 / 图标 / 可见性等展示数据。
+    /// <para>权限标识单一事实源（P1-H1）：全部菜单 / 按钮 perms 引用 <see cref="PermissionDefinitions"/> 常量，
+    /// 不再手写字符串；种子完成后校验「声明集 ⊆ 注册表」fail-closed，防止常量漂移或笔误复活旧缺陷。</para>
     /// 超管按 roleKey 放行全部权限，无需角色-菜单关联。
     /// </summary>
     private async Task SeedMenusAsync()
     {
+        // 种子声明的全部权限标识（含菜单与按钮），用于种子后校验 ⊆ 权限注册表（P1-H1）
+        var declaredPerms = new List<string>();
+
         // 首页（顶级菜单）
         await EnsureMenuAsync(Menu(MenuType.Menu, SeedId(1), "首页", "/dashboard", "dashboard/index", perms: null, icon: "dashboard", order: 1, keepAlive: true));
 
         // 系统管理目录
         await EnsureMenuAsync(Menu(MenuType.Directory, SeedId(100), "系统管理", "system", null, icon: "system", order: 2));
-        await EnsureMenuAsync(Menu(MenuType.Menu, SeedId(101), "用户管理", "user", "system/user/index", "system:user:list", "user", order: 1, parentId: SeedId(100)));
-        await EnsureButtonsAsync(SeedId(101), "system:user", "用户", startId: 1001,
-            ("查询", "query"), ("新增", "add"), ("修改", "edit"), ("删除", "remove"), ("重置密码", "resetPwd"), ("导入", "import"), ("导出", "export"));
-        await EnsureMenuAsync(Menu(MenuType.Menu, SeedId(102), "角色管理", "role", "system/role/index", "system:role:list", "peoples", order: 2, parentId: SeedId(100)));
-        await EnsureButtonsAsync(SeedId(102), "system:role", "角色", startId: 1011,
-            ("查询", "query"), ("新增", "add"), ("修改", "edit"), ("删除", "remove"), ("导出", "export"));
-        await EnsureMenuAsync(Menu(MenuType.Menu, SeedId(103), "部门管理", "dept", "system/dept/index", "system:dept:list", "tree", order: 3, parentId: SeedId(100)));
-        await EnsureButtonsAsync(SeedId(103), "system:dept", "部门", startId: 1021,
-            ("查询", "query"), ("新增", "add"), ("修改", "edit"), ("删除", "remove"));
-        await EnsureMenuAsync(Menu(MenuType.Menu, SeedId(104), "菜单管理", "menu", "system/menu/index", "system:menu:list", "tree-table", order: 4, parentId: SeedId(100)));
-        await EnsureButtonsAsync(SeedId(104), "system:menu", "菜单", startId: 1031,
-            ("查询", "query"), ("新增", "add"), ("修改", "edit"), ("删除", "remove"));
-        await EnsureMenuAsync(Menu(MenuType.Menu, SeedId(105), "字典管理", "dict", "system/dict/index", "system:dict:list", "dict", order: 5, parentId: SeedId(100)));
-        await EnsureButtonsAsync(SeedId(105), "system:dict", "字典", startId: 1041,
-            ("查询", "query"), ("新增", "add"), ("修改", "edit"), ("删除", "remove"));
-        await EnsureMenuAsync(Menu(MenuType.Menu, SeedId(106), "参数配置", "config", "system/config/index", "system:config:list", "edit", order: 6, parentId: SeedId(100)));
-        await EnsureButtonsAsync(SeedId(106), "system:config", "参数", startId: 1051,
-            ("查询", "query"), ("新增", "add"), ("修改", "edit"), ("删除", "remove"));
-        await EnsureMenuAsync(Menu(MenuType.Menu, SeedId(107), "通知公告", "notice", "system/notice/index", "system:notice:list", "message", order: 7, parentId: SeedId(100)));
-        await EnsureButtonsAsync(SeedId(107), "system:notice", "公告", startId: 1061,
-            ("查询", "query"), ("新增", "add"), ("修改", "edit"), ("删除", "remove"));
-        await EnsureMenuAsync(Menu(MenuType.Menu, SeedId(108), "租户管理", "tenant", "system/tenant/index", "system:tenant:list", "tenant", order: 8, parentId: SeedId(100)));
-        await EnsureButtonsAsync(SeedId(108), "system:tenant", "租户", startId: 1071,
-            ("查询", "query"), ("新增", "add"), ("修改", "edit"), ("删除", "remove"));
-        await EnsureMenuAsync(Menu(MenuType.Menu, SeedId(109), "岗位管理", "post", "system/post/index", "system:post:list", "post", order: 9, parentId: SeedId(100)));
-        await EnsureButtonsAsync(SeedId(109), "system:post", "岗位", startId: 1081,
-            ("查询", "query"), ("新增", "add"), ("修改", "edit"), ("删除", "remove"));
+        await EnsureMenuAsync(Menu(MenuType.Menu, SeedId(101), "用户管理", "user", "system/user/index", PermissionDefinitions.SystemUserList, "user", order: 1, parentId: SeedId(100)));
+        await EnsureButtonsAsync(SeedId(101), "用户", startId: 1001, declaredPerms,
+            ("查询", PermissionDefinitions.SystemUserQuery),
+            ("新增", PermissionDefinitions.SystemUserAdd),
+            ("修改", PermissionDefinitions.SystemUserEdit),
+            ("删除", PermissionDefinitions.SystemUserRemove),
+            ("重置密码", PermissionDefinitions.SystemUserResetPwd),
+            ("导入", PermissionDefinitions.SystemUserImport),
+            ("导出", PermissionDefinitions.SystemUserExport));
+        await EnsureMenuAsync(Menu(MenuType.Menu, SeedId(102), "角色管理", "role", "system/role/index", PermissionDefinitions.SystemRoleList, "peoples", order: 2, parentId: SeedId(100)));
+        await EnsureButtonsAsync(SeedId(102), "角色", startId: 1011, declaredPerms,
+            ("查询", PermissionDefinitions.SystemRoleQuery),
+            ("新增", PermissionDefinitions.SystemRoleAdd),
+            ("修改", PermissionDefinitions.SystemRoleEdit),
+            ("删除", PermissionDefinitions.SystemRoleRemove),
+            ("导出", PermissionDefinitions.SystemRoleExport));
+        await EnsureMenuAsync(Menu(MenuType.Menu, SeedId(103), "部门管理", "dept", "system/dept/index", PermissionDefinitions.SystemDeptList, "tree", order: 3, parentId: SeedId(100)));
+        await EnsureButtonsAsync(SeedId(103), "部门", startId: 1021, declaredPerms,
+            ("查询", PermissionDefinitions.SystemDeptQuery),
+            ("新增", PermissionDefinitions.SystemDeptAdd),
+            ("修改", PermissionDefinitions.SystemDeptEdit),
+            ("删除", PermissionDefinitions.SystemDeptRemove));
+        await EnsureMenuAsync(Menu(MenuType.Menu, SeedId(104), "菜单管理", "menu", "system/menu/index", PermissionDefinitions.SystemMenuList, "tree-table", order: 4, parentId: SeedId(100)));
+        await EnsureButtonsAsync(SeedId(104), "菜单", startId: 1031, declaredPerms,
+            ("查询", PermissionDefinitions.SystemMenuQuery),
+            ("新增", PermissionDefinitions.SystemMenuAdd),
+            ("修改", PermissionDefinitions.SystemMenuEdit),
+            ("删除", PermissionDefinitions.SystemMenuRemove));
+        await EnsureMenuAsync(Menu(MenuType.Menu, SeedId(105), "字典管理", "dict", "system/dict/index", PermissionDefinitions.SystemDictList, "dict", order: 5, parentId: SeedId(100)));
+        await EnsureButtonsAsync(SeedId(105), "字典", startId: 1041, declaredPerms,
+            ("查询", PermissionDefinitions.SystemDictQuery),
+            ("新增", PermissionDefinitions.SystemDictAdd),
+            ("修改", PermissionDefinitions.SystemDictEdit),
+            ("删除", PermissionDefinitions.SystemDictRemove));
+        await EnsureMenuAsync(Menu(MenuType.Menu, SeedId(106), "参数配置", "config", "system/config/index", PermissionDefinitions.SystemConfigList, "edit", order: 6, parentId: SeedId(100)));
+        await EnsureButtonsAsync(SeedId(106), "参数", startId: 1051, declaredPerms,
+            ("查询", PermissionDefinitions.SystemConfigQuery),
+            ("新增", PermissionDefinitions.SystemConfigAdd),
+            ("修改", PermissionDefinitions.SystemConfigEdit),
+            ("删除", PermissionDefinitions.SystemConfigRemove));
+        await EnsureMenuAsync(Menu(MenuType.Menu, SeedId(107), "通知公告", "notice", "system/notice/index", PermissionDefinitions.SystemNoticeList, "message", order: 7, parentId: SeedId(100)));
+        await EnsureButtonsAsync(SeedId(107), "公告", startId: 1061, declaredPerms,
+            ("查询", PermissionDefinitions.SystemNoticeQuery),
+            ("新增", PermissionDefinitions.SystemNoticeAdd),
+            ("修改", PermissionDefinitions.SystemNoticeEdit),
+            ("删除", PermissionDefinitions.SystemNoticeRemove));
+        await EnsureMenuAsync(Menu(MenuType.Menu, SeedId(108), "租户管理", "tenant", "system/tenant/index", PermissionDefinitions.SystemTenantList, "tenant", order: 8, parentId: SeedId(100)));
+        await EnsureButtonsAsync(SeedId(108), "租户", startId: 1071, declaredPerms,
+            ("查询", PermissionDefinitions.SystemTenantQuery),
+            ("新增", PermissionDefinitions.SystemTenantAdd),
+            ("修改", PermissionDefinitions.SystemTenantEdit),
+            ("删除", PermissionDefinitions.SystemTenantRemove));
+        await EnsureMenuAsync(Menu(MenuType.Menu, SeedId(109), "岗位管理", "post", "system/post/index", PermissionDefinitions.SystemPostList, "post", order: 9, parentId: SeedId(100)));
+        await EnsureButtonsAsync(SeedId(109), "岗位", startId: 1081, declaredPerms,
+            ("查询", PermissionDefinitions.SystemPostQuery),
+            ("新增", PermissionDefinitions.SystemPostAdd),
+            ("修改", PermissionDefinitions.SystemPostEdit),
+            ("删除", PermissionDefinitions.SystemPostRemove));
 
         // 监控目录
         await EnsureMenuAsync(Menu(MenuType.Directory, SeedId(200), "监控", "monitor", null, icon: "monitor", order: 3));
-        await EnsureMenuAsync(Menu(MenuType.Menu, SeedId(201), "操作日志", "operlog", "monitor/operlog/index", "monitor:operlog:list", "form", order: 1, parentId: SeedId(200)));
-        await EnsureButtonsAsync(SeedId(201), "monitor:operlog", "操作日志", startId: 2011,
-            ("查询", "query"), ("删除", "remove"), ("清空", "clean"), ("导出", "export"));
-        await EnsureMenuAsync(Menu(MenuType.Menu, SeedId(202), "登录日志", "logininfor", "monitor/logininfor/index", "monitor:logininfor:list", "logininfor", order: 2, parentId: SeedId(200)));
-        await EnsureButtonsAsync(SeedId(202), "monitor:logininfor", "登录日志", startId: 2021,
-            ("查询", "query"), ("删除", "remove"), ("清空", "clean"), ("导出", "export"));
+        await EnsureMenuAsync(Menu(MenuType.Menu, SeedId(201), "操作日志", "operlog", "monitor/operlog/index", PermissionDefinitions.MonitorOperlogList, "form", order: 1, parentId: SeedId(200)));
+        await EnsureButtonsAsync(SeedId(201), "操作日志", startId: 2011, declaredPerms,
+            ("查询", PermissionDefinitions.MonitorOperlogQuery),
+            ("删除", PermissionDefinitions.MonitorOperlogRemove),
+            ("清空", PermissionDefinitions.MonitorOperlogClean),
+            ("导出", PermissionDefinitions.MonitorOperlogExport));
+        await EnsureMenuAsync(Menu(MenuType.Menu, SeedId(202), "登录日志", "logininfor", "monitor/logininfor/index", PermissionDefinitions.MonitorLogininforList, "logininfor", order: 2, parentId: SeedId(200)));
+        await EnsureButtonsAsync(SeedId(202), "登录日志", startId: 2021, declaredPerms,
+            ("查询", PermissionDefinitions.MonitorLogininforQuery),
+            ("删除", PermissionDefinitions.MonitorLogininforRemove),
+            ("清空", PermissionDefinitions.MonitorLogininforClean),
+            ("导出", PermissionDefinitions.MonitorLogininforExport));
         await EnsureMenuAsync(Menu(MenuType.Menu, SeedId(203), "缓存监控", "cache", "monitor/cache/index", PermissionDefinitions.MonitorCacheList, "redis", order: 3, parentId: SeedId(200)));
 
         // 系统工具目录
         await EnsureMenuAsync(Menu(MenuType.Directory, SeedId(300), "系统工具", "tool", null, icon: "tool", order: 4));
-        await EnsureMenuAsync(Menu(MenuType.Menu, SeedId(301), "定时任务", "job", "system/job/index", "monitor:job:list", "job", order: 1, parentId: SeedId(300)));
-        await EnsureButtonsAsync(SeedId(301), "monitor:job", "定时任务", startId: 3011,
-            ("查询", "query"), ("新增", "add"), ("修改", "edit"), ("删除", "remove"), ("执行", "run"), ("状态修改", "changeStatus"));
+        await EnsureMenuAsync(Menu(MenuType.Menu, SeedId(301), "定时任务", "job", "system/job/index", PermissionDefinitions.MonitorJobList, "job", order: 1, parentId: SeedId(300)));
+        await EnsureButtonsAsync(SeedId(301), "定时任务", startId: 3011, declaredPerms,
+            ("查询", PermissionDefinitions.MonitorJobQuery),
+            ("新增", PermissionDefinitions.MonitorJobAdd),
+            ("修改", PermissionDefinitions.MonitorJobEdit),
+            ("删除", PermissionDefinitions.MonitorJobRemove),
+            ("执行", PermissionDefinitions.MonitorJobRun),
+            ("状态修改", PermissionDefinitions.MonitorJobChangeStatus));
 
-        logger.LogInformation("种子数据：菜单树已同步");
+        // 种子声明集必须完整落在权限注册表内（fail-closed）：常量漂移 / 笔误在此处启动即失败，
+        // 防止「种子串与鉴权串失配」类缺陷（P0-B1）再次出现
+        var unregistered = declaredPerms
+            .Where(perms => !PermissionDefinitions.All.Contains(perms, StringComparer.Ordinal))
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        if (unregistered.Length > 0)
+        {
+            throw new InvalidOperationException(
+                "种子权限标识未在 PermissionDefinitions 注册表声明（种子与鉴权将失配）："
+                + string.Join("、", unregistered));
+        }
+
+        logger.LogInformation("种子数据：菜单树已同步（权限声明 {Count} 项，全部 ⊆ 权限注册表）", declaredPerms.Count);
     }
 
     /// <summary>确保目录 / 菜单存在（按主键或「菜单类型 + 名称 + 路由」判重，缺失时插入；同名菜单 component / perms 过时则原位更新）。</summary>
@@ -383,17 +443,20 @@ public sealed class SeedDataInitializer(
         }
     }
 
-    /// <summary>在指定菜单下批量确保按钮级权限存在（按父菜单 + 权限标识判重，缺失项才插入；同名按钮 perms 过时则原位更新）。</summary>
+    /// <summary>在指定菜单下批量确保按钮级权限存在（按父菜单 + 权限标识判重，缺失项才插入；同名按钮 perms 过时则原位更新）。
+    /// <para>权限标识以 <see cref="PermissionDefinitions"/> 常量传入（P1-H1 单一事实源），不再手写字符串。</para></summary>
     /// <param name="parentId">父菜单 Id。</param>
-    /// <param name="permsPrefix">权限前缀（如 system:user）。</param>
     /// <param name="namePrefix">按钮名称前缀。</param>
     /// <param name="startId">起始种子序号。</param>
-    /// <param name="buttons">(名称, 动作) 列表。</param>
-    private async Task EnsureButtonsAsync(Guid parentId, string permsPrefix, string namePrefix, long startId, params (string Name, string Action)[] buttons)
+    /// <param name="declaredPerms">本次种子声明的权限标识收集列表（种子完成后校验 ⊆ 注册表）。</param>
+    /// <param name="buttons">(按钮名称, 权限常量) 列表。</param>
+    private async Task EnsureButtonsAsync(Guid parentId, string namePrefix, long startId, List<string> declaredPerms, params (string Name, string Perms)[] buttons)
     {
+        declaredPerms.AddRange(buttons.Select(button => button.Perms));
+
         for (var i = 0; i < buttons.Length; i++)
         {
-            var perms = $"{permsPrefix}:{buttons[i].Action}";
+            var perms = buttons[i].Perms;
             var menuName = namePrefix + buttons[i].Name;
             var buttonId = SeedId(startId + i);
 

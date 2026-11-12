@@ -15,6 +15,9 @@ public static class PermissionDefinitions
     /// <summary>监控-操作日志-列表。</summary>
     public const string MonitorOperlogList = "monitor:operlog:list";
 
+    /// <summary>监控-操作日志-查询（按钮级，供前端按钮显隐）。</summary>
+    public const string MonitorOperlogQuery = "monitor:operlog:query";
+
     /// <summary>监控-操作日志-删除。</summary>
     public const string MonitorOperlogRemove = "monitor:operlog:remove";
 
@@ -23,6 +26,9 @@ public static class PermissionDefinitions
 
     /// <summary>监控-登录日志-列表。</summary>
     public const string MonitorLogininforList = "monitor:logininfor:list";
+
+    /// <summary>监控-登录日志-查询（按钮级，供前端按钮显隐）。</summary>
+    public const string MonitorLogininforQuery = "monitor:logininfor:query";
 
     /// <summary>监控-登录日志-删除。</summary>
     public const string MonitorLogininforRemove = "monitor:logininfor:remove";
@@ -217,6 +223,9 @@ public static class PermissionDefinitions
 
     /// <summary>系统-租户-列表。</summary>
     public const string SystemTenantList = "system:tenant:list";
+
+    /// <summary>系统-租户-查询（按钮级，供前端按钮显隐）。</summary>
+    public const string SystemTenantQuery = "system:tenant:query";
 
     /// <summary>系统-租户-新增。</summary>
     public const string SystemTenantAdd = "system:tenant:add";
