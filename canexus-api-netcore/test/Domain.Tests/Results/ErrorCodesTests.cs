@@ -16,8 +16,14 @@ public class ErrorCodesTests
             Assert.That(ErrorCodes.GetHttpStatusCode(Result.SuccessCode), Is.EqualTo(200));
             Assert.That(ErrorCodes.GetHttpStatusCode(ErrorCodes.AuthCaptchaError), Is.EqualTo(400),
                 "验证码错误须保持 400，避免触发前端刷新令牌重试");
-            Assert.That(ErrorCodes.GetHttpStatusCode(ErrorCodes.CommonTooManyRequests), Is.EqualTo(429));
+            Assert.That(ErrorCodes.GetHttpStatusCode(ErrorCodes.AuthAccountOrPasswordError), Is.EqualTo(400),
+                "账号或密码错误属登录表单语义（C3），返回 401 会被前端吞掉文案并误触发刷新链路");
+            Assert.That(ErrorCodes.GetHttpStatusCode(ErrorCodes.AuthAccountLocked), Is.EqualTo(400),
+                "账号锁定属登录表单语义（C3），返回 401 会被前端吞掉文案并误触发刷新链路");
+            Assert.That(ErrorCodes.GetHttpStatusCode(ErrorCodes.AuthUnauthorized), Is.EqualTo(401));
             Assert.That(ErrorCodes.GetHttpStatusCode(ErrorCodes.AuthTokenExpired), Is.EqualTo(401));
+            Assert.That(ErrorCodes.GetHttpStatusCode(ErrorCodes.AuthRefreshTokenInvalid), Is.EqualTo(401));
+            Assert.That(ErrorCodes.GetHttpStatusCode(ErrorCodes.AuthTokenRevoked), Is.EqualTo(401));
             Assert.That(ErrorCodes.GetHttpStatusCode(ErrorCodes.AuthForbidden), Is.EqualTo(403));
             Assert.That(ErrorCodes.GetHttpStatusCode(ErrorCodes.CommonSystemError), Is.EqualTo(500));
             Assert.That(ErrorCodes.GetHttpStatusCode(ErrorCodes.CommonConcurrencyConflict), Is.EqualTo(400));

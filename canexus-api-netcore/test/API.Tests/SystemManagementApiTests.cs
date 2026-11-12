@@ -227,9 +227,9 @@ public class SystemManagementApiTests
         }, _adminToken);
         Assert.That(resetResponse.StatusCode, Is.EqualTo(HttpStatusCode.OK));
 
-        // 旧密码登录失败
+        // 旧密码登录失败（登录表单语义 C3：HTTP 400，业务码 40103）
         var oldLogin = await TryLoginAsync(userName, "init@123");
-        Assert.That(oldLogin.StatusCode, Is.EqualTo(HttpStatusCode.Unauthorized), "旧密码应失效");
+        Assert.That(oldLogin.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest), "旧密码应失效");
 
         // 新密码登录成功（走真实登录链路：验证码 + BCrypt 校验）
         var newLogin = await TryLoginAsync(userName, "newPwd@456");

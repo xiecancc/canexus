@@ -149,7 +149,7 @@ public class AuthApiIntegrationTests
 
         Assert.Multiple(() =>
         {
-            Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Unauthorized), "密码错误应返回 HTTP 401");
+            Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest), "密码错误属登录表单语义（C3）应返回 HTTP 400，避免前端误触发刷新链路");
             Assert.That(body.RootElement.GetProperty("code").GetInt32(), Is.EqualTo(40103));
         });
 
@@ -190,7 +190,7 @@ public class AuthApiIntegrationTests
 
         Assert.Multiple(() =>
         {
-            Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Unauthorized));
+            Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest), "账号锁定属登录表单语义（C3）应返回 HTTP 400");
             Assert.That(body.RootElement.GetProperty("code").GetInt32(), Is.EqualTo(40105), "连续失败达上限应返回锁定错误码");
             Assert.That(body.RootElement.GetProperty("message").GetString(), Does.Contain("锁定"));
         });
