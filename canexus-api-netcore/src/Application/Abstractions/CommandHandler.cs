@@ -68,12 +68,29 @@ public abstract class AggregateCreateCommandHandler<TCommand, TRequest, TEntity>
     /// <returns>待发布的领域事件。</returns>
     protected abstract DomainEvent CreateEvent(TEntity inserted);
 
+    /// <summary>
+    /// 创建后处理钩子：插入成功之后、创建事件发布之前的扩展点（写关联表、补充派生数据等），
+    /// 参照删除侧 <see cref="AggregateDeleteCommandHandler{TCommand, TEntity}.ValidateBeforeDeleteAsync(TEntity, System.Threading.CancellationToken)"/> 的开放模式提供，默认空操作。
+    /// <para>执行时处于命令管道（TransactionBehavior）的事务作用域内，失败随事务整体回滚；
+    /// 此时聚合已生成主键与审计字段但事件尚未发布——关联数据就绪后再发布事件，监听器可看到完整终态。
+    /// 复杂创建（多关联全删全插等超出单钩子表达力）仍应直接继承
+    /// <see cref="RequestHandler{TRequest, TResponse}"/> 显式实现。</para>
+    /// </summary>
+    /// <param name="entity">插入后的聚合（与传入仓储的同一实例，主键与审计字段已就地填充）。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>表示异步操作的任务。</returns>
+    protected virtual Task AfterCreateAsync(TEntity entity, CancellationToken cancellationToken)
+    {
+        return Task.CompletedTask;
+    }
+
     /// <inheritdoc />
     protected sealed override async Task<bool> HandleAsync(TCommand command, CancellationToken cancellationToken)
     {
         await ValidateAsync(command.Request, cancellationToken);
         var entity = MapToEntity(command.Request);
         _ = await Repository.InsertAsync(entity, cancellationToken);
+        await AfterCreateAsync(entity, cancellationToken);
 
         // 关键节点发布创建领域事件（主键与审计字段已就地填充到传入实体，携带创建后状态；
         // 缓存清理等响应动作由监听器处理）
@@ -125,6 +142,21 @@ public abstract class AggregateUpdateCommandHandler<TCommand, TRequest, TEntity>
     /// <returns>待发布的领域事件。</returns>
     protected abstract DomainEvent CreateEvent(TEntity before, TEntity after);
 
+    /// <summary>
+    /// 更新后处理钩子：更新成功之后、修改事件发布之前的扩展点（写关联表、级联变更等），默认空操作。
+    /// <para>执行时处于命令管道（TransactionBehavior）的事务作用域内，失败随事务整体回滚；
+    /// 此时聚合已按请求原位修改且乐观锁版本比对已通过，但事件尚未发布——关联数据就绪后再发布事件，
+    /// 监听器可看到完整终态。</para>
+    /// </summary>
+    /// <param name="before">变更前快照（供钩子比对 diff）。</param>
+    /// <param name="entity">变更后的聚合（已应用请求载荷与乐观锁版本令牌）。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>表示异步操作的任务。</returns>
+    protected virtual Task AfterUpdateAsync(TEntity before, TEntity entity, CancellationToken cancellationToken)
+    {
+        return Task.CompletedTask;
+    }
+
     /// <inheritdoc />
     protected sealed override async Task<bool> HandleAsync(TCommand command, CancellationToken cancellationToken)
     {
@@ -140,6 +172,7 @@ public abstract class AggregateUpdateCommandHandler<TCommand, TRequest, TEntity>
         entity.ApplyVersion(command.Version);
 
         await Repository.UpdateAsync(entity, cancellationToken);
+        await AfterUpdateAsync(before, entity, cancellationToken);
 
         // 关键节点发布修改领域事件（变更比对等响应动作由监听器处理）
         await EventPublisher.PublishAsync(CreateEvent(before, entity), cancellationToken);
