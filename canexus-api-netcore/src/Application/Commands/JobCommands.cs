@@ -19,20 +19,30 @@ namespace Application.Commands;
 /// <param name="jobRepository">定时任务仓储。</param>
 /// <param name="domainEventPublisher">领域事件发布端口。</param>
 /// <param name="mapper">对象映射器。</param>
-public sealed class JobCreateCommandHandler(IAggregateRepository<SysJob> jobRepository, IDomainEventPublisher domainEventPublisher, IMapper mapper) : RequestHandler<JobCreateCommand, bool>
+public sealed class JobCreateCommandHandler(
+    IAggregateRepository<SysJob> jobRepository,
+    IDomainEventPublisher domainEventPublisher,
+    IMapper mapper) : AggregateCreateCommandHandler<JobCreateCommand, JobInputRequest, SysJob>(jobRepository, domainEventPublisher)
 {
     /// <inheritdoc />
-    protected override async Task<bool> HandleAsync(JobCreateCommand command, CancellationToken cancellationToken)
+    protected override Task ValidateAsync(JobInputRequest request, CancellationToken cancellationToken)
     {
-        // 调度同步已移至 JobScheduleSynchronizationHandler（Outbox 提交后投递），本处理器只负责 DB 写入与事件发布
-        var request = command.Request;
-        var entity = mapper.Map<SysJob>(request);
-        // 主键与审计字段已就地填充到传入实体，供创建事件携带创建后的任务状态
-        _ = await jobRepository.InsertAsync(entity, cancellationToken);
+        // 请求结构合法性由 JobCreateCommandValidator 启动期强制，此处无额外业务校验；
+        // 调度同步已移至 JobScheduleSynchronizationHandler（Outbox 提交后投递），不在此处理
+        return Task.CompletedTask;
+    }
 
-        // 关键节点发布定时任务创建领域事件（携带创建后的任务状态）
-        await domainEventPublisher.PublishAsync(new JobCreatedEvent(entity), cancellationToken);
-        return true;
+    /// <inheritdoc />
+    protected override SysJob MapToEntity(JobInputRequest request)
+    {
+        return mapper.Map<SysJob>(request);
+    }
+
+    /// <inheritdoc />
+    protected override DomainEvent CreateEvent(SysJob inserted)
+    {
+        // 关键节点发布定时任务创建领域事件（主键与审计字段已就地填充，携带创建后的任务状态）
+        return new JobCreatedEvent(inserted);
     }
 }
 
@@ -40,23 +50,21 @@ public sealed class JobCreateCommandHandler(IAggregateRepository<SysJob> jobRepo
 /// <remarks>构造函数。</remarks>
 /// <param name="jobRepository">定时任务仓储。</param>
 /// <param name="domainEventPublisher">领域事件发布端口。</param>
-public sealed class JobDeleteCommandHandler(IAggregateRepository<SysJob> jobRepository, IDomainEventPublisher domainEventPublisher) : RequestHandler<JobDeleteCommand, bool>
+public sealed class JobDeleteCommandHandler(
+    IAggregateRepository<SysJob> jobRepository,
+    IDomainEventPublisher domainEventPublisher) : AggregateDeleteCommandHandler<JobDeleteCommand, SysJob>(jobRepository, domainEventPublisher)
 {
     /// <inheritdoc />
-    protected override async Task<bool> HandleAsync(JobDeleteCommand command, CancellationToken cancellationToken)
+    protected override int NotFoundErrorCode => ErrorCodes.JobNotFound;
+
+    /// <inheritdoc />
+    protected override string EntityDisplayName => "定时任务";
+
+    /// <inheritdoc />
+    protected override DomainEvent CreateEvent(SysJob deleted)
     {
-        // 调度同步已移至 JobScheduleSynchronizationHandler（Outbox 提交后投递），本处理器只负责 DB 写入与事件发布
-        var entity = await jobRepository.GetAsync([it => it.Id == command.Id], cancellationToken)
-            ?? throw new BusinessException(ErrorCodes.JobNotFound, $"定时任务 {command.Id} 不存在");
-
-        // 变更前捕获任务状态快照（软删除可能回填墓碑字段）
-        var snapshot = entity.Snapshot<SysJob>();
-
-        await jobRepository.SoftDeleteAsync(command.Id, cancellationToken, command.Version);
-
-        // 关键节点发布定时任务删除领域事件（携带删除前的任务状态）
-        await domainEventPublisher.PublishAsync(new JobDeletedEvent(snapshot), cancellationToken);
-        return true;
+        // 关键节点发布定时任务删除领域事件（基类快照携带删除前的任务状态；调度同步由 Outbox 监听器处理）
+        return new JobDeletedEvent(deleted);
     }
 }
 
@@ -64,25 +72,15 @@ public sealed class JobDeleteCommandHandler(IAggregateRepository<SysJob> jobRepo
 /// <remarks>构造函数。</remarks>
 /// <param name="jobRepository">定时任务仓储。</param>
 /// <param name="domainEventPublisher">领域事件发布端口。</param>
-public sealed class JobRestoreCommandHandler(IAggregateRepository<SysJob> jobRepository, IDomainEventPublisher domainEventPublisher) : RequestHandler<JobRestoreCommand, bool>
+public sealed class JobRestoreCommandHandler(
+    IAggregateRepository<SysJob> jobRepository,
+    IDomainEventPublisher domainEventPublisher) : AggregateRestoreCommandHandler<JobRestoreCommand, SysJob>(jobRepository, domainEventPublisher)
 {
     /// <inheritdoc />
-    protected override async Task<bool> HandleAsync(JobRestoreCommand command, CancellationToken cancellationToken)
+    protected override DomainEvent CreateEvent(SysJob restored)
     {
-        // 调度同步已移至 JobScheduleSynchronizationHandler（Outbox 提交后投递），本处理器只负责 DB 写入与事件发布
-        // 幂等恢复：主键不存在或未删除时仓储静默忽略（返回 false），不同步调度、不发布事件
-        if (!await jobRepository.RestoreAsync(command.Id, cancellationToken, command.Version))
-        {
-            return false;
-        }
-
-        // 恢复刚成功，聚合必然可常规查询（墓碑已解除）；取回恢复后状态供恢复事件携带
-        var restored = await jobRepository.GetAsync([it => it.Id == command.Id], cancellationToken: cancellationToken)
-            ?? throw new InvalidOperationException($"定时任务 {command.Id} 恢复成功但不可查询，疑似数据访问层软删除过滤异常");
-
-        // 关键节点发布定时任务恢复领域事件（携带恢复后的任务状态）
-        await domainEventPublisher.PublishAsync(new JobRestoredEvent(restored), cancellationToken);
-        return true;
+        // 关键节点发布定时任务恢复领域事件（幂等：主键不存在或未删除时不发布，不同步调度）
+        return new JobRestoredEvent(restored);
     }
 }
 
@@ -108,26 +106,35 @@ public sealed class JobRunOnceCommandHandler(IAggregateRepository<SysJob> jobRep
 /// <param name="jobRepository">定时任务仓储。</param>
 /// <param name="domainEventPublisher">领域事件发布端口。</param>
 /// <param name="mapper">对象映射器。</param>
-public sealed class JobUpdateCommandHandler(IAggregateRepository<SysJob> jobRepository, IDomainEventPublisher domainEventPublisher, IMapper mapper) : RequestHandler<JobUpdateCommand, bool>
+public sealed class JobUpdateCommandHandler(
+    IAggregateRepository<SysJob> jobRepository,
+    IDomainEventPublisher domainEventPublisher,
+    IMapper mapper) : AggregateUpdateCommandHandler<JobUpdateCommand, JobInputRequest, SysJob>(jobRepository, domainEventPublisher)
 {
     /// <inheritdoc />
-    protected override async Task<bool> HandleAsync(JobUpdateCommand command, CancellationToken cancellationToken)
+    protected override int NotFoundErrorCode => ErrorCodes.JobNotFound;
+
+    /// <inheritdoc />
+    protected override string EntityDisplayName => "定时任务";
+
+    /// <inheritdoc />
+    protected override Task ValidateAsync(JobInputRequest request, SysJob entity, CancellationToken cancellationToken)
     {
-        // 调度同步已移至 JobScheduleSynchronizationHandler（Outbox 提交后投递），本处理器只负责 DB 写入与事件发布
-        var request = command.Request;
-        var entity = await jobRepository.GetAsync([it => it.Id == command.Id], cancellationToken)
-            ?? throw new BusinessException(ErrorCodes.JobNotFound, $"定时任务 {command.Id} 不存在");
+        // 请求结构合法性由 JobUpdateCommandValidator 启动期强制，此处无额外业务校验
+        return Task.CompletedTask;
+    }
 
-        // 变更前捕获任务状态快照（实体即将被原位修改，供修改事件携带变更前后状态）
-        var before = entity.Snapshot<SysJob>();
-
+    /// <inheritdoc />
+    protected override void MapToEntity(JobInputRequest request, SysJob entity)
+    {
         mapper.Map(request, entity);
-        entity.ApplyVersion(command.Version);
-        await jobRepository.UpdateAsync(entity, cancellationToken);
+    }
 
+    /// <inheritdoc />
+    protected override DomainEvent CreateEvent(SysJob before, SysJob after)
+    {
         // 关键节点发布定时任务修改领域事件（携带变更前后任务状态，启停与分组变化由监听器比对同步调度）
-        await domainEventPublisher.PublishAsync(new JobUpdatedEvent(before, entity), cancellationToken);
-        return true;
+        return new JobUpdatedEvent(before, after);
     }
 }
 
@@ -135,24 +142,33 @@ public sealed class JobUpdateCommandHandler(IAggregateRepository<SysJob> jobRepo
 /// <remarks>构造函数。</remarks>
 /// <param name="jobRepository">定时任务仓储。</param>
 /// <param name="domainEventPublisher">领域事件发布端口。</param>
-public sealed class JobUpdateStatusCommandHandler(IAggregateRepository<SysJob> jobRepository, IDomainEventPublisher domainEventPublisher) : RequestHandler<JobUpdateStatusCommand, bool>
+public sealed class JobUpdateStatusCommandHandler(
+    IAggregateRepository<SysJob> jobRepository,
+    IDomainEventPublisher domainEventPublisher) : AggregateUpdateCommandHandler<JobUpdateStatusCommand, JobStatusRequest, SysJob>(jobRepository, domainEventPublisher)
 {
     /// <inheritdoc />
-    protected override async Task<bool> HandleAsync(JobUpdateStatusCommand command, CancellationToken cancellationToken)
+    protected override int NotFoundErrorCode => ErrorCodes.JobNotFound;
+
+    /// <inheritdoc />
+    protected override string EntityDisplayName => "定时任务";
+
+    /// <inheritdoc />
+    protected override Task ValidateAsync(JobStatusRequest request, SysJob entity, CancellationToken cancellationToken)
     {
-        // 调度同步已移至 JobScheduleSynchronizationHandler（Outbox 提交后投递），本处理器只负责 DB 写入与事件发布
-        var entity = await jobRepository.GetAsync([it => it.Id == command.Id], cancellationToken)
-            ?? throw new BusinessException(ErrorCodes.JobNotFound, $"定时任务 {command.Id} 不存在");
+        // 状态取值合法性由 JobUpdateStatusCommandValidator 启动期强制，此处无额外业务校验
+        return Task.CompletedTask;
+    }
 
-        // 变更前捕获任务状态快照（状态字段即将被原位修改）
-        var before = entity.Snapshot<SysJob>();
+    /// <inheritdoc />
+    protected override void MapToEntity(JobStatusRequest request, SysJob entity)
+    {
+        entity.Status = request.Status;
+    }
 
-        entity.Status = command.Request.Status;
-        entity.ApplyVersion(command.Version);
-        await jobRepository.UpdateAsync(entity, cancellationToken);
-
-        // 关键节点发布定时任务修改领域事件（携带变更前后任务状态，启停变化可由监听器比对）
-        await domainEventPublisher.PublishAsync(new JobUpdatedEvent(before, entity), cancellationToken);
-        return true;
+    /// <inheritdoc />
+    protected override DomainEvent CreateEvent(SysJob before, SysJob after)
+    {
+        // 关键节点发布定时任务修改领域事件（携带变更前后任务状态，启停变化由监听器比对同步调度）
+        return new JobUpdatedEvent(before, after);
     }
 }
