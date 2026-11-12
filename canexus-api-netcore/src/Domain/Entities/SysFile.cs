@@ -7,6 +7,7 @@ namespace Domain.Entities;
 /// <para>FileName / ContentType / SizeBytes 描述原始上传物；StorageProvider + RelativePath 定位物理存储；
 /// 软删除（继承自聚合基类）只摘除元数据可见性，物理文件保留（恢复可用，物理清理属运维职责）。</para>
 /// </summary>
+[SugarIndex("ix_sys_file_scope", nameof(TenantId), OrderByType.Asc, nameof(DeletedAt), OrderByType.Asc, nameof(CreatedAt), OrderByType.Asc)]
 [SugarTable("sys_file", TableDescription = "系统文件表：上传文件元数据档案")]
 public class SysFile : AggregateBase
 {

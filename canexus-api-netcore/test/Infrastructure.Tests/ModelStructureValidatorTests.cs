@@ -252,7 +252,7 @@ public class ModelStructureValidatorTests
         Assert.That(problems, Is.Empty);
     }
 
-    /// <summary>P2-6：CollectModel 全部取 ORM 元数据（不手写列名清单），当前实体零索引声明时索引清单为空。</summary>
+    /// <summary>P2-6：CollectModel 全部取 ORM 元数据（不手写列名清单）；列与索引均由实体声明驱动。</summary>
     [Test]
     public void CollectModel_ReadsOrmMetadata_NoHardcodedColumns()
     {
@@ -272,7 +272,8 @@ public class ModelStructureValidatorTests
             Assert.That(table.Name, Is.EqualTo("sys_job"));
             Assert.That(table.Columns.Any(column => column.Name == "JobName" && column.Length == 50 && column.IsText), Is.True);
             Assert.That(table.Columns.Any(column => column.Name == "ParametersJson" && column.Length == 2000 && column.IsText), Is.True);
-            Assert.That(table.Indexes, Is.Empty, "当前实体未声明索引，模型侧索引清单应为空（真实库比对不误报）");
+            Assert.That(table.Indexes?.Any(index => index.Name == "ix_sys_job_scope" && index.ColumnName == "DeletedAt") == true,
+                Is.True, "模型侧索引清单应取自实体 SugarIndex 声明（ORM 元数据驱动，非硬编码）");
         });
     }
 

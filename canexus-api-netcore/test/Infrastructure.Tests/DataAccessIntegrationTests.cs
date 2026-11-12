@@ -2,6 +2,7 @@
 using Domain.Repositories;
 using Domain.Shared.Exceptions;
 using Domain.Shared.Paging;
+using Domain.Shared.Results;
 using Infrastructure;
 using Infrastructure.DataAccess;
 using Infrastructure.Shared.Filtering;
@@ -64,6 +65,12 @@ public class DataAccessIntegrationTests
         _unitOfWork = _provider.GetRequiredService<IUnitOfWork>();
         _tenantContext = _provider.GetRequiredService<ITenantContext>();
         _dataFilter = _provider.GetRequiredService<IDataFilter>();
+
+        // 测试实体结构可能随用例演进（如唯一索引声明）：先丢弃旧表，再由 CodeFirst 按当前模型重建
+        foreach (var tableName in new[] { "it_soft_delete_entity", "it_multi_tenant_entity", "it_plain_entity" })
+        {
+            await _client.Ado.ExecuteCommandAsync($"DROP TABLE IF EXISTS `{tableName}`");
+        }
 
         // CodeFirst 建库建表（复用已存在的库表）
         var initializer = _provider.GetRequiredService<DbInitializer>();
@@ -297,6 +304,71 @@ public class DataAccessIntegrationTests
         var physicalCount = Convert.ToInt32(
             await _client.Ado.GetScalarAsync("SELECT COUNT(*) FROM it_soft_delete_entity WHERE DeletedAt IS NOT NULL"));
         Assert.That(physicalCount, Is.EqualTo(1), "软删除时间戳不应被旧令牌更新翻转");
+    }
+
+    /// <summary>验证软删除写入唯一键槽墓碑标记、恢复时清回空串。</summary>
+    [Test]
+    public async Task SoftDeleteAndRestore_MaintainDeletedKeySlot()
+    {
+        var entity = new SoftDeleteTestEntity { Name = "键槽墓碑" };
+        _ = await _softDeleteRepository.InsertAsync(entity);
+        Assert.That(entity.DeletedKey, Is.Empty, "插入后未删除行键槽应为空串");
+
+        await _softDeleteRepository.SoftDeleteAsync(entity.Id);
+
+        var deletedKey = await _client.Ado.GetScalarAsync(
+            "SELECT DeletedKey FROM it_soft_delete_entity WHERE Id = @id",
+            new SugarParameter("@id", entity.Id));
+        Assert.That(Convert.ToString(deletedKey), Is.EqualTo($"#{entity.Id:N}"), "软删除应写入唯一墓碑标记（# 主键 N 格式）");
+
+        await _softDeleteRepository.RestoreAsync(entity.Id);
+
+        var restoredKey = await _client.Ado.GetScalarAsync(
+            "SELECT DeletedKey FROM it_soft_delete_entity WHERE Id = @id",
+            new SugarParameter("@id", entity.Id));
+        Assert.That(Convert.ToString(restoredKey), Is.Empty, "恢复应把唯一键槽清回空串");
+    }
+
+    /// <summary>验证唯一索引在未删除集内数据库级防重：并发查重竞态窗口内的重复插入转业务错误码。</summary>
+    [Test]
+    public async Task Insert_DuplicateKeyAmongLiveRows_ConvertedToBusinessDataDuplicate()
+    {
+        var first = new SoftDeleteTestEntity { Name = "唯一键" };
+        _ = await _softDeleteRepository.InsertAsync(first);
+
+        // 应用层查重先走一遍（正常路径：业务错误码 UserNameDuplicate 之类），此处直接验证数据库兜底
+        var duplicate = new SoftDeleteTestEntity { Name = "唯一键" };
+        var ex = Assert.ThrowsAsync<BusinessException>(() => _softDeleteRepository.InsertAsync(duplicate));
+        Assert.That(ex!.Code, Is.EqualTo(ErrorCodes.CommonDataDuplicate), "唯一索引冲突应转 CommonDataDuplicate 业务错误码");
+    }
+
+    /// <summary>验证墓碑行不阻断业务键复用：软删除后同键可再次插入（唯一索引含 DeletedKey 键槽）。</summary>
+    [Test]
+    public async Task Insert_AfterSoftDelete_SameKeyAllowed()
+    {
+        var original = new SoftDeleteTestEntity { Name = "复用键" };
+        _ = await _softDeleteRepository.InsertAsync(original);
+        await _softDeleteRepository.SoftDeleteAsync(original.Id);
+
+        var replacement = new SoftDeleteTestEntity { Name = "复用键" };
+        Assert.DoesNotThrowAsync(() => _softDeleteRepository.InsertAsync(replacement), "墓碑行的键槽唯一，不应阻断同键新行");
+        var count = await _softDeleteRepository.CountAsync();
+        Assert.That(count, Is.EqualTo(1), "新行可见，墓碑行仍不可见");
+    }
+
+    /// <summary>验证恢复与现存活行撞键时被唯一索引拒绝并转业务错误码。</summary>
+    [Test]
+    public async Task Restore_CollidesWithLiveKey_ConvertedToBusinessDataDuplicate()
+    {
+        var original = new SoftDeleteTestEntity { Name = "恢复撞键" };
+        _ = await _softDeleteRepository.InsertAsync(original);
+        await _softDeleteRepository.SoftDeleteAsync(original.Id);
+
+        var replacement = new SoftDeleteTestEntity { Name = "恢复撞键" };
+        _ = await _softDeleteRepository.InsertAsync(replacement);
+
+        var ex = Assert.ThrowsAsync<BusinessException>(() => _softDeleteRepository.RestoreAsync(original.Id));
+        Assert.That(ex!.Code, Is.EqualTo(ErrorCodes.CommonDataDuplicate), "恢复撞唯一键应转 CommonDataDuplicate 业务错误码");
     }
 
     /// <summary>验证软删除实体恢复后默认查询重新可见。</summary>

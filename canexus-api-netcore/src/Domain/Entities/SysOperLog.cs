@@ -4,6 +4,7 @@ using SqlSugar;
 
 namespace Domain.Entities;
 /// <summary>操作日志实体：记录带 [OperLog] 特性的写操作审计信息。</summary>
+[SugarIndex("ix_sys_oper_log_created", nameof(CreatedAt), OrderByType.Desc)]
 [SugarTable("sys_oper_log", TableDescription = "操作日志实体：记录带 [OperLog] 特性的写操作审计信息。")]
 public class SysOperLog : AggregateBase
 {

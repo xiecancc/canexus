@@ -8,12 +8,15 @@ namespace Domain.Entities;
 
 /// <summary>系统用户实体。
 /// <para>实体不保留验证逻辑与数据归一化：字段约束由 Application 层 FluentValidation Validators 承接，
-/// trim 在字段映射阶段自动完成；用户名唯一性由业务层校验保证。</para>
+/// trim 在字段映射阶段自动完成；用户名唯一性由业务层校验 + 数据库唯一索引（含软删除键槽）双重保证。</para>
 /// <para>聚合不变量（内置超管账号保护）以守卫方法内聚于本实体，命令处理器不得散落复刻。</para></summary>
+[SugarIndex("uk_sys_user_name", nameof(UserName), OrderByType.Asc, nameof(DeletedKey), OrderByType.Asc, true)]
+[SugarIndex("ix_sys_user_dept", nameof(DeptId), OrderByType.Asc)]
+[SugarIndex("ix_sys_user_scope", nameof(TenantId), OrderByType.Asc, nameof(DeletedAt), OrderByType.Asc, nameof(CreatedAt), OrderByType.Asc)]
 [SugarTable("sys_user", TableDescription = "系统用户实体。")]
 public class SysUser : AggregateBase
 {
-    /// <summary>用户名（唯一，由业务层校验保证）。</summary>
+    /// <summary>用户名（唯一：业务层查重 + 数据库唯一索引双重保证）。</summary>
     [SugarColumn(ColumnDescription = "用户名（唯一，由业务层校验保证）。", Length = 30)]
     public virtual string UserName { get; set; } = string.Empty;
 

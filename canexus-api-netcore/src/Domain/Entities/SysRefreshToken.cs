@@ -4,6 +4,10 @@ using SqlSugar;
 namespace Domain.Entities;
 /// <summary>刷新令牌实体：持久化 refreshToken，支持轮换（旧令牌吊销）与校验。
 /// <para>实体不保留验证逻辑与数据归一化；令牌串由认证服务内部生成（恒非空）。</para></summary>
+[SugarIndex("uk_sys_refresh_token_token", nameof(Token), OrderByType.Asc, true)]
+[SugarIndex("ix_sys_refresh_token_user", nameof(UserId), OrderByType.Asc)]
+[SugarIndex("ix_sys_refresh_token_session", nameof(SessionId), OrderByType.Asc)]
+[SugarIndex("ix_sys_refresh_token_expires", nameof(ExpiresAt), OrderByType.Asc)]
 [SugarTable("sys_refresh_token", TableDescription = "刷新令牌实体：持久化 refreshToken，支持轮换（旧令牌吊销）与校验。")]
 public class SysRefreshToken : AggregateBase
 {

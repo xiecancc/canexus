@@ -6,6 +6,8 @@ namespace Domain.Entities;
 /// <summary>岗位实体：组织内的职务岗位档案（如董事长、项目经理），供用户管理页关联分配。
 /// <para>实体不保留验证逻辑与数据归一化：字段约束由 Application 层 FluentValidation Validators 承接，
 /// trim 在字段映射阶段自动完成；岗位编码唯一性由业务层校验保证。</para></summary>
+[SugarIndex("uk_sys_post_code", nameof(PostCode), OrderByType.Asc, nameof(DeletedKey), OrderByType.Asc, true)]
+[SugarIndex("ix_sys_post_scope", nameof(TenantId), OrderByType.Asc, nameof(DeletedAt), OrderByType.Asc, nameof(CreatedAt), OrderByType.Asc)]
 [SugarTable("sys_post", TableDescription = "岗位实体：组织内职务岗位档案")]
 public class SysPost : AggregateBase
 {

@@ -8,6 +8,8 @@ namespace Domain.Entities;
 /// <para>实体不保留验证逻辑与数据归一化：字段约束由 Application 层 FluentValidation Validators 承接，
 /// trim 在字段映射阶段自动完成；键值不做 trim（允许任意内容）。</para>
 /// <para>聚合不变量（内置参数删除保护）以守卫方法内聚于本实体，命令处理器不得散落复刻。</para></summary>
+[SugarIndex("uk_sys_config_key", nameof(ConfigKey), OrderByType.Asc, nameof(DeletedKey), OrderByType.Asc, true)]
+[SugarIndex("ix_sys_config_scope", nameof(TenantId), OrderByType.Asc, nameof(DeletedAt), OrderByType.Asc, nameof(CreatedAt), OrderByType.Asc)]
 [SugarTable("sys_config", TableDescription = "系统参数配置实体（键值对形式的全局配置）。")]
 public class SysConfig : AggregateBase
 {

@@ -10,6 +10,8 @@ namespace Domain.Entities;
 /// <para>实体不保留验证逻辑与数据归一化：字段约束由 Application 层 FluentValidation Validators 承接，
 /// trim 在字段映射阶段自动完成；角色权限字符串唯一性由业务层校验保证。</para>
 /// <para>聚合不变量（内置超管角色保护与保留权限字符）以守卫方法内聚于本实体，命令处理器不得散落复刻。</para></summary>
+[SugarIndex("uk_sys_role_key", nameof(RoleKey), OrderByType.Asc, nameof(DeletedKey), OrderByType.Asc, true)]
+[SugarIndex("ix_sys_role_scope", nameof(TenantId), OrderByType.Asc, nameof(DeletedAt), OrderByType.Asc, nameof(CreatedAt), OrderByType.Asc)]
 [SugarTable("sys_role", TableDescription = "系统角色实体。")]
 public class SysRole : AggregateBase
 {

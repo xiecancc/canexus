@@ -7,6 +7,7 @@ using Domain.Shared.Exceptions;
 using Domain.Shared.Results;
 using Infrastructure.DataAccess;
 using Infrastructure.Shared.Tenants;
+using MySqlConnector;
 using SqlSugar;
 
 namespace Infrastructure.Repositories;
@@ -16,7 +17,8 @@ namespace Infrastructure.Repositories;
 /// <para><b>乐观并发全覆盖</b>：更新、软删除、恢复三条写入路径统一经
 /// <c>ExecuteCommandWithOptLockAsync</c> 生成 <c>UPDATE ... WHERE Version = 传入值</c>，
 /// 命中 0 行即抛并发冲突业务异常；成功后由框架自动轮换版本令牌。
-/// 软删除 / 恢复按列只更新 <see cref="AggregateBase.DeletedAt"/>、更新审计与版本列，
+/// 软删除 / 恢复按列只更新 <see cref="AggregateBase.DeletedAt"/>、唯一键槽
+/// <see cref="AggregateBase.DeletedKey"/>、更新审计与版本列，
 /// 版本轮换使旧快照的更新失效，杜绝「墓碑被旧快照复活」。
 /// 命令携带版本令牌时以其作为 CAS 条件（陈旧令牌直接冲突），未携带时取库中当前版本。</para>
 /// <para>软删除以可空时间戳 <see cref="AggregateBase.DeletedAt"/> 为墓碑：null 表示未删除，
@@ -65,10 +67,20 @@ public class AggregateRepository<TEntity>(ISqlSugarClient client, IUserContext c
 
     /// <inheritdoc />
     /// <remarks>插入成功后按字段补一条「新增」变更日志（OldValue 为 null，敏感字段值脱敏）；
-    /// 与业务插入同连接，处于外层事务时随其原子提交。</remarks>
+    /// 与业务插入同连接，处于外层事务时随其原子提交。
+    /// 数据库唯一索引冲突（并发创建同键数据的应用层查重竞态窗口）转业务错误码返回。</remarks>
     public override async Task<bool> InsertAsync(TEntity entity, CancellationToken cancellationToken = default)
     {
-        var inserted = await base.InsertAsync(entity, cancellationToken);
+        bool inserted;
+        try
+        {
+            inserted = await base.InsertAsync(entity, cancellationToken);
+        }
+        catch (Exception exception) when (IsUniqueViolation(exception))
+        {
+            throw UniqueConflict();
+        }
+
         if (!inserted || !ChangeLogEnabled)
         {
             return inserted;
@@ -84,11 +96,20 @@ public class AggregateRepository<TEntity>(ISqlSugarClient client, IUserContext c
     }
 
     /// <inheritdoc />
-    /// <remarks>批量插入（如用户导入）同样逐实体补字段级「新增」变更日志。</remarks>
+    /// <remarks>批量插入（如用户导入）同样逐实体补字段级「新增」变更日志。
+    /// 数据库唯一索引冲突（并发导入同键数据）转业务错误码返回。</remarks>
     public override async Task<bool> InsertAsync(IEnumerable<TEntity> entities, CancellationToken cancellationToken = default)
     {
         var materialized = entities as List<TEntity> ?? [.. entities];
-        var inserted = await base.InsertAsync(materialized, cancellationToken);
+        bool inserted;
+        try
+        {
+            inserted = await base.InsertAsync(materialized, cancellationToken);
+        }
+        catch (Exception exception) when (IsUniqueViolation(exception))
+        {
+            throw UniqueConflict();
+        }
         if (!inserted || !ChangeLogEnabled)
         {
             return inserted;
@@ -162,6 +183,11 @@ public class AggregateRepository<TEntity>(ISqlSugarClient client, IUserContext c
 
             if (!result.IsSuccess)
             {
+                if (IsUniqueViolation(result.ErrorException))
+                {
+                    throw UniqueConflict();
+                }
+
                 throw result.ErrorException
                     ?? new BusinessException(ErrorCodes.CommonConcurrencyConflict, "数据更新失败，请重试。");
             }
@@ -241,13 +267,14 @@ public class AggregateRepository<TEntity>(ISqlSugarClient client, IUserContext c
                 // 否则用刚读出的库中版本；ExecuteCommandWithOptLock 成功后自动轮换为新 Guid。
                 target.Version = expectedVersion ?? target.Version;
                 target.DeletedAt = newDeletedAt;
+                target.DeletedKey = deleted ? string.Empty : DeleteMarker(target.Id);
                 target.UpdatedAt = now;
                 target.UpdatedBy = userId;
 
-                // 只更新墓碑、更新审计与版本列，不触碰任何业务字段；
+                // 只更新墓碑、唯一键槽、更新审计与版本列，不触碰任何业务字段；
                 // Version 必须出现在 UpdateColumns 中，框架才会在 SET 子句里轮换版本令牌。
                 var rows = await BuildUpdate(target)
-                    .UpdateColumns(it => new { it.DeletedAt, it.UpdatedAt, it.UpdatedBy, it.Version })
+                    .UpdateColumns(it => new { it.DeletedAt, it.DeletedKey, it.UpdatedAt, it.UpdatedBy, it.Version })
                     .ExecuteCommandWithOptLockAsync();
                 if (rows == 0)
                 {
@@ -277,6 +304,11 @@ public class AggregateRepository<TEntity>(ISqlSugarClient client, IUserContext c
             var result = await Client.Ado.UseTranAsync(ApplyAsync);
             if (!result.IsSuccess)
             {
+                if (IsUniqueViolation(result.ErrorException))
+                {
+                    throw UniqueConflict();
+                }
+
                 throw result.ErrorException ?? ConcurrencyConflict();
             }
         }
@@ -335,4 +367,39 @@ public class AggregateRepository<TEntity>(ISqlSugarClient client, IUserContext c
             ErrorCodes.CommonConcurrencyConflict,
             "数据已被他人修改（版本号不一致或目标不可见），请刷新后重试。");
     }
+
+    /// <summary>MySQL 唯一索引冲突错误码（ER_DUP_ENTRY，文档号 1062）。</summary>
+    private const int MySqlDuplicateEntryNumber = 1062;
+
+    /// <summary>判断异常链中是否存在 MySQL 唯一索引冲突（含 SqlSugar 包装的内部异常）。</summary>
+    /// <param name="exception">待检查异常（可为 null）。</param>
+    /// <returns>存在唯一冲突时返回 true。</returns>
+    private static bool IsUniqueViolation(Exception? exception)
+    {
+        for (var current = exception; current is not null; current = current.InnerException)
+        {
+            if (current is MySqlException { Number: MySqlDuplicateEntryNumber })
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>构造数据库唯一索引冲突业务异常（错误码 CommonDataDuplicate）。
+    /// <para>这是应用层查重（EnsureNotDuplicateAsync）的并发竞态兜底：先查后插窗口内的并发创建
+    /// 由数据库唯一索引拦截，业务语义仍归「数据重复」而非 500 系统错误。</para></summary>
+    /// <returns>业务异常实例。</returns>
+    private static BusinessException UniqueConflict()
+    {
+        return new BusinessException(
+            ErrorCodes.CommonDataDuplicate,
+            "数据唯一性冲突：同键数据已存在（可能是并发创建），请刷新后重试。");
+    }
+
+    /// <summary>生成软删除墓碑的唯一键槽标记（"#" + 主键 N 格式，32 位十六进制）。</summary>
+    /// <param name="id">聚合主键。</param>
+    /// <returns>墓碑键槽值；与未删除行恒空串的槽位约定配对。</returns>
+    private static string DeleteMarker(Guid id) => $"#{id:N}";
 }

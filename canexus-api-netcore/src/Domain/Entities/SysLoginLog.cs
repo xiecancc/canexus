@@ -4,6 +4,7 @@ using SqlSugar;
 
 namespace Domain.Entities;
 /// <summary>系统登录日志实体：记录每次登录成功 / 失败的审计信息。</summary>
+[SugarIndex("ix_sys_login_log_created", nameof(CreatedAt), OrderByType.Desc)]
 [SugarTable("sys_login_log", TableDescription = "系统登录日志实体：记录每次登录成功 / 失败的审计信息。")]
 public class SysLoginLog : AggregateBase
 {

@@ -6,6 +6,8 @@ namespace Domain.Entities;
 /// <summary>系统部门实体（树形结构）。
 /// <para>实体不保留验证逻辑与数据归一化：字段约束由 Application 层 FluentValidation Validators 承接，
 /// trim 在字段映射阶段自动完成；树形结构由 ParentId 与树形仓储表达。</para></summary>
+[SugarIndex("ix_sys_dept_parent", nameof(ParentId), OrderByType.Asc)]
+[SugarIndex("ix_sys_dept_scope", nameof(TenantId), OrderByType.Asc, nameof(DeletedAt), OrderByType.Asc, nameof(CreatedAt), OrderByType.Asc)]
 [SugarTable("sys_dept", TableDescription = "系统部门实体（树形结构）。")]
 public class SysDept : AggregateTreeBase<SysDept>
 {

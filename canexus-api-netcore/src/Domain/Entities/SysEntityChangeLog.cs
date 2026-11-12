@@ -3,6 +3,8 @@ using SqlSugar;
 
 namespace Domain.Entities;
 /// <summary>实体变更日志实体：聚合根经聚合仓储更新时按字段记录 old / new 值（append-only，不参与业务）。</summary>
+[SugarIndex("ix_sys_entity_change_log_created", nameof(CreatedAt), OrderByType.Desc)]
+[SugarIndex("ix_sys_entity_change_log_entity", nameof(EntityId), OrderByType.Asc, nameof(CreatedAt), OrderByType.Desc)]
 [SugarTable("sys_entity_change_log", TableDescription = "实体变更日志实体：聚合根经聚合仓储更新时按字段记录 old / new 值（append-only，不参与业务）。")]
 public class SysEntityChangeLog : AggregateBase
 {

@@ -6,6 +6,8 @@ namespace Domain.Entities;
 /// <summary>系统菜单实体：目录 / 菜单 / 按钮统一存储，树形结构。
 /// <para>实体不保留验证逻辑与数据归一化：字段约束（含类型与字段耦合的跨属性规则）
 /// 由 Application 层 FluentValidation Validators 承接，trim 在字段映射阶段自动完成。</para></summary>
+[SugarIndex("ix_sys_menu_parent", nameof(ParentId), OrderByType.Asc)]
+[SugarIndex("ix_sys_menu_scope", nameof(TenantId), OrderByType.Asc, nameof(DeletedAt), OrderByType.Asc, nameof(CreatedAt), OrderByType.Asc)]
 [SugarTable("sys_menu", TableDescription = "系统菜单实体：目录 / 菜单 / 按钮统一存储，树形结构。")]
 public class SysMenu : AggregateTreeBase<SysMenu>
 {

@@ -13,7 +13,7 @@ namespace Infrastructure.DataAccess;
 /// </summary>
 internal static class EntityChangeLogger
 {
-    /// <summary>不参与变更对比的字段名（主键 / 乐观锁版本 / 创建与更新审计 / 软删除标记）。</summary>
+    /// <summary>不参与变更对比的字段名（主键 / 乐观锁版本 / 创建与更新审计 / 软删除标记与唯一键槽）。</summary>
     private static readonly string[] ExcludedProperties =
     [
         nameof(AggregateBase.Id),
@@ -22,7 +22,8 @@ internal static class EntityChangeLogger
         nameof(AggregateBase.CreatedBy),
         nameof(AggregateBase.UpdatedAt),
         nameof(AggregateBase.UpdatedBy),
-        nameof(AggregateBase.DeletedAt)
+        nameof(AggregateBase.DeletedAt),
+        nameof(AggregateBase.DeletedKey)
     ];
 
     /// <summary>实体可对比属性缓存（键为实体类型；属性集运行期不变，静态缓存避免重复反射）。</summary>

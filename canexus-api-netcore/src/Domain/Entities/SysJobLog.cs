@@ -4,6 +4,7 @@ using SqlSugar;
 
 namespace Domain.Entities;
 /// <summary>定时任务执行日志实体（由调度包装任务在执行前后写入，平台级数据不做租户隔离）。</summary>
+[SugarIndex("ix_sys_job_log_created", nameof(CreatedAt), OrderByType.Desc)]
 [SugarTable("sys_job_log", TableDescription = "定时任务执行日志实体（由调度包装任务在执行前后写入，平台级数据不做租户隔离）。")]
 public class SysJobLog : AggregateBase
 {

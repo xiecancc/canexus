@@ -13,6 +13,8 @@ namespace Domain.Entities;
 /// 实体不保留验证逻辑与数据归一化：字段约束由 Application 层 FluentValidation Validators 承接，
 /// trim 在字段映射阶段自动完成；TenantKey 唯一性由业务层校验保证。</para>
 /// </summary>
+[SugarIndex("uk_sys_tenant_key", nameof(TenantKey), OrderByType.Asc, nameof(DeletedKey), OrderByType.Asc, true)]
+[SugarIndex("ix_sys_tenant_scope", nameof(DeletedAt), OrderByType.Asc, nameof(CreatedAt), OrderByType.Asc)]
 [SugarTable("sys_tenant", TableDescription = "租户实体：平台级全局表（租户定义不参与租户隔离过滤）。")]
 public class SysTenant : AggregateBase
 {

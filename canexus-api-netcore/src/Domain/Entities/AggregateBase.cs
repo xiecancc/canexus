@@ -40,6 +40,15 @@ public abstract class AggregateBase : DomainBase, IEquatable<AggregateBase>
     [SugarColumn(ColumnDescription = "软删除时间戳（UTC）：null 表示未删除，非 null 表示删除时间，默认查询自动过滤。", IsNullable = true)]
     public virtual DateTime? DeletedAt { get; set; }
 
+    /// <summary>软删除唯一键槽位：未删除行恒为空串，软删除时由数据访问层写入唯一墓碑标记（"#" + 主键）。
+    /// <para>用途：把「软删除感知的业务键唯一性」下推到数据库唯一索引——需要数据库级防重的实体
+    /// 声明 (业务唯一列, <see cref="DeletedKey"/>) 复合唯一索引：未删除行槽位恒为空串，
+    /// 业务键在未删除集内数据库级唯一；墓碑行槽位唯一不阻断历史键重复；恢复时槽位清回空串，
+    /// 与现存活行撞键时由唯一索引拒绝（转业务错误码）。数据库层唯一索引是应用层查重的并发兜底，
+    /// 两者口径一致（同为全局唯一、不含租户维度，与登录 / 业务键查询口径对齐）。</para></summary>
+    [SugarColumn(ColumnDescription = "软删除唯一键槽位：未删除行恒为空串，软删时写入唯一墓碑标记（\"#\" + 主键）。", Length = 40)]
+    public virtual string DeletedKey { get; set; } = string.Empty;
+
     /// <summary>相等运算符。</summary>
     public static bool operator ==(AggregateBase? left, AggregateBase? right) => left?.Equals(other: right) ?? right is null;
 

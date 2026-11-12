@@ -13,6 +13,8 @@ namespace Domain.Entities;
 /// 与租户过滤（消息必须全局可见，投递方可能处于任意租户上下文），也不受审计 Aop 自动填充；
 /// 主键与创建时间在 <see cref="Create"/> 工厂显式赋值。</para>
 /// </summary>
+[SugarIndex("ix_sys_outbox_message_claim", nameof(Status), OrderByType.Asc, nameof(NextRetryAt), OrderByType.Asc)]
+[SugarIndex("ix_sys_outbox_message_created", nameof(CreatedAt), OrderByType.Asc)]
 [SugarTable("sys_outbox_message", TableDescription = "领域事件 Outbox 消息实体：业务事务内持久化的领域事件快照， 事务提交后由投递服务/后台 worker 投递，投递失败保留记录并按次数重试。")]
 public sealed class OutboxMessage
 {

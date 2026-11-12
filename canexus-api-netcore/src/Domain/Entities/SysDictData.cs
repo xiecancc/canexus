@@ -6,6 +6,10 @@ namespace Domain.Entities;
 /// <summary>字典数据实体（同 dictType 下 label / value 由业务层保证唯一）。
 /// <para>实体不保留验证逻辑与数据归一化：字段约束由 Application 层 FluentValidation Validators 承接，
 /// trim 在字段映射阶段自动完成。</para></summary>
+[SugarIndex("uk_sys_dict_data_label", nameof(DictType), OrderByType.Asc, nameof(DictLabel), OrderByType.Asc, nameof(DeletedKey), OrderByType.Asc, true)]
+[SugarIndex("uk_sys_dict_data_value", nameof(DictType), OrderByType.Asc, nameof(DictValue), OrderByType.Asc, nameof(DeletedKey), OrderByType.Asc, true)]
+[SugarIndex("ix_sys_dict_data_type", nameof(DictType), OrderByType.Asc)]
+[SugarIndex("ix_sys_dict_data_scope", nameof(TenantId), OrderByType.Asc, nameof(DeletedAt), OrderByType.Asc, nameof(CreatedAt), OrderByType.Asc)]
 [SugarTable("sys_dict_data", TableDescription = "字典数据实体（同 dictType 下 label / value 由业务层保证唯一）。")]
 public class SysDictData : AggregateBase
 {
