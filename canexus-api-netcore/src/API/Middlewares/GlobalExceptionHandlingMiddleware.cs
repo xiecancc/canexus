@@ -9,6 +9,7 @@ namespace API.Middlewares;
 /// <list type="bullet">
 /// <item><see cref="BusinessException"/>：按业务错误码映射 HTTP 状态（认证段 401、权限段 403、系统段 500、限流 429，其余默认 400；完整规则见 ErrorCodes.GetHttpStatusCode），返回统一 Result；</item>
 /// <item>未知异常：返回 500 + 统一 Result（固定消息“服务器内部错误”，不向客户端泄露堆栈），并以 Error 级别记录 Serilog；</item>
+/// <item>BadHttpRequestException：按 Kestrel 报告的 StatusCode 精确映射（413 上传超限 → 上传超限业务码；其余 400 类 → 通用请求错误码），不再一刀切标注 413（P1-C1）。</item>
 /// <item>客户端断开（OperationCanceledException 且 RequestAborted 触发）：非服务端错误，仅 Information 记录，不写响应、不计 500。</item>
 /// </list>
 /// 统一响应附 <c>X-Trace-Id</c> 响应头（HttpContext.TraceIdentifier），客户端反馈该值即可在日志中精确定位对应请求。
@@ -53,14 +54,29 @@ public sealed class GlobalExceptionHandlingMiddleware(RequestDelegate next, ILog
         }
         catch (Microsoft.AspNetCore.Http.BadHttpRequestException exception)
         {
-            // 请求体超出 Kestrel 线级上限（如上传文件超过 FileStorage:MaxSizeMB+1MB 边界）：映射为 413 + 统一业务码，
-            // 避免落入通用 500 分支并保证响应结构与业务校验失败一致
-            logger.LogWarning("请求体超出大小上限：{Reason}（TraceId：{TraceId}）", exception.Message, context.TraceIdentifier);
+            // 按 Kestrel 报告的 StatusCode 精确区分（P1-C1）：仅 413（请求体超出 Kestrel 线级上限，
+            // 如上传文件超过 FileStorage:MaxSizeMB+1MB 边界）映射为 413 + 上传超限业务码；
+            // 同类型异常也承载「请求行非法 / 请求体意外结束」等 400 类问题，一律标注 413 会误导
+            // 客户端重试语义（误以为是文件过大）。其余状态按原样映射为对应 HTTP 状态 + 通用请求错误码
+            var statusCode = exception.StatusCode is > 0 ? exception.StatusCode : StatusCodes.Status400BadRequest;
+            if (statusCode == StatusCodes.Status413PayloadTooLarge)
+            {
+                logger.LogWarning("请求体超出大小上限：{Reason}（TraceId：{TraceId}）", exception.Message, context.TraceIdentifier);
+                await WriteResultAsync(
+                    context,
+                    StatusCodes.Status413PayloadTooLarge,
+                    Result.Fail(ErrorCodes.FileSizeExceeded,
+                        ErrorMessageLocalizer.Localize(ErrorCodes.FileSizeExceeded, "上传文件大小超出上限")));
+                return;
+            }
+
+            logger.LogWarning("非法请求（BadHttpRequest，HTTP {StatusCode}）：{Reason}（TraceId：{TraceId}）",
+                statusCode, exception.Message, context.TraceIdentifier);
             await WriteResultAsync(
                 context,
-                StatusCodes.Status413PayloadTooLarge,
-                Result.Fail(ErrorCodes.FileSizeExceeded,
-                    ErrorMessageLocalizer.Localize(ErrorCodes.FileSizeExceeded, "上传文件大小超出上限")));
+                statusCode,
+                Result.Fail(ErrorCodes.CommonInvalidRequest,
+                    ErrorMessageLocalizer.Localize(ErrorCodes.CommonInvalidRequest, "请求格式非法")));
         }
         catch (OperationCanceledException) when (context.RequestAborted.IsCancellationRequested)
         {
