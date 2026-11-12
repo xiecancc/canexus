@@ -307,10 +307,10 @@ internal static class SqlSugarClientFactory
     /// <para><b>级别与降噪</b>：该配置委托每个异步上下文仅执行一次，天然不随查询次数放大；
     /// 但平台态（未携带 X-Tenant-Id）是平台管理员、匿名登录、后台作业等合法且高频路径，
     /// 若每个上下文都发 Warning 会在正常运维下持续刷屏并制造误报警。故：
-    /// ① 进程内仅发一次 LogWarning，显式宣告该后门已启用并指明如何取得逐次留痕；
-    /// ② 每个平台态上下文发一条 LogDebug，携带操作人 / TraceId / 路径与明确行为说明，
-    /// 默认级别下不输出（结构化参数延迟求值、热路径零开销），需审计平台态跨租户数据访问时
-    /// 将日志 category「SqlSugar」级别调至 Debug 即可获得完整留痕。
+    /// ① 进程内仅发一次 LogWarning，显式宣告该后门已启用；
+    /// ② 每个平台态上下文发一条 LogInformation（P2-F3：由 Debug 升级，默认级别下可见），
+    /// 携带操作人 / TraceId / 路径与明确行为说明，使平台态跨租户数据访问无需调整日志级别即可审计；
+    /// 结构化参数延迟求值、热路径零开销。
     /// 过滤开关被显式关闭（TenantFilterEnabled=false）属于另一条路径，不在此记录。</para>
     /// </summary>
     /// <param name="logger">日志器（category 为 SqlSugar）。</param>
@@ -337,12 +337,12 @@ internal static class SqlSugarClientFactory
         {
             logger.LogWarning(
                 "[多租户审计] 平台态租户过滤整体短路后门启用：TenantId 上下文为 null 时不过滤任何租户行（设计内后门）。"
-                + "此后逐次留痕以 Debug 级别记录，需将日志 category「SqlSugar」级别调至 Debug。"
+                + "此后逐次留痕以 Information 级别记录。"
                 + "OperatorUserId={OperatorUserId} TraceId={TraceId} Path={Path}",
                 currentUser.UserId, traceId, path);
         }
 
-        logger.LogDebug(
+        logger.LogInformation(
             "[多租户审计] 平台态租户过滤整体短路：TenantId 上下文为 null，本次上下文所有租户数据均可见（设计内平台后门）。"
             + "OperatorUserId={OperatorUserId} TraceId={TraceId} Path={Path}",
             currentUser.UserId, traceId, path);

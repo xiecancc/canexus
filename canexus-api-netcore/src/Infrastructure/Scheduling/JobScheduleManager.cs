@@ -65,6 +65,7 @@ public sealed class JobScheduleManager(
     public async Task ScheduleAsync(SysJob job, CancellationToken cancellationToken = default)
     {
         EnsureJobTypeValid(job);
+        WarnIfParametersUnknown(job);
         var scheduler = await schedulerFactory.GetScheduler(cancellationToken);
         await EnsureScheduledAsync(scheduler, job, cancellationToken);
     }
@@ -81,6 +82,7 @@ public sealed class JobScheduleManager(
     public async Task RunOnceAsync(SysJob job, CancellationToken cancellationToken = default)
     {
         EnsureJobTypeValid(job);
+        WarnIfParametersUnknown(job);
         var scheduler = await schedulerFactory.GetScheduler(cancellationToken);
         var jobKey = BuildJobKey(job.Id, job.JobGroup);
         var jobDetail = BuildJobDetail(job, jobKey);
@@ -175,6 +177,7 @@ public sealed class JobScheduleManager(
     /// <param name="cancellationToken">取消令牌。</param>
     private async Task EnsureScheduledAsync(IScheduler scheduler, SysJob job, CancellationToken cancellationToken)
     {
+        WarnIfParametersUnknown(job);
         var jobKey = BuildJobKey(job.Id, job.JobGroup);
         var desiredDetail = BuildJobDetail(job, jobKey);
         var desiredTrigger = BuildTrigger(job, jobKey);
@@ -329,6 +332,35 @@ public sealed class JobScheduleManager(
         {
             throw new BusinessException(ErrorCodes.JobTypeInvalid,
                 $"任务「{job.JobName}」类型「{job.JobType}」不在已登记白名单内（允许值：{string.Join(" / ", JobTypeResolver.AllowedKeys)}），已拒绝入调度");
+        }
+    }
+
+    /// <summary>
+    /// 入调度前按作业类型校验参数契约（P2-F2）：未知键 / 值非法记 Warning（不阻断，保持存量库
+    /// 向前兼容，作业执行侧另有越界收敛兜底）；结构合法性已由 JobParameters 双侧兜底，此处
+    /// 只补「键与取值是否为该作业所认识」的契约校验，让误配在同步期可见而非首次执行才暴露。
+    /// </summary>
+    /// <param name="job">任务定义。</param>
+    private void WarnIfParametersUnknown(SysJob job)
+    {
+        IReadOnlyDictionary<string, string> parameters;
+        try
+        {
+            parameters = JobParameters.Parse(job.ParametersJson);
+        }
+        catch (InvalidOperationException exception)
+        {
+            // 结构非法已被 Parse fail-fast 抛出（后续 BuildJobDetail 同样会抛）：此处仅提前留痕定位
+            logger.LogWarning("定时任务 {JobName}（{JobId}）参数结构非法，将在入调度时被拒绝：{Reason}",
+                job.JobName, job.Id, exception.Message);
+            return;
+        }
+
+        var problems = JobParameterContracts.Validate(job.JobType.Trim(), parameters);
+        foreach (var problem in problems)
+        {
+            logger.LogWarning("定时任务 {JobName}（{JobId}，{JobType}）参数契约告警：{Problem}",
+                job.JobName, job.Id, job.JobType, problem);
         }
     }
 

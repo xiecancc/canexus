@@ -43,9 +43,10 @@ services:
       # MySQL（双下划线 = 配置节层级；MySqlConnector 需要的 TLS/字符集参数）
       Database__ConnectionString: "Server=mysql;Port=3306;Database=${MYSQL_DATABASE:-super_admin};Uid=root;Pwd=${MYSQL_ROOT_PASSWORD:?MYSQL_ROOT_PASSWORD is required};CharSet=utf8mb4;AllowPublicKeyRetrieval=true;SslMode=none;"
       Database__MigrationsEnabled: "true"
-      # 全新库首次部署的一次性建表授权（Production 禁止自动改表，
-      # 未显式授权时首次启动会 fail-fast）；存量库部署应移除此项，结构由迁移通道管理
-      Database__AllowSchemaInitialization: "true"
+      # 全新库首次部署的一次性建表授权（Production 禁止自动改表，未显式授权时首次启动会 fail-fast）：
+      # 默认 false（存量库部署安全基线，结构由迁移通道管理）；全新库部署在 .env 设 ALLOW_SCHEMA_INIT=true
+      # 并于建表完成后移除（P2-D5：由硬编码 true 改为显式开关，避免生产长期保留「缺表即自动建表」授权）
+      Database__AllowSchemaInitialization: "${ALLOW_SCHEMA_INIT:-false}"
       # Jwt 密钥：必填，生产必须通过 .env / 密钥管理系统注入（未设置时 compose 立即报错）
       Jwt__Secret: "${JWT_SECRET:?JWT_SECRET is required (at least 32 random characters)}"
       # 内置超管初始口令：非 Development 环境必填，首次登录后强制修改
