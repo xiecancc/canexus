@@ -832,6 +832,21 @@ Development 可不启用（缓存退化为进程内 L1、限流失效为单实�
 
 ## 变更记录
 
+### 2026-11-13（三）：深度评审 P0-D1 登录命令退出数据库事务
+
+1. **问题**：登录命令实现 ICommand 后被 TransactionBehavior 包裹 MySQL 事务，事务内串行执行
+   验证码校验（Redis）→ 锁定检查（Redis）→ BCrypt 口令校验（CPU 50-100ms）→ 缓存操作 →
+   令牌签发（refreshToken 落库）——BCrypt 把数据库连接与行锁占用放大，登录吞吐受连接池限制。
+2. **修复**：写命令契约新增 `INonTransactionalCommand` 标记，TransactionBehavior 对标记命令
+   不包裹事务（发布的领域事件仍排水投递）；AuthLoginCommand 标记该接口，退出事务——
+   处理器主体耗时在事务外（BCrypt / Redis），唯一的数据库写入为 refreshToken 单行插入，
+   登录日志走独立连接，无事务原子性需求；刷新令牌轮换保持事务语义
+   （「吊销旧令牌 + 签发新令牌」需原子完成）。
+3. **守卫**：Application.Tests 新增单元测试（非事务命令透放不开启事务）与架构守卫测试
+   （登录命令必须保持非事务标记、刷新令牌命令必须保持事务标记），防止标记被误加或误删。
+
+**验证**：`dotnet test api.slnx` 全量通过（Domain 92 / Application 150 / Infrastructure 152 / API 205，0 失败）。
+
 ### 2026-11-13（二）：深度评审 P0-E1/E2 全库二级索引与软删除感知唯一约束
 
 1. **二级索引（E1）**：全部聚合表声明租户 / 软删 / 创建时间复合索引，日志表（操作 / 登录 /

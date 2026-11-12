@@ -5,12 +5,13 @@ using Domain.Shared.Permissions;
 
 
 namespace Application.Contracts.Commands;
-/// <summary>账号密码登录命令（验证码校验 + 失败锁定策略）。</summary>
+/// <summary>账号密码登录命令（验证码校验 + 失败锁定策略）。
+/// <para>标记 INonTransactionalCommand（P0-D1）：处理器主体耗时在数据库事务外\n/// （BCrypt 口令校验、Redis 验证码 / 锁定检查），包裹事务只会放大连接与行锁占用；\n/// 唯一的数据库写入（refreshToken 持久化）为单行插入，登录日志走独立连接，无事务原子性需求。</para></summary>
 /// <param name="Request">登录请求。</param>
 /// <param name="Ip">客户端 IP（写入登录日志）。</param>
 /// <param name="UserAgent">浏览器 User-Agent（解析浏览器 / 操作系统写入登录日志）。</param>
 [AllowAnonymousCommand]
-public sealed record AuthLoginCommand(LoginRequest Request, string? Ip, string? UserAgent) : Request<TokenPairDto>, ICommand;
+public sealed record AuthLoginCommand(LoginRequest Request, string? Ip, string? UserAgent) : Request<TokenPairDto>, ICommand, INonTransactionalCommand;
 
 /// <summary>登出命令：吊销 refreshToken（不传时吊销当前用户全部活跃令牌）。</summary>
 /// <param name="RefreshToken">刷新令牌；可空。</param>

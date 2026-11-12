@@ -14,6 +14,18 @@ public interface ICommand
 }
 
 /// <summary>
+/// 非事务写命令标记：实现本标记的写命令不进入 TransactionBehavior 的数据库事务（P0-D1）。
+/// <para>适用场景：命令主体耗时在数据库事务外（如登录的 BCrypt 口令校验、Redis 验证码与锁定检查）——
+/// 包裹数据库事务只会放大连接与行锁占用、限制认证吞吐，不提供额外原子性收益；
+/// 实现方须自行评估写入路径的原子性需求（审计日志写入已有独立连接兜底，过期令牌由清理任务回收）。
+/// 须由 Application.Tests 的架构守卫测试（TransactionBehaviorTests）约束标记的增删，
+/// 防止非事务语义被误加或误删。</para>
+/// </summary>
+public interface INonTransactionalCommand
+{
+}
+
+/// <summary>
 /// 用户数据范围写命令标记：管道行为（UserDataScopeBehavior）据此在处理器取得目标实体前
 /// 统一按当前用户数据范围做越权准入（更新 / 删除 / 恢复 / 改状态 / 重置密码 / 分配角色等），
 /// 越界抛 AuthForbidden（HTTP 403）。实现方须暴露目标用户 Id。

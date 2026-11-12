@@ -8,7 +8,9 @@ using Microsoft.Extensions.Logging;
 namespace Application.Behaviors;
 /// <summary>
 /// 事务管道行为：对实现 <see cref="ICommand"/> 的写命令，在数据库事务中执行后续管道与处理器
-/// （成功提交 / 异常自动回滚并原样透出），查询请求直接透放、不开启事务。
+/// （成功提交 / 异常自动回滚并原样透出），查询请求直接透放、不开启事务；
+/// 实现 <see cref="INonTransactionalCommand"/> 的写命令不包裹事务（P0-D1：命令主体耗时在事务外，
+/// 如登录的 BCrypt 口令校验，事务只会放大连接与行锁占用）。
 /// <para>事务边界覆盖「校验通过后的全部写入 + 领域事件发布（Outbox 持久化）」：处理器内不再手工管理
 /// <see cref="IUnitOfWork"/>（历史上各处理器手工 <see cref="IUnitOfWork.RunInTransactionAsync{TResult}"/>，
 /// 现统一收口到本行为，避免双开事务与遗漏事务两种问题）。注册顺序上位于 ValidationBehavior 之后
@@ -39,6 +41,16 @@ public sealed class TransactionBehavior<TRequest, TResponse>(
         if (request is not ICommand)
         {
             return await next();
+        }
+
+        // 非事务写命令（P0-D1）：标记 INonTransactionalCommand 的命令不进入数据库事务——
+        // 命令主体耗时在事务外（BCrypt / Redis 等），包裹事务只会放大连接与行锁占用；
+        // 发布的领域事件仍排水投递（无事务语义，消息持久化由仓储自持提交）
+        if (request is INonTransactionalCommand)
+        {
+            var directResponse = await next();
+            await DeliverPendingOutboxAsync(cancellationToken);
+            return directResponse;
         }
 
         // MediatR 12.4.1 的 RequestHandlerDelegate 不带令牌参数：令牌由 Send 在构建管道时捕获，
