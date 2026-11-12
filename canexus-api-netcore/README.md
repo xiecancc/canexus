@@ -68,7 +68,7 @@ CodeFirst 依实体模型一次性建表、随后按序执行幂等迁移脚本�
 
 | 依赖 | 当前（保留） | 最新稳定版 | 保留原因 |
 | --- | --- | --- | --- |
-| AutoMapper | 14.0.0（MIT） | 16.3.0 | 15.0.0 起改为 Lucky Penny 商业 / RPL 双许可，需许可证密钥；14.x 官方不回补 GHSA-rvv3-g6hj-g44x（High，DoS），若须修复应迁移到 MIT 替代库或购买商业许可 |
+| AutoMapper | 14.0.0（MIT） | 16.3.0 | 15.0.0 起改为 Lucky Penny 商业 / RPL 双许可，需许可证密钥；14.x 官方不回补 GHSA-rvv3-g6hj-g44x（High，不受控递归 DoS；修复版仅 15.1.1 / 16.1.1 且均为商业许可，16.0.0 / 16.1.0 仍受影响）。2026-11-12 核实：触发需约 25000 层自引用对象图，请求 JSON 默认深度上限 64，常规路径不可达，故结论为「排期迁移」而非紧急修复，详见下方处置与期限表 |
 | MediatR | 12.5.0（Apache-2.0） | 14.3.0 | 13.0.0 起改为商业许可；12.5.0 是最后一个 Apache-2.0 版 |
 | Quartz | 3.22.9（Apache-2.0） | 4.7.2 | 4.0 仅支持 net10.0，容器构建调度器、公开 API 大面积移除，且强制 QRTZ 表结构迁移；3.x 仍在维护 |
 | Asp.Versioning.Mvc | 8.1.1（MIT） | 10.2.1 | 10.x 引入 AV0016 等新诊断与配置约束，需调整版本化配置 |
@@ -76,8 +76,26 @@ CodeFirst 依实体模型一次性建表、随后按序执行幂等迁移脚本�
 | Vue | 3.5.45（MIT） | 3.5.45 | 原 package.json 与 workspace overrides 锁定 rc 预览版，已移除覆盖并固定稳定版 |
 | TypeScript | 6.0.3（Apache-2.0） | 7.0.2 | Volar / vue-tsc 要求 typescript < 7，7.x 移除内部 tsc 导出导致类型检查无法启动；6.0.3 为兼容线最后稳定版 |
 
-已知传递依赖风险：System.Security.Cryptography.Pkcs 8.0.1（经 JWT 相关包间接引入）存在 High 级公告
-GHSA-846f-f764-76mx，需等待上游更新或显式提升传递依赖版本。
+### 依赖安全处置与期限（核实于 2026-11-12，对应评审 P1-10）
+
+两个已披露 High 公告均经依赖审计命令与 GitHub Advisory / NuGet 核实；当前二者在常规 HTTP
+请求路径均不可达，按合规项登记期限处置，不作紧急线上漏洞处理。
+
+| 公告 | 依赖与引入路径 | 影响与修复版本 | HTTP 可达性 | 处置期限 |
+| --- | --- | --- | --- | --- |
+| GHSA-rvv3-g6hj-g44x / CVE-2026-32933（High，CVSS 7.5） | AutoMapper 14.0.0，Application 项目直接引用 | 深度自引用对象图（约 25000 层）触发进程级栈溢出；修复版 15.1.1 / 16.1.1 起，且 15.0 后均为商业许可；14.x 无回补 | 不可达：请求 JSON 沿用默认深度上限 64，映射源均为内部受信实体与已知 DTO，不按运行时类型名动态选择映射目标 | 2026-12-31 前完成宽松许可映射库迁移 PoC；2027-01-31 前完成全量迁移与回归 |
+| GHSA-846f-f764-76mx / CVE-2026-84008（High，CVSS 7.5）及 GHSA-2fmv-rv2c-59x7（Moderate） | System.Security.Cryptography.Pkcs 8.0.1，经 SqlSugarCore 的 Oracle 驱动间接引入（**与 JWT 包无关**，原表述已更正） | 攻击者控制的 CMS 签名数据导致二次 CPU 耗尽；修复版 8.0.2 / 9.0.21 / 10.0.13 / 11.0.0-rc.2 均已发布 | 不可达：业务代码不解析 CMS / PKCS#7 数据，仅做 JWT Bearer 校验 | 2026-11-30 前显式固定该传递依赖到 10.0.14 并用依赖审计命令验证告警清零；自包含部署须用 10.0.13 及以上 SDK 重新发布 |
+
+**补偿控制（迁移完成前）**：维持请求 JSON 默认深度上限、不映射不受信类型、不引入运行时类型名映射入口；
+每次依赖变更均执行 `dotnet list package --vulnerable --include-transitive` 并确认新增告警为零。
+
+**映射库替代评估结论**：使用面为 39 个文件 / 15 个映射配置 / 48 处映射声明 / 约 31 处映射调用 /
+65 处注入引用，且依赖程序集扫描与开放泛型等专有特性，立即迁移破坏面大，故取「排期迁移」。
+优先 Mapster 10.0.14（MIT，原生支持 net10.0，保留注入模型，成本最低）；备选 Mapperly 4.3.1
+（Apache-2.0 而非 MIT，源生成器零运行时依赖，但需改为分部方法并重写注入模型）。
+
+> 完整核实记录（含公告链接、依赖图、版本真实性核对与待核实清单）见本地评估文档，
+> 该文件位于被忽略的 `.docs/` 目录，不纳入版本控制。
 
 ## 功能模块与接口
 
@@ -462,7 +480,26 @@ curl -s http://localhost:5000/api/auth/user-info \
   `MinimalApiEndpointPolicyValidator` 在启动期反向扫描端点集合，新增受保护的裸 minimal 端点会阻止启动，
   堵住「新增 minimal API 绕过权限过滤器 / 强制改密」的扩展缺口；
 - 超级管理员持有 `*:*:*`，在端点与命令两层均短路放行；普通角色按菜单 / 按钮授权，越权返回 403 / 40300；
-- 数据范围（全部 / 自定义部门 / 本部门 / 本部门及以下 / 仅本人）在查询层统一拼接过滤条件。
+- 数据范围（全部 / 自定义部门 / 本部门 / 本部门及以下 / 仅本人）在查询层统一拼接过滤条件，
+  当前仅适用于**用户域**（`UserQueryPaged` 列表、`UserQueryDetail` 详情、用户域写命令准入）；
+  用户列表导出复用 `UserQueryPaged` 分页口径，因此同样受数据范围约束。
+
+### 数据范围适用边界（白名单）
+
+数据范围是「同一租户内按部门 / 归属人收敛业务数据」的机制，**不是**租户隔离的替代品。
+租户隔离由全局查询过滤器与仓储写入侧条件统一保证，对所有下表资源一律生效。
+下列资源明确**不套用**用户数据范围，改由「独立权限点 + 租户隔离 + 行数上限」控制：
+
+| 资源 | 不套用数据范围的原因 | 实际约束 |
+| --- | --- | --- |
+| 角色 / 菜单 / 部门 / 字典 / 岗位 / 配置 / 通知公告 / 文件 / 租户 | 租户级配置与字典数据，没有部门归属字段 | 端点与命令级权限点 + 租户全局过滤器 |
+| 操作日志 / 登录日志 / 任务日志 / 实体变更日志 | 审计完整性要求按租户完整可追溯；`SysOperLog` 等实体无部门归属 / 创建人数据范围字段 | `Monitor*` 独立权限点 + 租户全局过滤器（含删除语句显式补租户条件） |
+| 在线会话 / 服务器监控 / 缓存监控 | 运行态监控视图，不属于部门业务数据 | `Monitor*` 独立权限点 + 会话令牌租户归属 |
+| 角色 / 操作日志 / 登录日志导出 | 复用对应分页查询口径，属平台 / 租户级审计数据 | 对应 `Monitor*` / `System*` 权限点 + `Export:MaxRows` 行数上限 + 租户全局过滤器 |
+
+新增查询或导出接口时按此白名单判定：若资源带部门归属且属于用户域业务数据，必须接入
+`IDataScopeFilter`（列表收敛 + 详情按数据范围准入校验）；否则须显式登记到上表并说明约束口径，
+不得默认「无过滤」。导出一律复用对应分页查询，避免绕过既有范围 / 租户 / 行数限制。
 
 ## 数据库初始化
 
@@ -649,33 +686,25 @@ await userRoleRepository.HardDeleteAsync(ur => ur.UserId == command.Id, ct);
 
 ### 任务完成后的固定动作（强制交付门禁）
 
-适用范围：本仓库后续**所有**任务与操作——功能开发、Bug 修复、重构、依赖包（NuGet / npm）增减或升级、
+适用范围：本仓库后续**所有**任务与操作——功能开发、Bug 修复、重构、依赖包增减或升级、
 配置 / 脚本 / 文档 / 规范调整、测试补充等。只要产生待提交改动，一律按以下顺序执行：不得跳过、不得调换、
 不得因「只是文档或配置改动」而省略，也无需另行确认。**推送以 gitee 为准**：GitHub 可达时同步推两端，
-GitHub 推送失败时仅推送 gitee 即可。
+GitHub 推送失败时仅推送 gitee 即可。完整约定、本地环境与脚本说明见
+[CONTRIBUTING.md](CONTRIBUTING.md)。
 
-1. **立即运行全量测试**：`dotnet test api.slnx`，确认全部用例通过
-   （集成测试需先设置 `SUPER_ADMIN_TEST_CONN` 为有效连接串，且测试库必须是 `super_admin_test`）；
-   出现失败必须先修复并复跑至全绿，禁止带红提交；
-2. **同步 README**：补充功能说明、使用方式与本次变更记录；任何影响安装、配置、接口、目录结构、
-   依赖版本、运维方式或开发规范的改动同样必须更新本文件；提交前执行 `python3 scripts/check-readme-types.py`
-   与 `dotnet format api.slnx --verify-no-changes`（本机 `python3` 为商店占位程序，改用 `python`）；
-3. **提交并推送**：测试全部无误后 `git add` 本次相关修改并 `git commit`，随后推送 `gitee`；
-   GitHub 可达时再推 `github`（GitHub）。两个远端按平台命名，不使用默认名 `origin`：
-   `gitee` → https://gitee.com/xiecancc/canexus.git，
-   `github` → https://github.com/xiecancc/canexus.git；
-   可用 `git remote -v` 查看，`master` 默认跟踪 `gitee/master`：
+1. **全量测试**：`dotnet test api.slnx` 必须 0 失败（集成测试需有效的 `SUPER_ADMIN_TEST_CONN`，
+   测试库必须是 `super_admin_test`）；失败先修复复跑，禁止带红提交；
+2. **同步 README**：补充功能说明、使用方式与本次变更记录；提交前跑
+   `python scripts/check-readme-types.py` 与 `dotnet format api.slnx --verify-no-changes`（本机用 `python`）；
+3. **提交并推送**：`git commit -F <提交信息文件>` → `git push gitee master`；GitHub 可达时再
+   `git push github master`。远端按平台命名为 `gitee` / `github`（**无 `origin`**），分支 `master`，
+   默认跟踪 `gitee/master`。**GitHub 推送失败时仅推 gitee 即可**：不反复重试、不阻塞交付、
+   不视为失败，说明原因即可；
+4. **收尾校验**：`git status` 干净（还原 pre-push 钩子生成的前端声明文件等噪音），
+   核对 local / gitee refs 一致；GitHub 本次推送成功时一并核对三端 refs。
 
-   ```bash
-   git push gitee master
-   git push github master
-   ```
-
-   **GitHub 推送失败（代理 502 / 网络超时 / 隧道不通等）时，仅推送 gitee 即可**：不反复重试、
-   不阻塞交付、不视为交付失败，在结果中说明 GitHub 未同步及原因即可；后续网络恢复可顺手补推，
-   但不作为待办阻塞项。
-4. **收尾校验**：确认 `git status` 干净（还原 pre-push hook 生成的前端声明文件等噪音），
-   核对 local / gitee refs 一致；GitHub 本次推送成功时再一并核对三端 refs。
+一键脚本（与 CI 同源）：`python scripts/verify-delivery.py` 跑提交前四项校验，
+`--post-push` 追加工作区与 refs 校验，`backend-ci.yml` 以 `--ci --no-restore` 调用同一脚本。
 
 ## 常见问题
 
@@ -768,6 +797,48 @@ Development 可不启用（缓存退化为进程内 L1、限流失效为单实�
 不要修改 `.editorconfig` 降级。
 
 ## 变更记录
+
+### 2026-11-12（三）：深度评审 P1 收尾 + P2 首批（多租户 / 数据范围 / 权限版本号 / 依赖安全 / 前端 / 门禁）
+
+**P1 剩余 4 项**
+
+1. **P1-2 多租户口径统一**：`AggregateRepository.GetDeletedAsync` 改按请求租户上下文
+   （`tenantContext.TenantId`）而非 JWT 声明约束，堵住平台用户带 X-Tenant-Id 跨租户读墓碑；
+   `SqlSugarClientFactory` 为「平台态租户过滤整体短路」加一次性结构化告警审计；
+   新增 `PlatformWideOperationWhitelist` 登记 3 处平台级全表操作（日志保留 / 刷新令牌清理 /
+   令牌版本递增，业务语义【待核实】），三处补操作名 + 影响行数日志，**不改变业务语义**。
+2. **P1-4 数据范围白名单文档化**：新增「数据范围适用边界」章节，明确数据范围仅适用于用户域
+   （含用户导出，因其复用分页口径）；角色 / 菜单 / 部门 / 字典 / 日志 / 在线会话 / 监控 /
+   角色与日志导出改由独立权限点 + 租户隔离 + 行数上限控制，并给出新增资源的判定规范。
+3. **P1-6 权限版本号防复活**：`PermissionChecker` 的全局版本号缓存 key 丢失时
+   （Redis 重启 / flush / 淘汰 / 首次冷启动）不再回退 0，改为重建以毫秒时间戳为基线、
+   进程内严格单调的安全版本号并写回，历史 v0 用户权限 key 永不复活；
+   新增 6 个单测覆盖 miss 重建、时钟回拨、并发与旧 key 失效。
+4. **P1-10 依赖安全处置与期限**：核实两个 High 公告（AutoMapper 14 不受控递归 DoS、
+   System.Security.Cryptography.Pkcs 8.0.1 CMS 二次 CPU 耗尽），更正传递依赖引入路径
+   （来自 SqlSugarCore 的 Oracle 驱动，与 JWT 包无关）；二者在常规 HTTP 路径均不可达，
+   按合规项登记补偿控制与明确期限；完成 MIT 映射库替代评估（优先 Mapster，结论「排期迁移」）。
+   完整核实记录见本地评估文档（`.docs/`，不提交）。
+
+**P2 首批（按优先级择低成本高价值项）**
+
+5. **P2-2 前端能力闭环**：补齐操作日志 / 登录日志 Excel 导出 API 与页面按钮；新增在线用户、
+   岗位管理、实体变更日志 3 个视图与对应 API / 单测；服务器监控、缓存监控、文件管理
+   列入前端 README 的 Roadmap（含缺失内容与待补原因）。
+6. **P2-3 覆盖率与架构守护**：新增 `scripts/verify-delivery.py` 的 `--coverage` 采集与
+   行覆盖率摘要（可配 `--min-line-rate` 硬门禁），CI 上传 cobertura 产物；
+   架构测试白名单的语义依据文档 `docs/事务语义与ORM选型说明.md` 入库，
+   修复「引用不存在的 `.docs/` 文件导致理由链断裂」。
+7. **P2-5 交付门禁脚本化**：新增 `scripts/verify-delivery.py`（README 类型校验 / 构建 /
+   格式 / 全量测试 / 工作区干净 / refs 一致），`backend-ci.yml` 改为调用同一脚本；
+   运维与推送约定移至 `CONTRIBUTING.md`，README 门禁章节精简为摘要 + 链接。
+8. **P2-10 过时注释修正**：修正 `Program.cs` 中间件顺序自相矛盾的注释、
+   `GlobalExceptionHandlingMiddleware` 的「资源段 404」死分支描述、
+   部门树「祖级路径」早期设计残留（接口 / 仓储 / 验证器 / 树形仓储注释统一），
+   并在 `ApiVersioningExtensions` 标注控制器硬编码版本常量待收敛。
+
+**验证**：`dotnet build api.slnx` 0 警告 0 错误；全量测试通过；
+前端 `pnpm type-check` / Vitest / `build-only` 全绿；README 类型校验与格式校验通过。
 
 ### 2026-11-12（二）：深度评审 P1 批次（拒绝审计 / 本地化脱敏 / Outbox 通知幂等 / 生产基线 / 中央构建）
 

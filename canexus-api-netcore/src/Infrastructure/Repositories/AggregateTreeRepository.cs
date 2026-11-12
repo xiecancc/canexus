@@ -130,7 +130,7 @@ public class AggregateTreeRepository<TAggregate>(ISqlSugarClient client, IUserCo
                 ?? throw new BusinessException(codes.ParentNotFound, $"{codes.EntityName}的父级节点 {newParentId} 不存在");
         }
 
-        // 持久化交由 MoveCoreAsync：基础树仅改父级，带祖级路径的树形仓储重写它以联动刷新路径
+        // 持久化交由 MoveCoreAsync：基础树仅改 ParentId；当前无物化祖级路径，无需联动刷新
         await MoveCoreAsync(node, parent, cancellationToken);
     }
 

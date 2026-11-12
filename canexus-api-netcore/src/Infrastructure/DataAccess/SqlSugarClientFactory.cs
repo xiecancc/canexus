@@ -7,6 +7,7 @@ using Domain.Shared.Logging;
 using Infrastructure.Shared.Filtering;
 using Infrastructure.Shared.Options;
 using Infrastructure.Shared.Tenants;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -38,6 +39,8 @@ internal static class SqlSugarClientFactory
         var dataFilter = serviceProvider.GetRequiredService<IDataFilter>();
         var currentUser = serviceProvider.GetRequiredService<IUserContext>();
         var logger = serviceProvider.GetRequiredService<ILoggerFactory>().CreateLogger("SqlSugar");
+        // 可选解析：数据访问可独立装配（如集成测试），未注册 HttpContextAccessor 时平台态审计仅少一项路径信息
+        var httpContextAccessor = serviceProvider.GetService<IHttpContextAccessor>();
 
         var connectionConfig = new ConnectionConfig
         {
@@ -66,6 +69,7 @@ internal static class SqlSugarClientFactory
 
             ConfigureExecutingAop(client, currentUser, tenantContext);
             ConfigureGlobalQueryFilters(client, options, dataFilter, tenantContext, currentUser);
+            AuditPlatformWideTenantBypass(logger, dataFilter, tenantContext, currentUser, httpContextAccessor);
 
             // SQL 执行日志 + 慢查询日志（P1-R5）统一在 OnLogExecuting / OnLogExecuted 中组合：
             // SqlSugar Aop 为单委托槽位，两类逻辑必须合并赋值（后者赋值会覆盖前者）。
@@ -286,5 +290,61 @@ internal static class SqlSugarClientFactory
             || tenantContext.TenantId == null
             || it.TenantId == tenantContext.TenantId
             || (currentUser.TenantId == null && it.TenantId == null));
+    }
+
+    /// <summary>平台态短路后门的一次性 Warning 是否已发出（进程级，避免每个请求刷屏）。</summary>
+    private static int PlatformWideAuditWarned;
+
+    /// <summary>
+    /// 平台态租户过滤短路的显式审计（P1-2）：仅当「租户过滤开关启用且请求租户上下文为 null」时记录，
+    /// 这正是 <c>AddAggregateFilter</c> / <c>AddTenantFilter</c> 中
+    /// <c>tenantContext.TenantId == null</c> 令租户条件整体短路为 true、平台上下文不过滤任何行的设计内后门。
+    /// <para><b>注入点</b>：全局过滤器是表达式树（由 SqlSugar 在每次查询时求值），无法在 lambda 内写日志或注入服务；
+    /// 故在 SqlSugarScope 每异步上下文注册过滤器处（Create 的配置委托，即该上下文首次建连 / 首次查询时）
+    /// 按当时的租户态判断一次，不在表达式树内注入任何副作用，过滤器语义与性能均不变。
+    /// 过滤器短路本身按每次查询时的 tenantContext 求值，本审计取首次建连时的值作为该上下文的代表；
+    /// 若中间件在首次建连后才收敛租户，本条留痕仅对应首次查询，属表达式树约束下的可接受近似。</para>
+    /// <para><b>级别与降噪</b>：该配置委托每个异步上下文仅执行一次，天然不随查询次数放大；
+    /// 但平台态（未携带 X-Tenant-Id）是平台管理员、匿名登录、后台作业等合法且高频路径，
+    /// 若每个上下文都发 Warning 会在正常运维下持续刷屏并制造误报警。故：
+    /// ① 进程内仅发一次 LogWarning，显式宣告该后门已启用并指明如何取得逐次留痕；
+    /// ② 每个平台态上下文发一条 LogDebug，携带操作人 / TraceId / 路径与明确行为说明，
+    /// 默认级别下不输出（结构化参数延迟求值、热路径零开销），需审计平台态跨租户数据访问时
+    /// 将日志 category「SqlSugar」级别调至 Debug 即可获得完整留痕。
+    /// 过滤开关被显式关闭（TenantFilterEnabled=false）属于另一条路径，不在此记录。</para>
+    /// </summary>
+    /// <param name="logger">日志器（category 为 SqlSugar）。</param>
+    /// <param name="dataFilter">数据过滤开关。</param>
+    /// <param name="tenantContext">请求租户上下文。</param>
+    /// <param name="currentUser">当前用户上下文（操作人取值来源）。</param>
+    /// <param name="httpContextAccessor">HTTP 上下文访问器（请求路径，可选）。</param>
+    private static void AuditPlatformWideTenantBypass(
+        ILogger logger,
+        IDataFilter dataFilter,
+        ITenantContext tenantContext,
+        IUserContext currentUser,
+        IHttpContextAccessor? httpContextAccessor)
+    {
+        if (!dataFilter.TenantFilterEnabled || tenantContext.TenantId is not null)
+        {
+            return;
+        }
+
+        var traceId = System.Diagnostics.Activity.Current?.TraceId.ToString() ?? "-";
+        var path = httpContextAccessor?.HttpContext?.Request.Path.Value ?? "-";
+
+        if (Interlocked.Exchange(ref PlatformWideAuditWarned, 1) == 0)
+        {
+            logger.LogWarning(
+                "[多租户审计] 平台态租户过滤整体短路后门启用：TenantId 上下文为 null 时不过滤任何租户行（设计内后门）。"
+                + "此后逐次留痕以 Debug 级别记录，需将日志 category「SqlSugar」级别调至 Debug。"
+                + "OperatorUserId={OperatorUserId} TraceId={TraceId} Path={Path}",
+                currentUser.UserId, traceId, path);
+        }
+
+        logger.LogDebug(
+            "[多租户审计] 平台态租户过滤整体短路：TenantId 上下文为 null，本次上下文所有租户数据均可见（设计内平台后门）。"
+            + "OperatorUserId={OperatorUserId} TraceId={TraceId} Path={Path}",
+            currentUser.UserId, traceId, path);
     }
 }

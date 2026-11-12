@@ -6,11 +6,14 @@
  *   → PagedResult<OperLogVO>（beginTime / endTime 为 'YYYY-MM-DD'，可空）
  * - DELETE /system/oper-log/{id}/{version} → 删除单条操作日志（菜单含 remove 按钮权限）
  * - POST /system/oper-log/clean?beginTime=&endTime=&confirm= → 按时间范围清空（须显式确认，单次最多 31 天）
+ * - GET /system/oper-log/export?title=&businessType=&status=&operUserName=&beginTime=&endTime=
+ *   → xlsx 文件流（复用列表筛选条件，分页参数被忽略，行数上限 10000；经 utils/download.ts 处理）
  * - status 状态：1 成功 0 失败
  * - businessType 业务类型：来自字典 sys_oper_type
  * - 乐观锁：删除的 URL 须携带 version，取自列表响应的 version 字段（36 位 GUID 字符串）
  */
 import type { AggregateVO, PagedRequest, PagedResult } from '@/api/types'
+import { downloadFile } from '@/utils/download'
 import request from '@/utils/request'
 
 /** 操作日志列表项 */
@@ -87,4 +90,20 @@ export interface LogCleanParams {
 /** 按时间范围清空操作日志（危险操作，后端按范围 DELETE 并记录审计） */
 export function cleanOperLogApi(params: LogCleanParams): Promise<null> {
   return request.post<null>('/system/oper-log/clean', null, { params })
+}
+
+/** 操作日志导出筛选条件（与列表同口径；后端忽略分页参数，全量按筛选导出） */
+export type OperLogExportRequest = Omit<OperLogPageRequest, 'pageIndex' | 'pageSize'>
+
+/**
+ * 导出操作日志为 Excel（GET /system/oper-log/export）。
+ *
+ * 后端返回 xlsx 文件流并在 Content-Disposition 携带建议文件名，经 utils/download.ts
+ * 以 `responseType: 'blob'` 下载，不走统一 Result 解包拦截器。
+ *
+ * @param params 与列表一致的筛选条件（title / businessType / status / operUserName / beginTime / endTime）
+ */
+export function exportOperLogApi(params: OperLogExportRequest): Promise<void> {
+  const query: Record<string, unknown> = { ...params }
+  return downloadFile('/system/oper-log/export', query, '操作日志.xlsx')
 }

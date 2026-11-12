@@ -10,7 +10,8 @@ namespace Infrastructure.Tests.Architecture;
 /// 原生 SQL 使用——这些场景要么没有实体语义，要么必须绕开 ORM 的 SQL 生成。</item>
 /// </list>
 /// 应用层 / API 层出现这两类写法即测试失败：要么改走仓储与工作单元抽象，要么把文件加入白名单并在
-/// 事务语义文档中说明理由（白名单条目必须与真实代码一致，删除实现而不删白名单同样会失败）。</para>
+/// 事务语义文档中说明理由（白名单条目必须与真实代码一致，删除实现而不删白名单同样会失败）。
+/// 该文档位于仓库内 docs/事务语义与ORM选型说明.md，随源码提交。</para>
 /// </summary>
 [TestFixture]
 public class TransactionBoundaryArchitectureTests
@@ -24,7 +25,7 @@ public class TransactionBoundaryArchitectureTests
 
     /// <summary>
     /// 允许使用 <c>CopyNew()</c> 的文件白名单（相对 canexus-api-netcore，正斜杠书写）。
-    /// 每一项的语义依据见 .docs/后端API_事务语义与ORM选型说明_2026-11-09.md 第二节。
+    /// 每一项的语义依据见仓库内 docs/事务语义与ORM选型说明.md 第二节（随仓库提交，不依赖本地分析文档）。
     /// </summary>
     private static readonly string[] CopyNewWhitelist =
     [
@@ -69,7 +70,7 @@ public class TransactionBoundaryArchitectureTests
             Assert.That(copyNewViolations, Is.Empty,
                 "CopyNew() 只允许用于「审计 / 认领 / 吊销须存活于事务回滚之外」的白名单文件；"
                 + "新增使用请改走仓储抽象，或把文件加入 TransactionBoundaryArchitectureTests.CopyNewWhitelist"
-                + "并在事务语义文档中说明理由。越界文件：\n" + string.Join("\n", copyNewViolations));
+                + "并在 docs/事务语义与ORM选型说明.md 说明理由。越界文件：\n" + string.Join("\n", copyNewViolations));
             Assert.That(bareAdoViolations, Is.Empty,
                 "裸 Ado 只允许数据访问基础设施执行原生 SQL；业务查询请走 Queryable / 仓储抽象。"
                 + "越界文件：\n" + string.Join("\n", bareAdoViolations));

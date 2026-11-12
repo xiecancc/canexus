@@ -172,8 +172,8 @@ public class Program
             // 未启用时为空操作；仅可在可信代理后开启，KnownProxies 白名单外的转发头一律忽略
             app.UseApiForwardedHeaders();
 
-            // TraceId 中间件最先注册（P2-B3）：生成请求链路 TraceId（响应头 X-Trace-Id），
-            // 供慢请求 / SQL / 事件投递日志关联；须在异常中间件之前，保证异常路径同样带链路标识
+            // TraceId 中间件（P2-B3）：紧随转发头解析之后注册（转发头才是管道最外层），生成请求链路 TraceId（响应头 X-Trace-Id），
+            // 供慢请求 / SQL / 事件投递日志关联；位于全局异常处理中间件外层，保证异常路径同样带链路标识
             app.UseMiddleware<TraceIdMiddleware>();
 
             // 请求本地化中间件（须先于异常中间件：CurrentUICulture 按请求文化设置后，业务异常消息才能按文化翻译）
@@ -184,7 +184,7 @@ public class Program
             // 放在内层时异常沿栈上抛，finally 读到的仍是默认 200，监控会漏报 5xx。
             app.UseSerilogRequestLogging();
 
-            // 全局异常处理中间件：捕获其内层（CORS / HSTS / 限流 / 鉴权 / 端点）全部异常并写统一 Result。
+            // 全局异常处理中间件：并非管道最外层（外层为转发头 / TraceId / 请求本地化 / 请求日志），捕获其内层（CORS / HSTS / 限流 / 鉴权 / 端点）全部异常并写统一 Result。
             // 位置保持在 CORS / HSTS 外层，但 UnifiedResponseWriter 会保留跨切响应头白名单，
             // 因此错误响应仍带 Access-Control-Allow-Origin / Strict-Transport-Security。
             app.UseMiddleware<GlobalExceptionHandlingMiddleware>();

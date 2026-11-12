@@ -63,10 +63,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # README 引用的 C# 类型必须与 src 声明一致；失败即快速拦截，不占用后续构建/Test。
-      - name: Validate README type references
-        run: python3 scripts/check-readme-types.py
-
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
@@ -75,11 +71,17 @@ jobs:
       - name: Restore
         run: dotnet restore api.slnx
 
-      - name: Build
-        run: dotnet build api.slnx --no-restore --verbosity quiet -nologo
+      # P2-5 / P2-3：交付门禁脚本化 + CI 化，并采集行覆盖率。
+      # 四项可验证检查（README 类型引用 / 构建 / 格式 / 全量测试）统一由
+      # scripts/verify-delivery.py 执行，与本地 `python scripts/verify-delivery.py` 同源；
+      # --ci 跳过工作区干净与 refs 一致检查（CI 为 detached HEAD），--no-restore 复用上一步产物。
+      - name: Delivery gate (scripted, with coverage)
+        run: python3 scripts/verify-delivery.py --ci --no-restore --coverage
 
-      - name: Format check
-        run: dotnet format api.slnx --no-restore --verify-no-changes --verbosity minimal
-
-      - name: Test
-        run: dotnet test api.slnx --no-build --verbosity quiet -nologo
+      - name: Upload coverage reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-cobertura
+          path: canexus-api-netcore/TestResults/**/coverage.cobertura.xml
+          if-no-files-found: warn

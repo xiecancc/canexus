@@ -53,7 +53,7 @@ public interface IAggregateTreeRepository<TAggregate> : IAggregateRepository<TAg
 
     /// <summary>移动节点到新父级（所有树形聚合通用的父级变更能力）：
     /// 校验新父级合法（不可为自身或自身后代）且存在后变更 ParentId；
-    /// 带祖级路径的树形聚合仓储（如部门）同时重算自身祖级路径并联动刷新全部后代路径；
+    /// 当前树形结构仅由 ParentId 邻接关系表达，不维护物化路径（祖级路径 / Level）；原「重算祖级路径」描述属早期设计残留，全仓无对应实现，勿依赖；
     /// 父级未变更时幂等返回。多次写库的原子性由调用方通过 <c>IUnitOfWork</c> 事务保障。</summary>
     /// <param name="id">待移动的节点 Id。</param>
     /// <param name="newParentId">新父节点 Id；Guid.Empty 表示移动为根节点。</param>

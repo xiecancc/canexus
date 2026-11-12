@@ -77,7 +77,9 @@ public sealed class LogRetentionJob(ISqlSugarClient client, ILogger<LogRetention
         var cutoff = DateTime.UtcNow.AddDays(-days);
         cancellationToken.ThrowIfCancellationRequested();
 
-        // 日志表不走软删除墓碑，与既有 ClearAsync 口径一致（物理删除）
+        // 平台级跨租户全表操作：已登记在 PlatformWideOperationWhitelist（LogRetention），刻意不补租户条件。
+        // 日志表不走软删除墓碑，与既有 ClearAsync 口径一致（物理删除）；
+        // QueryFilter 不作用于 Deleteable，故此处删除不会被租户上下文收窄。
         var loginLog = await client.Deleteable<SysLoginLog>()
             .Where(log => log.CreatedAt < cutoff)
             .ExecuteCommandAsync(cancellationToken);
@@ -91,12 +93,23 @@ public sealed class LogRetentionJob(ISqlSugarClient client, ILogger<LogRetention
             .Where(log => log.CreatedAt < cutoff)
             .ExecuteCommandAsync(cancellationToken);
 
-        return new Dictionary<string, int>(StringComparer.Ordinal)
+        var summary = new Dictionary<string, int>(StringComparer.Ordinal)
         {
             [nameof(SysLoginLog)] = loginLog,
             [nameof(SysOperLog)] = operLog,
             [nameof(SysEntityChangeLog)] = entityChangeLog,
             [nameof(SysJobLog)] = jobLog
         };
+
+        logger.LogInformation(
+            "[平台级全表操作][白名单] Operation={Operation} RetentionDays={RetentionDays} 影响行数 LoginLog={LoginLog} / OperLog={OperLog} / EntityChangeLog={EntityChangeLog} / JobLog={JobLog}",
+            PlatformWideOperationWhitelist.LogRetention,
+            days,
+            summary[nameof(SysLoginLog)],
+            summary[nameof(SysOperLog)],
+            summary[nameof(SysEntityChangeLog)],
+            summary[nameof(SysJobLog)]);
+
+        return summary;
     }
 }

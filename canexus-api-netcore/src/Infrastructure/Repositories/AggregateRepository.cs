@@ -48,13 +48,14 @@ public class AggregateRepository<TEntity>(ISqlSugarClient client, IUserContext c
     /// <inheritdoc />
     public virtual async Task<TEntity?> GetDeletedAsync(Guid id, CancellationToken cancellationToken = default)
     {
-        // 清除软删除 / 租户全局过滤器后按主键取墓碑，再按当前登录用户的租户范围显式约束，
-        // 避免恢复前校验因默认查询过滤而读不到目标行，同时不放大跨租户读取范围。
+        // 清除软删除 / 租户全局过滤器后按主键取墓碑，再按请求租户上下文（含平台用户通过
+        // X-Tenant-Id 指定的租户）显式约束，避免恢复前校验因默认查询过滤而读不到目标行，
+        // 同时不放大跨租户读取范围（口径与 LoadTargetsAsync 一致）。
         var query = BuildQuery()
             .ClearFilter<TEntity>()
             .Where(it => it.Id == id && it.DeletedAt != null);
 
-        if (CurrentUser.TenantId is { } tenantId)
+        if (CurrentTenantId is { } tenantId)
         {
             query = query.Where(it => it.TenantId == tenantId);
         }

@@ -7,7 +7,7 @@ namespace API.Extensions;
 /// <summary>API 版本化与请求本地化的服务注册扩展。</summary>
 public static class ApiVersioningExtensions
 {
-    /// <summary>当前 API 版本（全部控制器统一标注，破坏性变更发布 v2 时在此登记新版本）。</summary>
+    /// <summary>当前 API 版本常量（破坏性变更发布 v2 时在此登记新版本）；注意各控制器当前硬编码 [ApiVersion("1.0")] 而非引用本常量，两者需手工同步，后续泛型基类收敛时统一为引用本常量。</summary>
     public const string CurrentVersion = "1.0";
 
     /// <summary>

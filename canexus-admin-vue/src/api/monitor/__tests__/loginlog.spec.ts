@@ -1,5 +1,5 @@
 /**
- * 登录日志模块接口测试：mock 请求层，验证接口路径、HTTP 方法与参数透传。
+ * 登录日志模块接口测试：mock 请求层与下载层，验证接口路径、HTTP 方法与参数透传。
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Mock } from 'vitest'
@@ -14,12 +14,23 @@ vi.mock('@/utils/request', () => ({
   },
 }))
 
+vi.mock('@/utils/download', () => ({
+  downloadFile: vi.fn(),
+}))
+
 import request from '@/utils/request'
-import { cleanLoginLogApi, deleteLoginLogApi, getLoginLogPageApi } from '../loginlog'
+import { downloadFile } from '@/utils/download'
+import {
+  cleanLoginLogApi,
+  deleteLoginLogApi,
+  exportLoginLogApi,
+  getLoginLogPageApi,
+} from '../loginlog'
 
 const mockedGet = request.get as unknown as Mock
 const mockedPost = request.post as unknown as Mock
 const mockedDelete = request.delete as unknown as Mock
+const mockedDownloadFile = downloadFile as unknown as Mock
 
 describe('登录日志模块接口', () => {
   beforeEach(() => {
@@ -56,5 +67,24 @@ describe('登录日志模块接口', () => {
     const params = { beginTime: '2026-11-01', endTime: '2026-11-07', confirm: true }
     await cleanLoginLogApi(params)
     expect(mockedPost).toHaveBeenCalledWith('/system/login-log/clean', null, { params })
+  })
+
+  it('导出 Excel：GET /system/login-log/export 且筛选条件透传（不含分页参数）', async () => {
+    mockedDownloadFile.mockResolvedValueOnce(undefined)
+    const params = {
+      userName: 'admin',
+      ip: '127.0.0.1',
+      status: 0,
+      beginTime: '2026-02-01',
+      endTime: '2026-02-28',
+    }
+    await expect(exportLoginLogApi(params)).resolves.toBeUndefined()
+    expect(mockedDownloadFile).toHaveBeenCalledWith(
+      '/system/login-log/export',
+      params,
+      '登录日志.xlsx',
+    )
+    // 导出为文件流下载，不应走统一请求层
+    expect(mockedGet).not.toHaveBeenCalled()
   })
 })

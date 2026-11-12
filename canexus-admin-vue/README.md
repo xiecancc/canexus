@@ -28,10 +28,35 @@
 | --- | --- | --- |
 | 登录 | `views/login` | 账号密码 + 验证码，JWT 令牌管理（无感刷新） |
 | 工作台 | `views/dashboard` | 首页概览 |
-| 系统管理 | `views/system` | 用户 / 角色 / 菜单 / 部门（树形）/ 字典 / 参数配置 / 通知公告 / 租户 / 定时任务（含执行日志抽屉） |
-| 系统监控 | `views/monitor` | 操作日志、登录日志 |
+| 系统管理 | `views/system` | 用户 / 角色 / 菜单 / 部门（树形）/ 字典 / 参数配置 / 通知公告 / 租户 / 岗位 / 实体变更日志 / 定时任务（含执行日志抽屉） |
+| 系统监控 | `views/monitor` | 操作日志、登录日志（均支持 Excel 导出）、在线会话（强制下线） |
 | 错误页 | `views/error` | 403 / 404 等 |
 | 通用能力 | `components` `composables` `directives` | 字典标签、权限指令、布局、动态路由等 |
+
+## Roadmap：后端能力前端视图对齐（P2-2）
+
+> 代码评审 P2-2 处置记录。后端 `canexus-api-netcore` 提供 6 个能力而前端一度无对应视图 / API。
+> 处置原则：能以「列表 + 分页 + 基础操作」与现有 `usePage` + `el-table` + `v-permission` 约定同构补齐的，直接补视图与 `src/api`；
+> 成本明显偏高、接口语义为只读快照（非分页列表）或无菜单入口的，**不写空壳占位页**，登记在此并说明原因。
+> 动态路由由后端菜单驱动（`src/router/dynamic.ts`）：组件映射失败会回落「建设中」占位页；
+> 菜单种子未登记 component 的视图不会被路由到，需后端同步补菜单（见下表「菜单状态」）。
+
+### 已补齐
+
+| 能力 | 前端视图 | API 模块 | 后端端点 | 菜单状态 |
+| --- | --- | --- | --- | --- |
+| 岗位管理 | `views/system/post/index.vue`（含 `components/PostFormDialog.vue`） | `api/system/post.ts` | `GET /api/system/post/page`、`/{id}`、`POST`、`PUT /{id}/{version}`、`DELETE /{id}/{version}` | 种子已登记 `system/post/index`（补齐前回落「建设中」） |
+| 实体变更日志 | `views/system/entity-change/index.vue` | `api/system/entitychange.ts` | `GET /api/system/entity-change/page` | 种子未登记，建议补 `system/entity-change/index` |
+| 在线用户 | `views/monitor/online/index.vue` | `api/monitor/online.ts` | `GET /api/monitor/online/page`、`POST /api/monitor/online/{tokenId}/revoke` | 种子未登记，建议补 `monitor/online/index` |
+| 日志 Excel 导出 | `views/monitor/operlog`、`views/monitor/logininfor`（新增「导出」按钮） | `api/monitor/operlog.ts` 的 `exportOperLogApi`、`api/monitor/loginlog.ts` 的 `exportLoginLogApi` | `GET /api/system/oper-log/export`、`GET /api/system/login-log/export`（xlsx 文件流，经 `utils/download.ts` 以 blob 下载） | 菜单已含 `monitor:operlog:export` / `monitor:logininfor:export` 按钮权限 |
+
+### 待补齐（Roadmap）
+
+| 优先级 | 能力 | 缺失内容 | 后端端点 | 待补原因 |
+| --- | --- | --- | --- | --- |
+| 中 | 文件管理 | 上传（multipart）+ 分页列表 + 文件流下载 + 删除的完整闭环 | `POST /api/system/file/upload`、`GET /api/system/file/page`、`GET /api/system/file/{id}/download`、`DELETE /api/system/file/{id}/{version}` | 涉及 `el-upload` 上传交互、blob 下载与失败重试，明显比标准 CRUD 复杂；且菜单种子未登记该菜单，补了也无入口。待菜单与上传 / 下载交互规范确定后按 `system/file/index` 补齐，不为凑数写半套页面 |
+| 低 | 服务器监控 | 运行指标快照展示页 | `GET /api/monitor/server`（`ServerMonitorResponse`：CPU / 内存 / GC / 线程 / 句柄 / 调度器概要） | 单个 GET 返回只读快照而非分页列表，需专门的指标卡片 / 仪表盘布局，与现有 `usePage + el-table` 约定不同构，成本偏高 |
+| 低 | 缓存监控 | 缓存指标与 TTL 档位展示页 | `GET /api/monitor/cache`（`CacheMonitorResponse`：Redis 连接状态、命中率、DBSIZE、TTL 三档嵌套等） | 同为只读快照 + 嵌套结构，需专门布局与数值 / 可空字段格式化；菜单种子虽已登记 `monitor/cache/index`（当前回落「建设中」），但不适合用列表页模板套用 |
 
 ## 目录结构
 

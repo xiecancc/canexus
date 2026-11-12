@@ -7,7 +7,7 @@ namespace API.Middlewares;
 /// <summary>
 /// 全局异常处理中间件：
 /// <list type="bullet">
-/// <item><see cref="BusinessException"/>：按业务错误码映射 HTTP 状态（默认 400，认证段 401、权限段 403、资源段 404），返回统一 Result；</item>
+/// <item><see cref="BusinessException"/>：按业务错误码映射 HTTP 状态（认证段 401、权限段 403、系统段 500、限流 429，其余默认 400；完整规则见 ErrorCodes.GetHttpStatusCode），返回统一 Result；</item>
 /// <item>未知异常：返回 500 + 统一 Result（固定消息“服务器内部错误”，不向客户端泄露堆栈），并以 Error 级别记录 Serilog；</item>
 /// <item>客户端断开（OperationCanceledException 且 RequestAborted 触发）：非服务端错误，仅 Information 记录，不写响应、不计 500。</item>
 /// </list>

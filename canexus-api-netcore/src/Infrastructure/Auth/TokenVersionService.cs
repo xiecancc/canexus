@@ -3,6 +3,7 @@ using Domain.Entities;
 using Domain.Services.Auth;
 using Infrastructure.Shared.Caching;
 using Infrastructure.Shared.Options;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using SqlSugar;
 
@@ -20,7 +21,12 @@ namespace Infrastructure.Auth;
 /// <param name="client">SqlSugar 客户端（版本递增使用独立连接，避免受调用方事务状态影响）。</param>
 /// <param name="cache">应用缓存。</param>
 /// <param name="options">JWT 配置监视器（读取 accessToken 有效期以确定会话吊销 TTL）。</param>
-public sealed class TokenVersionService(ISqlSugarClient client, ICache cache, IOptionsMonitor<JwtOption> options) : ITokenVersionService
+/// <param name="logger">日志器（记录平台级全表操作的结构化审计）。</param>
+public sealed class TokenVersionService(
+    ISqlSugarClient client,
+    ICache cache,
+    IOptionsMonitor<JwtOption> options,
+    ILogger<TokenVersionService> logger) : ITokenVersionService
 {
     /// <summary>用户令牌版本缓存 key 前缀（key 格式：{prefix}{userId}）。</summary>
     public const string VersionCacheKeyPrefix = "auth:token-version:";
@@ -70,12 +76,17 @@ public sealed class TokenVersionService(ISqlSugarClient client, ICache cache, IO
             return;
         }
 
+        // 平台级跨租户全表操作：已登记在 PlatformWideOperationWhitelist（TokenVersionRevokeAll），刻意不补租户条件。
         // 单条 UPDATE 原子递增，避免并发读-改-写丢失版本；独立连接保证事件在业务事务提交后仍可执行
-        await client.CopyNew()
+        var affectedRows = await client.CopyNew()
             .Updateable<SysUser>()
             .SetColumns(u => u.TokenVersion == u.TokenVersion + 1)
             .Where(u => ids.Contains(u.Id))
             .ExecuteCommandAsync(cancellationToken);
+
+        logger.LogInformation(
+            "[平台级全表操作][白名单] Operation={Operation} 目标用户数={TargetCount} 影响行数={AffectedRows}",
+            PlatformWideOperationWhitelist.TokenVersionRevokeAll, ids.Count, affectedRows);
 
         // 逐 key 清除：RemoveAsync 同时清除本实例 L1 / L2，并在 Redis 可用时广播其他实例清除 L1
         await Task.WhenAll(ids.Select(id => cache.RemoveAsync(VersionCacheKeyPrefix + id, cancellationToken)));

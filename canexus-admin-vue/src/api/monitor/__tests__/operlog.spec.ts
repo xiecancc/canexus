@@ -1,5 +1,5 @@
 /**
- * 操作日志模块接口测试：mock 请求层，验证接口路径、HTTP 方法与参数透传。
+ * 操作日志模块接口测试：mock 请求层与下载层，验证接口路径、HTTP 方法与参数透传。
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Mock } from 'vitest'
@@ -14,12 +14,18 @@ vi.mock('@/utils/request', () => ({
   },
 }))
 
+vi.mock('@/utils/download', () => ({
+  downloadFile: vi.fn(),
+}))
+
 import request from '@/utils/request'
-import { cleanOperLogApi, deleteOperLogApi, getOperLogPageApi } from '../operlog'
+import { downloadFile } from '@/utils/download'
+import { cleanOperLogApi, deleteOperLogApi, exportOperLogApi, getOperLogPageApi } from '../operlog'
 
 const mockedGet = request.get as unknown as Mock
 const mockedPost = request.post as unknown as Mock
 const mockedDelete = request.delete as unknown as Mock
+const mockedDownloadFile = downloadFile as unknown as Mock
 
 describe('操作日志模块接口', () => {
   beforeEach(() => {
@@ -57,5 +63,25 @@ describe('操作日志模块接口', () => {
     const params = { beginTime: '2026-11-01', endTime: '2026-11-07', confirm: true }
     await cleanOperLogApi(params)
     expect(mockedPost).toHaveBeenCalledWith('/system/oper-log/clean', null, { params })
+  })
+
+  it('导出 Excel：GET /system/oper-log/export 且筛选条件透传（不含分页参数）', async () => {
+    mockedDownloadFile.mockResolvedValueOnce(undefined)
+    const params = {
+      title: '用户管理',
+      businessType: '2',
+      status: 1,
+      operUserName: 'admin',
+      beginTime: '2026-01-01',
+      endTime: '2026-01-31',
+    }
+    await expect(exportOperLogApi(params)).resolves.toBeUndefined()
+    expect(mockedDownloadFile).toHaveBeenCalledWith(
+      '/system/oper-log/export',
+      params,
+      '操作日志.xlsx',
+    )
+    // 导出为文件流下载，不应走统一请求层
+    expect(mockedGet).not.toHaveBeenCalled()
   })
 })

@@ -1,13 +1,18 @@
 <script setup lang="ts">
 /**
  * 操作日志：支持模块标题/操作人/业务类型（字典 sys_oper_type）/状态/日期范围搜索，
- * 详情抽屉、单条删除与清空全部（均需对应按钮权限）。
+ * 详情抽屉、单条删除与清空全部（均需对应按钮权限），并按当前筛选条件导出 Excel。
  */
 import { ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Delete, Refresh, Search, View } from '@element-plus/icons-vue'
+import { Delete, Download, Refresh, Search, View } from '@element-plus/icons-vue'
 import type { OperLogVO } from '@/api/monitor/operlog'
-import { cleanOperLogApi, deleteOperLogApi, getOperLogPageApi } from '@/api/monitor/operlog'
+import {
+  cleanOperLogApi,
+  deleteOperLogApi,
+  exportOperLogApi,
+  getOperLogPageApi,
+} from '@/api/monitor/operlog'
 import { useDict } from '@/composables/useDict'
 import { usePage } from '@/composables/usePage'
 import { formatDateTime } from '@/utils/format'
@@ -110,6 +115,29 @@ async function handleClean(): Promise<void> {
   ElMessage.success('清空成功')
   await fetchData()
 }
+
+/** 导出中（按钮 loading） */
+const exportLoading = ref(false)
+
+/** 按当前搜索条件导出操作日志（xlsx 文件流，错误提示由下载层统一处理） */
+async function handleExport(): Promise<void> {
+  exportLoading.value = true
+  try {
+    await exportOperLogApi({
+      title: query.title || undefined,
+      businessType: query.businessType || undefined,
+      status: query.status,
+      operUserName: query.operUserName || undefined,
+      beginTime: dateRange.value?.[0] || undefined,
+      endTime: dateRange.value?.[1] || undefined,
+    })
+    ElMessage.success('导出成功')
+  } catch {
+    // 错误提示由下载层统一处理
+  } finally {
+    exportLoading.value = false
+  }
+}
 </script>
 
 <template>
@@ -191,6 +219,16 @@ async function handleClean(): Promise<void> {
           @click="handleClean"
         >
           清空
+        </el-button>
+        <el-button
+          v-permission="'monitor:operlog:export'"
+          type="primary"
+          plain
+          :icon="Download"
+          :loading="exportLoading"
+          @click="handleExport"
+        >
+          导出
         </el-button>
       </div>
 

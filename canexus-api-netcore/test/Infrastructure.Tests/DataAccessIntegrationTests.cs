@@ -504,6 +504,39 @@ public class DataAccessIntegrationTests
         });
     }
 
+    /// <summary>
+    /// P1-2 口径统一：平台用户（CurrentUser.TenantId 为 null，集成测试无 HTTP 上下文即如此）通过
+    /// X-Tenant-Id 指定 tenantContext.TenantId 时，GetDeletedAsync 必须按该请求租户约束，
+    /// 不得因登录用户无租户声明而跨租户读取墓碑（与 LoadTargetsAsync 统一取 CurrentTenantId）。
+    /// </summary>
+    [Test]
+    public async Task GetDeletedAsync_UsesRequestTenantContext_ForPlatformUserWithTenantHeader()
+    {
+        var tenantA = Guid.Parse("00000000-0000-0000-0000-00000000000a");
+        var tenantB = Guid.Parse("00000000-0000-0000-0000-00000000000b");
+
+        // 平台态（tenantContext 为 null）下插入两条分属不同租户的实体，再分别软删除为墓碑
+        var entityA = new MultiTenantTestEntity { Name = "A-墓碑", TenantId = tenantA };
+        var entityB = new MultiTenantTestEntity { Name = "B-墓碑", TenantId = tenantB };
+        await _tenantRepository.InsertAsync(entityA);
+        await _tenantRepository.InsertAsync(entityB);
+        Assert.That(await _tenantRepository.SoftDeleteAsync(entityA.Id), Is.True);
+        Assert.That(await _tenantRepository.SoftDeleteAsync(entityB.Id), Is.True);
+
+        // 平台用户带 X-Tenant-Id：请求租户上下文收敛到 tenantA（等价于中间件写入 tenantContext）
+        _tenantContext.TenantId = tenantA;
+
+        var ownTombstone = await _tenantRepository.GetDeletedAsync(entityA.Id);
+        var crossTenantTombstone = await _tenantRepository.GetDeletedAsync(entityB.Id);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(ownTombstone, Is.Not.Null, "本租户墓碑应可读");
+            Assert.That(crossTenantTombstone, Is.Null,
+                "平台用户带 X-Tenant-Id 时 GetDeletedAsync 不得跨租户读墓碑（须按 CurrentTenantId 而非 CurrentUser.TenantId）");
+        });
+    }
+
     /// <summary>验证分页查询返回正确的页数据与总数。</summary>
     [Test]
     public async Task GetPagedAsync_ReturnsCorrectPageAndTotal()

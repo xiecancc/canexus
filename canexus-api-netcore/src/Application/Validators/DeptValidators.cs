@@ -19,7 +19,7 @@ public class DeptRequestValidator<TRequest> : AbstractValidator<TRequest>
     }
 }
 
-/// <summary>创建部门命令验证器（桥接请求验证器）；父部门存在性与祖级路径由处理器 / 树形仓储校验。</summary>
+/// <summary>创建部门命令验证器（桥接请求验证器）；父部门存在性由处理器 / 树形仓储校验。</summary>
 public sealed class DeptCreateCommandValidator() :
     WriteCommandValidator<DeptCreateCommand, DeptInputRequest>(new DeptRequestValidator<DeptInputRequest>());
 

@@ -1,13 +1,19 @@
 <script setup lang="ts">
 /**
- * 登录日志：支持用户名/IP/状态/日期范围搜索、单条删除与清空全部（均需对应按钮权限）。
+ * 登录日志：支持用户名/IP/状态/日期范围搜索、单条删除与清空全部（均需对应按钮权限），
+ * 并按当前筛选条件导出 Excel。
  * 组件目录名为 logininfor，与后端菜单种子 component 路径保持一致。
  */
 import { ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Delete, Refresh, Search } from '@element-plus/icons-vue'
+import { Delete, Download, Refresh, Search } from '@element-plus/icons-vue'
 import type { LoginLogVO } from '@/api/monitor/loginlog'
-import { cleanLoginLogApi, deleteLoginLogApi, getLoginLogPageApi } from '@/api/monitor/loginlog'
+import {
+  cleanLoginLogApi,
+  deleteLoginLogApi,
+  exportLoginLogApi,
+  getLoginLogPageApi,
+} from '@/api/monitor/loginlog'
 import { usePage } from '@/composables/usePage'
 import { formatDateTime } from '@/utils/format'
 
@@ -101,6 +107,28 @@ async function handleClean(): Promise<void> {
   ElMessage.success('清空成功')
   await fetchData()
 }
+
+/** 导出中（按钮 loading） */
+const exportLoading = ref(false)
+
+/** 按当前搜索条件导出登录日志（xlsx 文件流，错误提示由下载层统一处理） */
+async function handleExport(): Promise<void> {
+  exportLoading.value = true
+  try {
+    await exportLoginLogApi({
+      userName: query.userName || undefined,
+      ip: query.ip || undefined,
+      status: query.status,
+      beginTime: dateRange.value?.[0] || undefined,
+      endTime: dateRange.value?.[1] || undefined,
+    })
+    ElMessage.success('导出成功')
+  } catch {
+    // 错误提示由下载层统一处理
+  } finally {
+    exportLoading.value = false
+  }
+}
 </script>
 
 <template>
@@ -166,6 +194,16 @@ async function handleClean(): Promise<void> {
           @click="handleClean"
         >
           清空
+        </el-button>
+        <el-button
+          v-permission="'monitor:logininfor:export'"
+          type="primary"
+          plain
+          :icon="Download"
+          :loading="exportLoading"
+          @click="handleExport"
+        >
+          导出
         </el-button>
       </div>
 

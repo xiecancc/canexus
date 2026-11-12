@@ -61,15 +61,22 @@ public sealed class RefreshTokenCleanupJob(ISqlSugarClient client, ILogger<Refre
     /// <param name="graceDays">宽限天数；越界时收敛到 <see cref="MinGraceDays"/>~<see cref="MaxGraceDays"/>。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>删除的行数。</returns>
-    public Task<int> CleanAsync(int graceDays, CancellationToken cancellationToken = default)
+    public async Task<int> CleanAsync(int graceDays, CancellationToken cancellationToken = default)
     {
         var days = Math.Clamp(graceDays, MinGraceDays, MaxGraceDays);
         var cutoff = DateTime.UtcNow.AddDays(-days);
         cancellationToken.ThrowIfCancellationRequested();
 
-        // QueryFilter 不作用于 Deleteable（V-04）；令牌回收是平台级行为，不过滤租户
-        return client.Deleteable<SysRefreshToken>()
+        // 平台级跨租户全表操作：已登记在 PlatformWideOperationWhitelist（RefreshTokenCleanup），刻意不补租户条件。
+        // QueryFilter 不作用于 Deleteable（V-04）；令牌回收是平台级行为，不过滤租户。
+        var removed = await client.Deleteable<SysRefreshToken>()
             .Where(token => token.ExpiresAt < cutoff)
             .ExecuteCommandAsync(cancellationToken);
+
+        logger.LogInformation(
+            "[平台级全表操作][白名单] Operation={Operation} GraceDays={GraceDays} 影响行数={AffectedRows}",
+            PlatformWideOperationWhitelist.RefreshTokenCleanup, days, removed);
+
+        return removed;
     }
 }
