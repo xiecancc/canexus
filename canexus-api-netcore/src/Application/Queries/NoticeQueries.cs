@@ -61,7 +61,7 @@ public sealed class NoticeQueryPagedHandler(IAggregateRepository<SysNotice> noti
     protected override async Task<PagedResponse<NoticePagedResponse>> HandleAsync(NoticeQueryPaged query, CancellationToken cancellationToken)
     {
         var request = query.Request;
-        var title = NormalizeFilter(request.Title);
+        var title = NormalizeKeyword(request.Title);
         var noticeType = request.NoticeType;
         var status = request.Status;
 

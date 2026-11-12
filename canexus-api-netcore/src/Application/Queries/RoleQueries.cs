@@ -56,7 +56,7 @@ public sealed class RoleQueryPagedHandler(IAggregateRepository<SysRole> roleRepo
     /// <inheritdoc />
     protected override Expression<Func<SysRole, bool>>? BuildPredicate(RolePageRequest request)
     {
-        var keyword = NormalizeFilter(request.Keyword);
+        var keyword = NormalizeKeyword(request.Keyword);
         var status = request.Status;
         return r =>
             (keyword == null || r.RoleName.Contains(keyword) || r.RoleKey.Contains(keyword))

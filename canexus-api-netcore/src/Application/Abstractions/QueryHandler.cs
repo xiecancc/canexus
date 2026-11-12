@@ -18,12 +18,32 @@ namespace Application.Abstractions;
 public abstract class QueryHandler<TQuery, TResponse> : RequestHandler<TQuery, TResponse>
     where TQuery : Request<TResponse>
 {
-    /// <summary>规整筛选文本：空白（null / 空串 / 全空白）返回 null 表示不过滤，否则返回去除首尾空白后的值。</summary>
+    /// <summary>规整筛选文本：空白（null / 空串 / 全空白）返回 null 表示不过滤，否则返回去除首尾空白后的值。
+    /// 适用于等值过滤（== 翻译为参数化等值比较），不做 LIKE 转义；模糊检索请用 <see cref="NormalizeKeyword"/>。</summary>
     /// <param name="text">原始筛选文本。</param>
     /// <returns>规整后的筛选文本；不过滤时为 null。</returns>
     protected static string? NormalizeFilter(string? text)
     {
         return string.IsNullOrWhiteSpace(text) ? null : text.Trim();
+    }
+
+    /// <summary>规整模糊检索关键字：在 <see cref="NormalizeFilter"/> 基础上转义 LIKE 通配符（% _ \）。</summary>
+    /// <remarks>
+    /// 转义背景（P1-E4）：关键字经 <c>string.Contains</c> 翻译为 <c>LIKE '%kw%'</c>，未转义时用户输入
+    /// <c>%</c> / <c>_</c> 会充当通配符（输入单个 <c>%</c> 即退化为全表匹配，放大查询成本）；转义后
+    /// 通配符按字面量匹配。MySQL 默认（未启用 NO_BACKSLASH_ESCAPES）下 LIKE 的转义符为反斜杠，
+    /// 参数化值内 <c>\%</c> / <c>\_</c> / <c>\\</c> 即可表达字面量。
+    /// 仅用于模糊检索路径；等值过滤（== 比较）必须继续使用 <see cref="NormalizeFilter"/>，否则会破坏匹配语义。
+    /// </remarks>
+    /// <param name="text">原始关键字。</param>
+    /// <returns>规整并转义后的关键字；不过滤时为 null。</returns>
+    protected static string? NormalizeKeyword(string? text)
+    {
+        var normalized = NormalizeFilter(text);
+        return normalized?
+            .Replace(@"\", @"\\", StringComparison.Ordinal)
+            .Replace("%", @"\%", StringComparison.Ordinal)
+            .Replace("_", @"\_", StringComparison.Ordinal);
     }
 }
 

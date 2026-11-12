@@ -20,7 +20,7 @@ public sealed class FileQueryPagedHandler(
     /// <inheritdoc />
     protected override Expression<Func<SysFile, bool>>? BuildPredicate(FilePageRequest request)
     {
-        var fileName = NormalizeFilter(request.FileName);
+        var fileName = NormalizeKeyword(request.FileName);
         var bizCategory = NormalizeFilter(request.BizCategory);
 
         return f =>

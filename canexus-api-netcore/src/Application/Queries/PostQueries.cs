@@ -32,8 +32,8 @@ public sealed class PostQueryPagedHandler(IAggregateRepository<SysPost> postRepo
     protected override async Task<PagedResponse<PostPagedResponse>> HandleAsync(PostQueryPaged query, CancellationToken cancellationToken)
     {
         var request = query.Request;
-        var postName = NormalizeFilter(request.PostName);
-        var postCode = NormalizeFilter(request.PostCode);
+        var postName = NormalizeKeyword(request.PostName);
+        var postCode = NormalizeKeyword(request.PostCode);
         var status = request.Status;
 
         Expression<Func<SysPost, bool>> predicate = p =>

@@ -25,8 +25,8 @@ public sealed class OnlineUserQueryPagedHandler(
     protected override async Task<PagedResponse<OnlineUserPagedResponse>> HandleAsync(OnlineUserQueryPaged query, CancellationToken cancellationToken)
     {
         var request = query.Request;
-        var userName = NormalizeFilter(request.UserName);
-        var ip = NormalizeFilter(request.Ip);
+        var userName = NormalizeKeyword(request.UserName);
+        var ip = NormalizeKeyword(request.Ip);
         var now = DateTime.UtcNow;
 
         // 用户名过滤：refreshToken 表不冗余账号，先解析匹配用户 Id 集合（空集合直接短路返回空页）

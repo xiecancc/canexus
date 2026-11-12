@@ -49,7 +49,7 @@ public sealed class DictDataQueryPagedHandler(IAggregateRepository<SysDictData> 
     protected override Expression<Func<SysDictData, bool>>? BuildPredicate(DictDataPageRequest request)
     {
         var dictType = NormalizeFilter(request.DictType);
-        var keyword = NormalizeFilter(request.Keyword);
+        var keyword = NormalizeKeyword(request.Keyword);
         return d =>
             (dictType == null || d.DictType == dictType)
             && (keyword == null || d.DictLabel.Contains(keyword) || d.DictValue.Contains(keyword));
@@ -65,7 +65,7 @@ public sealed class DictTypeQueryPagedHandler(IAggregateRepository<SysDictType> 
     /// <inheritdoc />
     protected override Expression<Func<SysDictType, bool>>? BuildPredicate(DictTypePageRequest request)
     {
-        var keyword = NormalizeFilter(request.Keyword);
+        var keyword = NormalizeKeyword(request.Keyword);
         return t => keyword == null || t.DictName.Contains(keyword) || t.DictType.Contains(keyword);
     }
 }

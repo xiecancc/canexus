@@ -116,7 +116,7 @@ public sealed class UserQueryPagedHandler(
     /// <summary>构造分页查询条件：关键字 / 部门子树 / 状态与数据范围合并为单一表达式。</summary>
     private Expression<Func<SysUser, bool>> BuildPredicate(UserPageRequest request, UserDataScope scope, List<Guid>? deptFilterIds)
     {
-        var keyword = NormalizeFilter(request.Keyword);
+        var keyword = NormalizeKeyword(request.Keyword);
         var status = request.Status;
         var scopeType = scope.Scope;
         var scopeDeptIds = scope.DeptIds?.ToList();

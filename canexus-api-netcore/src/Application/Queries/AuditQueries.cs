@@ -18,8 +18,8 @@ public sealed class EntityChangeLogQueryPagedHandler(IAggregateRepository<SysEnt
     /// <inheritdoc />
     protected override Expression<Func<SysEntityChangeLog, bool>>? BuildPredicate(EntityChangeLogPageRequest request)
     {
-        var entityName = NormalizeFilter(request.EntityName);
-        var fieldName = NormalizeFilter(request.FieldName);
+        var entityName = NormalizeKeyword(request.EntityName);
+        var fieldName = NormalizeKeyword(request.FieldName);
         var entityId = request.EntityId;
 
         return l =>

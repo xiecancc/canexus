@@ -21,8 +21,8 @@ public sealed class LoginLogQueryPagedHandler(ILoginLogRepository loginLogReposi
     protected override async Task<PagedResponse<LoginLogPagedResponse>> HandleAsync(LoginLogQueryPaged query, CancellationToken cancellationToken)
     {
         var request = query.Request;
-        var userName = NormalizeFilter(request.UserName);
-        var ip = NormalizeFilter(request.Ip);
+        var userName = NormalizeKeyword(request.UserName);
+        var ip = NormalizeKeyword(request.Ip);
         var status = request.Status;
         var beginTime = request.BeginTime;
         var endTime = LogQueryBounds.NormalizeEndTime(request.EndTime);
@@ -52,8 +52,8 @@ public sealed class OperLogQueryPagedHandler(IOperLogRepository operLogRepositor
     /// <inheritdoc />
     protected override Expression<Func<SysOperLog, bool>>? BuildPredicate(OperLogPageRequest request)
     {
-        var title = NormalizeFilter(request.Title);
-        var operUserName = NormalizeFilter(request.OperUserName);
+        var title = NormalizeKeyword(request.Title);
+        var operUserName = NormalizeKeyword(request.OperUserName);
         var businessType = request.BusinessType;
         var status = request.Status;
         var beginTime = request.BeginTime;

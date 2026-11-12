@@ -46,7 +46,7 @@ public sealed class ConfigQueryPagedHandler(IAggregateRepository<SysConfig> conf
     /// <inheritdoc />
     protected override Expression<Func<SysConfig, bool>>? BuildPredicate(ConfigPageRequest request)
     {
-        var keyword = NormalizeFilter(request.Keyword);
+        var keyword = NormalizeKeyword(request.Keyword);
         return c => keyword == null || c.ConfigName.Contains(keyword) || c.ConfigKey.Contains(keyword) || c.ConfigValue.Contains(keyword);
     }
 }

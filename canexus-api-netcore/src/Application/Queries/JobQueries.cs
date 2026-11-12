@@ -41,7 +41,7 @@ public sealed class JobQueryPagedHandler(IAggregateRepository<SysJob> jobReposit
     /// <inheritdoc />
     protected override Expression<Func<SysJob, bool>>? BuildPredicate(JobPageRequest request)
     {
-        var keyword = NormalizeFilter(request.Keyword);
+        var keyword = NormalizeKeyword(request.Keyword);
         return j =>
             (keyword == null || j.JobName.Contains(keyword) || j.JobGroup.Contains(keyword))
             && (request.Status == null || j.Status == request.Status.Value);

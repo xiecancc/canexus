@@ -34,7 +34,7 @@ public sealed class TenantQueryPagedHandler(IAggregateRepository<SysTenant> tena
     /// <inheritdoc />
     protected override Expression<Func<SysTenant, bool>>? BuildPredicate(TenantPageRequest request)
     {
-        var keyword = NormalizeFilter(request.Keyword);
+        var keyword = NormalizeKeyword(request.Keyword);
         return t =>
             (keyword == null || t.TenantName.Contains(keyword) || t.TenantKey.Contains(keyword))
             && (request.Status == null || t.Status == request.Status.Value);
